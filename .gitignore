@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Next.js Build
+.next/
+out/
+build/
+dist/
+
+# Environment variables & secrets
+.env
+.env*
+!.env.example
+*.pem
+*.key
+
+# Database & local data stores (strictly confidential)
+data/
+*.db
+*.sqlite
+data/*.json
+
+# OS / IDE files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs & scratch
+logs/
+*.log
+scratch/

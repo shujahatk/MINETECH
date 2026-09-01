@@ -1,0 +1,32 @@
+{
+  "name": "minetech-outbound",
+  "version": "2.0.0",
+  "description": "MINETECH - Outbound Sales Workstation & Dialer with CRM, Blasts, Unified Inbox, Sequences, and Twilio Voice/SMS",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@sendgrid/mail": "^8.1.3",
+    "bcryptjs": "^2.4.3",
+    "clsx": "^2.1.1",
+    "csv-parser": "^3.2.1",
+    "dotenv": "^16.4.5",
+    "jose": "^6.2.10",
+    "jsonwebtoken": "^9.0.2",
+    "lucide-react": "^0.439.0",
+    "mongoose": "^8.5.1",
+    "next": "^14.2.10",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^2.5.2",
+    "twilio": "^5.2.2"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.41",
+    "tailwindcss": "^3.4.10"
+  }
+}
