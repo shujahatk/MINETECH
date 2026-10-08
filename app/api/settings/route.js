@@ -45,7 +45,7 @@ export async function GET(request) {
           listmonkUrl: lmHealth.url,
           postgresConfigured: Boolean(process.env.LISTMONK_DB_HOST || process.env.LISTMONK_DB_NAME),
           resendConfigured: Boolean(process.env.RESEND_API_KEY || process.env.RESEND_SMTP_PASSWORD),
-          aiConfigured: Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY),
+          aiConfigured: Boolean(process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY),
         },
       },
     });

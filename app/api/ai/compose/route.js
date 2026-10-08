@@ -162,7 +162,8 @@ MineTech Outbound
     };
 
     // 4. Call Claude if Anthropic API Key is available
-    if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY.startsWith('sk-ant')) {
+    const anthropicComposeKey = process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY;
+    if (anthropicComposeKey && anthropicComposeKey.startsWith('sk-ant')) {
       try {
         const candidateModels = [
           'claude-sonnet-4-5-20250929',
@@ -178,7 +179,7 @@ MineTech Outbound
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
-                  'x-api-key': process.env.ANTHROPIC_API_KEY,
+                  'x-api-key': anthropicComposeKey,
                   'anthropic-version': '2023-06-01',
                 },
                 body: JSON.stringify({

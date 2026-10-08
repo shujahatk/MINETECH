@@ -61,7 +61,7 @@ export async function GET(request) {
   // Database ping and email provider checks are independent: run them together.
   const [database, email] = await Promise.all([checkDatabase(), checkEmail()]);
 
-  const claudeConfigured = Boolean(process.env.ANTHROPIC_API_KEY);
+  const claudeConfigured = Boolean(process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_API_KEY);
 
   const services = {
     database,
@@ -71,7 +71,7 @@ export async function GET(request) {
       name: 'Anthropic Claude',
       status: claudeConfigured ? 'operational' : 'standby_fallback',
       connected: claudeConfigured,
-      model: process.env.ANTHROPIC_MODEL || null,
+      model: process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || null,
     },
     workers: {
       name: 'Background Dispatch Worker',
