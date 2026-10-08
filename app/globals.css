@@ -2,65 +2,459 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #090d16;
-  --surface: #0f172a;
-  --border: rgba(255, 255, 255, 0.08);
+/*
+  MineTech design tokens
+  ----------------------
+  Every colour in the app resolves to one of these variables (HSL channels, no hsl() wrapper) so that
+  light and dark are designed independently instead of one being an inversion of the other.
+
+  Surface ladder (dark):  sidebar  <  background  <  card  <  popover/dropdown  <  muted (hover / wells)
+  Surface ladder (light): background  <  card (white)  ;  sidebar and muted are tinted stone.
+*/
+@layer base {
+  :root {
+    color-scheme: light;
+
+    /* Surfaces */
+    --background: 30 18% 96%;          /* #F7F5F2 warm porcelain */
+    --foreground: 15 12% 11%;          /* #1F1A19 */
+    --card: 0 0% 100%;
+    --card-foreground: 15 12% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 15 12% 11%;
+    --secondary: 30 12% 92%;
+    --secondary-foreground: 15 12% 15%;
+    --muted: 30 12% 92%;
+    --muted-foreground: 15 5% 42%;     /* 5.6:1 on card */
+    --accent: 15 40% 94%;
+    --accent-foreground: 15 76% 30%;
+
+    /* Brand */
+    --primary: 15 76% 40%;             /* #B43C1B terracotta clay */
+    --primary-foreground: 0 0% 100%;
+    --ring: 15 76% 40%;
+
+    /* Lines */
+    --border: 30 10% 86%;
+    --input: 30 10% 84%;
+    --radius: 0.5rem;
+
+    /* Semantic status (use as text-success, bg-success/10, border-success/25 ...) */
+    --success: 160 84% 29%;
+    --warning: 28 92% 38%;
+    --info: 201 90% 36%;
+    --danger: 350 72% 46%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Data-viz palette: ordered so neighbouring series stay distinguishable and colour-blind safe */
+    --chart-1: 15 76% 44%;             /* clay (brand) */
+    --chart-2: 36 90% 48%;             /* amber */
+    --chart-3: 192 62% 34%;            /* deep teal */
+    --chart-4: 152 48% 36%;            /* green */
+    --chart-5: 262 36% 54%;            /* muted violet */
+    --chart-6: 25 8% 56%;              /* stone */
+    --chart-grid: 30 10% 88%;
+    --chart-track: 30 12% 91%;
+
+    /* Sidebar */
+    --sidebar-background: 30 14% 94%;
+    --sidebar-foreground: 15 12% 14%;
+    --sidebar-primary: 15 76% 40%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 15 36% 91%;
+    --sidebar-accent-foreground: 15 76% 26%;
+    --sidebar-border: 30 10% 84%;
+    --sidebar-ring: 15 76% 40%;
+
+    /* Elevation */
+    --shadow-subtle: 0 1px 1px 0 rgb(20 12 8 / 0.03);
+    --shadow-card: 0 1px 2px 0 rgb(20 12 8 / 0.04);
+    --shadow-popover: 0 6px 20px -4px rgb(20 12 8 / 0.12), 0 2px 6px -2px rgb(20 12 8 / 0.06);
+    --shadow-dialog: 0 16px 40px -8px rgb(20 12 8 / 0.18), 0 4px 12px -4px rgb(20 12 8 / 0.08);
+    --shadow-drawer: -12px 0 32px -12px rgb(20 12 8 / 0.20);
+    --shadow-hover: 0 4px 14px -4px rgb(20 12 8 / 0.10), 0 1px 3px 0 rgb(20 12 8 / 0.05);
+    --overlay: 20 12% 8% / 0.45;
+
+    /* Motion: 150-350ms, opacity + small translate/scale only */
+    --motion-fast: 140ms;
+    --motion-normal: 200ms;
+    --motion-dialog: 220ms;
+    --motion-slow: 320ms;
+    --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .dark {
+    color-scheme: dark;
+
+    /* Surfaces: neutral-warm charcoal, never pure black. Each step is ~3% lighter than the one below. */
+    --background: 20 7% 8%;            /* #161413 */
+    --foreground: 30 12% 93%;          /* #EFECE8 */
+    --card: 20 6% 11%;                 /* #1D1B1A */
+    --card-foreground: 30 12% 93%;
+    --popover: 20 6% 13.5%;            /* #232120 */
+    --popover-foreground: 30 12% 93%;
+    --secondary: 20 5% 15%;            /* #282625 */
+    --secondary-foreground: 30 12% 93%;
+    --muted: 20 5% 15%;
+    --muted-foreground: 25 6% 67%;     /* 6.9:1 on card */
+    --accent: 16 26% 17%;
+    --accent-foreground: 16 72% 74%;
+
+    --primary: 16 72% 56%;             /* #E06A42 luminous clay */
+    --primary-foreground: 15 30% 7%;
+    --ring: 16 72% 56%;
+
+    --border: 20 5% 19%;               /* #313030 */
+    --input: 20 5% 22%;
+
+    --success: 158 62% 52%;
+    --warning: 40 94% 58%;
+    --info: 199 88% 62%;
+    --danger: 352 90% 70%;
+    --destructive: 0 62% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --chart-1: 16 72% 58%;
+    --chart-2: 40 92% 58%;
+    --chart-3: 188 56% 54%;
+    --chart-4: 150 46% 52%;
+    --chart-5: 262 50% 74%;
+    --chart-6: 25 8% 62%;
+    --chart-grid: 20 5% 20%;
+    --chart-track: 20 5% 17%;
+
+    /* Sidebar sits one step BELOW the canvas so content reads as the raised layer */
+    --sidebar-background: 20 8% 6.5%;  /* #121110 */
+    --sidebar-foreground: 30 12% 88%;
+    --sidebar-primary: 16 72% 56%;
+    --sidebar-primary-foreground: 15 30% 7%;
+    --sidebar-accent: 16 22% 14%;
+    --sidebar-accent-foreground: 16 72% 76%;
+    --sidebar-border: 20 5% 14%;
+    --sidebar-ring: 16 72% 56%;
+
+    /* Shadows are heavier but tighter in dark, with a 1px top highlight to give panels an edge */
+    --shadow-subtle: 0 1px 1px 0 rgb(0 0 0 / 0.30);
+    --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35), inset 0 1px 0 0 rgb(255 255 255 / 0.025);
+    --shadow-popover: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
+    --shadow-dialog: 0 20px 50px -10px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.05);
+    --shadow-drawer: -16px 0 40px -12px rgb(0 0 0 / 0.60);
+    --shadow-hover: 0 6px 18px -6px rgb(0 0 0 / 0.55), inset 0 1px 0 0 rgb(255 255 255 / 0.03);
+    --overlay: 0 0% 0% / 0.62;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    font-feature-settings: 'cv11', 'ss01';
+    transition: background-color var(--motion-fast) ease-out, color var(--motion-fast) ease-out, border-color var(--motion-fast) ease-out;
+  }
+
+  button, a, input, textarea, select {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button, a {
+    transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease), opacity var(--motion-fast) var(--motion-ease);
+  }
+
+  button:not(:disabled):active {
+    transform: scale(0.985);
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring) / 0.45);
+    outline-offset: 2px;
+  }
+
+  input, textarea, select {
+    accent-color: hsl(var(--primary));
+  }
+
+  input[aria-invalid=true], textarea[aria-invalid=true] {
+    border-color: hsl(var(--destructive));
+  }
+
+  /* Native <select> option lists follow the theme instead of the OS default */
+  select option {
+    background-color: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.2);
+    color: hsl(var(--foreground));
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.28);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
+    background-clip: content-box;
+  }
 }
 
-body {
-  background-color: #090d16;
-  color: #f1f5f9;
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  overflow-x: hidden;
+@layer components {
+  /* ---- Page chrome ---- */
+  .page-header {
+    @apply mb-4 flex flex-wrap items-center justify-between gap-3;
+  }
+  .page-heading {
+    @apply text-lg font-semibold leading-tight tracking-tight text-foreground;
+  }
+  .page-description {
+    @apply mt-0.5 text-[13px] leading-snug text-muted-foreground;
+  }
+
+  /* ---- Surfaces ---- */
+  .panel {
+    @apply rounded-xl border border-border bg-card p-4 shadow-card;
+  }
+  /* Opt-in hover affordance for panels that are clickable or summarise something navigable */
+  .panel-interactive {
+    @apply transition-[border-color,box-shadow,transform] duration-200;
+  }
+  .panel-interactive:hover {
+    border-color: hsl(var(--muted-foreground) / 0.35);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-1px);
+  }
+  .section-heading {
+    @apply text-[13px] font-semibold tracking-tight text-foreground;
+  }
+  /* Small uppercase caption used for field labels, table heads and section captions */
+  .field-label {
+    @apply text-[11px] font-medium uppercase tracking-wide text-muted-foreground;
+  }
+  .kbd {
+    @apply inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-border bg-muted/60 px-1 font-mono text-[10px] text-muted-foreground;
+  }
+
+  /* Rendered email HTML: inherit theme colours so quoted/legacy markup stays readable in dark mode */
+  .email-html {
+    @apply space-y-2 break-words text-[13px] leading-relaxed text-foreground;
+    overflow-wrap: anywhere;
+  }
+  .email-html * {
+    color: inherit !important;
+    background-color: transparent !important;
+    max-width: 100%;
+  }
+  .email-html a {
+    color: hsl(var(--primary)) !important;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .email-html img {
+    height: auto;
+    border-radius: 6px;
+  }
+  .email-html blockquote {
+    margin: 0.5rem 0;
+    padding-left: 0.75rem;
+    border-left: 2px solid hsl(var(--border));
+    opacity: 0.8;
+  }
+  .email-html table {
+    width: auto;
+    border-collapse: collapse;
+  }
+
+  /* ---- Tables (legacy .enterprise-table + new .data-table) ---- */
+  .enterprise-table,
+  .data-table {
+    @apply w-full border-collapse text-[13px];
+  }
+  .enterprise-table th,
+  .data-table th {
+    @apply border-b border-border bg-muted/40 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground;
+  }
+  .enterprise-table td,
+  .data-table td {
+    @apply border-b border-border/70 px-3 py-2.5 align-middle;
+  }
+  .enterprise-table tbody tr,
+  .data-table tbody tr {
+    @apply transition-colors duration-100;
+  }
+  .enterprise-table tbody tr:hover td,
+  .data-table tbody tr:hover td {
+    @apply bg-muted/40;
+  }
+  .enterprise-table tbody tr:last-child td,
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .nav-item {
+    @apply flex min-h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium text-muted-foreground transition-colors duration-100 hover:bg-sidebar-accent/70 hover:text-foreground;
+  }
+  .nav-item[aria-current=page] {
+    @apply bg-sidebar-accent font-semibold text-sidebar-accent-foreground;
+  }
+  .skip-link {
+    @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-lg bg-primary px-4 py-3 text-primary-foreground focus:translate-y-0 transition-transform duration-200 shadow-dialog;
+  }
+  .page-content {
+    @apply mx-auto w-full max-w-[1600px] p-4 sm:p-5 xl:px-6 xl:py-5;
+  }
+  .modal-surface {
+    @apply fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 outline-none;
+    max-height: 92dvh;
+    overflow-y: auto;
+  }
+
+  /* ---- Shared chip / status helpers built on semantic tokens (work unchanged in light + dark) ---- */
+  .tone-success { @apply border-success/25 bg-success/10 text-success; }
+  .tone-warning { @apply border-warning/30 bg-warning/10 text-warning; }
+  .tone-info    { @apply border-info/25 bg-info/10 text-info; }
+  .tone-danger  { @apply border-danger/25 bg-danger/10 text-danger; }
+  .tone-brand   { @apply border-primary/25 bg-primary/10 text-primary; }
+  .tone-neutral { @apply border-border bg-muted/60 text-muted-foreground; }
+
+  /* Modal / drawer backdrop: theme-aware (deeper in dark) with a hint of blur */
+  .scrim {
+    background-color: hsl(var(--overlay));
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+  }
+
+  /* Selected list row: calm tint + 2px brand rail, shared by Inbox, Workstation and similar lists */
+  .row-selected {
+    @apply bg-primary/[0.07];
+    box-shadow: inset 2px 0 0 hsl(var(--primary));
+  }
 }
 
-/* Glassmorphic elements */
-.glass-panel {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* =====================================================================
+   Animation system
+   Rules: 150-350ms, opacity + <=8px translate + scale 0.98->1, no bounce.
+   ===================================================================== */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.glass-card {
-  background: rgba(30, 41, 59, 0.45);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.glass-card:hover {
-  background: rgba(30, 41, 59, 0.65);
-  border-color: rgba(99, 102, 241, 0.3);
+@keyframes soft-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
-/* Custom sleek scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(9, 13, 22, 0.5);
+@keyframes modal-enter {
+  from { opacity: 0; transform: translate(-50%, -49%) scale(0.985); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 9999px;
+@keyframes skeleton-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+@keyframes drawer-enter {
+  from { transform: translateX(24px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
 }
 
-/* Badge styles */
-.badge-new { @apply bg-blue-500/15 text-blue-400 border border-blue-500/30; }
-.badge-contacted { @apply bg-slate-500/15 text-slate-300 border border-slate-500/30; }
-.badge-engaged { @apply bg-indigo-500/20 text-indigo-300 border border-indigo-500/40; }
-.badge-interested { @apply bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold; }
-.badge-qualified { @apply bg-teal-500/20 text-teal-300 border border-teal-500/40 font-semibold; }
-.badge-customer { @apply bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold; }
-.badge-follow_up { @apply bg-purple-500/15 text-purple-300 border border-purple-500/30; }
-.badge-no_response { @apply bg-zinc-600/20 text-zinc-400 border border-zinc-500/20; }
-.badge-not_interested { @apply bg-rose-500/15 text-rose-400 border border-rose-500/30; }
-.badge-do_not_contact { @apply bg-red-900/30 text-red-400 border border-red-800/40 line-through; }
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.page-enter, .animate-fadeIn {
+  animation: page-enter var(--motion-normal) var(--motion-ease);
+}
+.anim-fade-up   { animation: fade-up var(--motion-slow) var(--motion-ease) backwards; }
+.anim-fade-in   { animation: soft-fade var(--motion-normal) var(--motion-ease) backwards; }
+.anim-scale-in  { animation: scale-in var(--motion-normal) var(--motion-ease) backwards; }
+
+/* Children appear in a quick cascade (35ms apart, first 10). Add .stagger to the parent. */
+/* fill-mode "backwards" (not "both"): once finished no transform is left behind, so fixed-position descendants and sticky headers keep working */
+.stagger > * { animation: fade-up var(--motion-slow) var(--motion-ease) backwards; }
+.stagger > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger > *:nth-child(2)  { animation-delay: 35ms; }
+.stagger > *:nth-child(3)  { animation-delay: 70ms; }
+.stagger > *:nth-child(4)  { animation-delay: 105ms; }
+.stagger > *:nth-child(5)  { animation-delay: 140ms; }
+.stagger > *:nth-child(6)  { animation-delay: 175ms; }
+.stagger > *:nth-child(7)  { animation-delay: 210ms; }
+.stagger > *:nth-child(8)  { animation-delay: 245ms; }
+.stagger > *:nth-child(9)  { animation-delay: 280ms; }
+.stagger > *:nth-child(n+10) { animation-delay: 315ms; }
+
+.modal-surface[data-state=open],
+.dialog-surface[data-state=open] {
+  animation: modal-enter var(--motion-dialog) var(--motion-ease);
+}
+.dialog-surface[data-state=closed] {
+  animation: soft-fade var(--motion-fast) var(--motion-ease) reverse both;
+}
+[data-radix-popper-content-wrapper] {
+  animation: soft-fade var(--motion-fast) var(--motion-ease);
+}
+.skeleton {
+  animation: skeleton-breathe 1.6s ease-in-out infinite;
+}
+.drawer-surface[data-state=open] {
+  animation: drawer-enter 200ms var(--motion-ease);
+}
+.modal-overlay {
+  animation: soft-fade var(--motion-fast) var(--motion-ease);
+}
+.sidebar-width {
+  transition: width var(--motion-normal) var(--motion-ease);
+}
+
+/* Chart primitives (SVG) */
+.chart-arc {
+  transition: stroke-dasharray 700ms var(--motion-ease), stroke-dashoffset 700ms var(--motion-ease), opacity var(--motion-fast) ease, stroke-width var(--motion-fast) ease;
+}
+.chart-bar {
+  transform-origin: left center;
+  animation: bar-grow 600ms var(--motion-ease) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

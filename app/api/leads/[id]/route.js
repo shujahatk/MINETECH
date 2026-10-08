@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
+import { requireAuth } from '@/lib/middleware/authGuard';
 import { getLeadById, updateLead, deleteLead } from '@/lib/services/leadService';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request, { params }) {
+  const auth = await requireAuth(request);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const lead = await getLeadById(params.id);
     if (!lead) return NextResponse.json({ success: false, message: 'Lead not found' }, { status: 404 });
@@ -12,6 +18,9 @@ export async function GET(request, { params }) {
 }
 
 export async function PUT(request, { params }) {
+  const auth = await requireAuth(request);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const body = await request.json();
     const updated = await updateLead(params.id, body);
@@ -22,6 +31,9 @@ export async function PUT(request, { params }) {
 }
 
 export async function DELETE(request, { params }) {
+  const auth = await requireAuth(request);
+  if (!auth.authenticated) return auth.response;
+
   try {
     await deleteLead(params.id);
     return NextResponse.json({ success: true, message: 'Lead deleted' });

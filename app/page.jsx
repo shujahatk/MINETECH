@@ -10,7 +10,7 @@ export default function RootPage() {
   const decoded = verifyToken(token);
 
   if (decoded && decoded.userId) {
-    redirect('/workstation');
+    redirect('/dashboard');
   } else {
     redirect('/login');
   }

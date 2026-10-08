@@ -1,49 +1,79 @@
-import { connectToDatabase } from '@/lib/db/mongoose';
-import Call from '@/lib/models/Call';
-import ActivityLog from '@/lib/models/ActivityLog';
+import { NextResponse } from 'next/server.js';
+import { supabaseAdmin } from '../../../../../lib/supabase.js';
+import { verifyTwilioWebhookSignature } from '../../../../../lib/services/twilioService.js';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
-    await connectToDatabase();
+    const url = request.url;
+    const signature = request.headers.get('x-twilio-signature') || '';
 
     const formData = await request.formData();
-    const callSid = formData.get('CallSid');
-    const callStatus = formData.get('CallStatus');
-    const callDuration = formData.get('CallDuration');
-    const recordingUrl = formData.get('RecordingUrl');
-    const recordingSid = formData.get('RecordingSid');
-    const recordingDuration = formData.get('RecordingDuration');
-
-    if (!callSid) return new Response('OK', { status: 200 });
-
-    const updateData = {};
-    if (callStatus) updateData.status = callStatus;
-    if (callDuration) updateData.duration = parseInt(callDuration, 10);
-    if (recordingUrl) updateData.recordingUrl = recordingUrl;
-    if (recordingSid) updateData.recordingSid = recordingSid;
-    if (recordingDuration) updateData.recordingDuration = parseInt(recordingDuration, 10);
-
-    if (['completed', 'failed', 'busy', 'no-answer', 'canceled'].includes(callStatus)) {
-      updateData.endTime = new Date();
+    const params = {};
+    for (const [key, value] of formData.entries()) {
+      params[key] = value;
     }
 
-    const updatedCall = await Call.findOneAndUpdate({ callSid }, updateData, { new: true });
+    // Cryptographic signature validation
+    const isValid = verifyTwilioWebhookSignature(url, params, signature);
+    if (!isValid) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Invalid Twilio signature' }, { status: 401 });
+    }
 
-    if (updatedCall && updatedCall.leadId && callStatus === 'completed') {
-      await ActivityLog.create({
-        leadId: updatedCall.leadId,
-        action: 'CALL_COMPLETED',
-        channel: 'call',
-        direction: 'outbound',
-        summary: `Call completed (${callDuration || 0}s)`,
-        details: { duration: callDuration, recordingUrl },
-        timestamp: new Date(),
+    const callSid = params.CallSid;
+    const callStatus = params.CallStatus;
+    const callDuration = params.CallDuration ? parseInt(params.CallDuration, 10) : 0;
+    const recordingUrl = params.RecordingUrl || '';
+    const recordingSid = params.RecordingSid || '';
+    const recordingDuration = params.RecordingDuration ? parseInt(params.RecordingDuration, 10) : 0;
+
+    if (!callSid) {
+      return new Response('Missing CallSid', { status: 400 });
+    }
+
+    const nowIso = new Date().toISOString();
+    const updateData = {
+      updated_at: nowIso,
+    };
+
+    if (callStatus) updateData.status = callStatus;
+    if (callDuration > 0) updateData.duration = callDuration;
+    if (recordingUrl) updateData.recording_url = recordingUrl;
+
+    const { data: updatedCall, error: updateErr } = await supabaseAdmin
+      .from('calls')
+      .update(updateData)
+      .eq('call_sid', callSid)
+      .select()
+      .maybeSingle();
+
+    if (updateErr) {
+      console.error('[Twilio Status Webhook] Database update error:', updateErr.message);
+    }
+
+    if (updatedCall && updatedCall.lead_id && callStatus === 'completed') {
+      await supabaseAdmin.from('activity_logs').insert({
+        lead_id: updatedCall.lead_id,
+        user_id: updatedCall.user_id || null,
+        type: 'CALL_COMPLETED',
+        description: `Call completed (${callDuration || 0}s)${recordingUrl ? ' with recording' : ''}`,
+        metadata: {
+          callSid,
+          duration: callDuration,
+          recordingUrl,
+          recordingSid,
+          recordingDuration,
+        },
       });
     }
 
-    return new Response('OK', { status: 200 });
+    return new Response('<Response></Response>', {
+      headers: { 'Content-Type': 'text/xml' },
+      status: 200,
+    });
   } catch (err) {
     console.error('[Twilio Status Webhook] Error:', err);
-    return new Response('OK', { status: 200 });
+    return new Response('Internal Server Error', { status: 500 });
   }
 }

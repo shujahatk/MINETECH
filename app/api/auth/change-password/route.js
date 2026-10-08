@@ -1,9 +1,7 @@
-import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db/mongoose';
-import User from '@/lib/models/User';
-import ActivityLog from '@/lib/models/ActivityLog';
-import { getAuthenticatedUser } from '@/lib/services/authService';
+import { NextResponse } from 'next/server.js';
 import bcrypt from 'bcryptjs';
+import { supabaseAdmin } from '../../../../lib/supabase.js';
+import { getAuthenticatedUser } from '../../../../lib/services/authService.js';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,50 +74,57 @@ export async function POST(request) {
       );
     }
 
-    let userUpdated = false;
+    const userId = authUser._id || authUser.id;
 
-    try {
-      await connectToDatabase();
-      const user = await User.findById(authUser._id || authUser.id);
+    // Fetch user from Supabase PostgreSQL
+    const { data: user, error: fetchErr } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
 
-      if (user) {
-        const isCurrentValid = await user.matchPassword(currentPassword);
-        if (!isCurrentValid) {
-          return NextResponse.json(
-            { success: false, message: 'Current password is incorrect.' },
-            { status: 400 }
-          );
-        }
-
-        user.password = newPassword; // Will be hashed by pre-save hook in User model
-        await user.save();
-        userUpdated = true;
-
-        // Log security activity
-        await ActivityLog.create({
-          type: 'SECURITY_EVENT',
-          description: `Password updated successfully for account ${user.email}`,
-          metadata: { action: 'PASSWORD_CHANGE', timestamp: new Date() },
-        });
-      }
-    } catch (dbErr) {
-      // Fallback
+    if (fetchErr || !user) {
+      return NextResponse.json(
+        { success: false, message: 'User account not found.' },
+        { status: 404 }
+      );
     }
 
-    if (!userUpdated) {
-      // Offline / environment admin verification
-      const envAdminPassword = process.env.ADMIN_PASSWORD || 'AdminPassword2026!';
-      if (currentPassword !== envAdminPassword) {
-        return NextResponse.json(
-          { success: false, message: 'Current password is incorrect.' },
-          { status: 400 }
-        );
-      }
-      // Update memory / env password
-      process.env.ADMIN_PASSWORD = newPassword;
+    // Verify existing password
+    const isCurrentValid = await bcrypt.compare(currentPassword, user.password);
+    if (!isCurrentValid) {
+      return NextResponse.json(
+        { success: false, message: 'Current password is incorrect.' },
+        { status: 400 }
+      );
     }
 
-    console.log(`[Security] Password successfully changed for ${authUser.email}`);
+    // Hash the new password using bcrypt before persisting to database
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    const nowIso = new Date().toISOString();
+    const { error: updateErr } = await supabaseAdmin
+      .from('users')
+      .update({
+        password: hashedPassword,
+        updated_at: nowIso,
+      })
+      .eq('id', user.id);
+
+    if (updateErr) {
+      throw new Error(`Failed to update password: ${updateErr.message}`);
+    }
+
+    // Log security activity in Supabase
+    await supabaseAdmin.from('activity_logs').insert({
+      user_id: user.id,
+      type: 'SECURITY_EVENT',
+      description: `Password updated successfully for account ${user.email}`,
+      metadata: { action: 'PASSWORD_CHANGE', timestamp: nowIso },
+    });
+
+    console.log(`[Security] Password successfully changed for account ID: ${user.id}`);
 
     // Invalidate session cookie so user signs in with the new password
     const response = NextResponse.json({
@@ -139,7 +144,7 @@ export async function POST(request) {
 
     return response;
   } catch (err) {
-    console.error('[Change Password] Error:', err);
+    console.error('[Change Password] Error:', err.message);
     return NextResponse.json(
       { success: false, message: 'Unable to change password right now. Please try again.' },
       { status: 500 }

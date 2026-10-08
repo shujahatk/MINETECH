@@ -1,24 +1,30 @@
 import './globals.css';
 import AppShell from '@/components/layout/AppShell';
+import { ThemeProvider, themeScriptSnippet } from '@/components/theme/ThemeProvider';
+import { Toaster } from '@/components/ui/sonner';
 
 export const metadata = {
-  title: 'MINETECH — Outbound Dialer & Sales Workstation',
-  description: 'MINETECH Outbound Sales & Dialer Workstation with CRM, Email Blasts, Unified Inbox, Sequences, and Twilio Voice/SMS.',
+  title: 'MINETECH — Outbound Sales Workstation & CRM',
+  description: 'MINETECH outbound sales workstation with CRM, email campaigns, unified inbox and sequences.',
 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScriptSnippet }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body className="bg-[#090d16] text-slate-100 min-h-screen flex flex-col antialiased">
-        <AppShell>{children}</AppShell>
+      <body className="min-h-screen bg-background text-foreground antialiased selection:bg-primary/20 selection:text-primary">
+        <ThemeProvider>
+          <AppShell>{children}</AppShell>
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

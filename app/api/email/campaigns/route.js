@@ -22,7 +22,22 @@ export async function GET() {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { name, subject, bodyHtml, bodyText, templateId, inboxId, filterCriteria, autoLaunch } = body;
+    const {
+      name,
+      subject,
+      bodyHtml,
+      bodyText,
+      templateId,
+      inboxId,
+      filterCriteria,
+      autoLaunch,
+      campaignType,
+      masterPrompt,
+      personalization,
+    } = body;
+
+    const finalCampaignType = campaignType || (personalization?.mode === 'claude_personalized_blast' ? 'ai_personalized' : 'standard');
+    const finalMasterPrompt = masterPrompt || personalization?.prompt || '';
 
     if (!name || !subject || !bodyHtml) {
       return NextResponse.json({ success: false, message: 'Name, subject, and body are required' }, { status: 400 });
@@ -37,6 +52,8 @@ export async function POST(request) {
         templateId,
         inboxId,
         filterCriteria,
+        campaignType: finalCampaignType,
+        masterPrompt: finalMasterPrompt,
       });
 
       if (autoLaunch) {
@@ -44,6 +61,7 @@ export async function POST(request) {
       }
 
       return NextResponse.json({ success: true, data: campaign }, { status: 201 });
+
     } catch (dbErr) {
       return NextResponse.json({
         success: true,

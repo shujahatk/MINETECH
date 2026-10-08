@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db/mongoose';
 import EmailCampaign from '@/lib/models/EmailCampaign';
 import EmailRecipient from '@/lib/models/EmailRecipient';
+import { requireAuth } from '@/lib/middleware/authGuard';
 import {
   launchCampaign,
   pauseCampaign,
@@ -10,7 +11,12 @@ import {
   retryFailedCampaignRecipients,
 } from '@/lib/services/campaignService';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request, { params }) {
+  const auth = await requireAuth(request);
+  if (!auth.authenticated) return auth.response;
+
   try {
     await connectToDatabase();
     const campaign = await EmailCampaign.findById(params.id);
@@ -35,6 +41,9 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
+  const auth = await requireAuth(request);
+  if (!auth.authenticated) return auth.response;
+
   try {
     const { action } = await request.json(); // 'launch', 'pause', 'resume', 'cancel', 'retry'
 

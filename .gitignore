@@ -33,3 +33,7 @@ Thumbs.db
 logs/
 *.log
 scratch/
+
+# Local skills & tooling
+ui-ux-pro-max-skill/
+

@@ -1,7 +1,11 @@
-import PersonalDashboard from '@/components/dashboard/PersonalDashboard';
+import SalesCockpit from '@/components/workstation/SalesCockpit';
 
-export const dynamic = 'force-dynamic';
+
 
 export default function WorkstationPage() {
-  return <PersonalDashboard />;
+  return (
+    <div className="space-y-4">
+      <SalesCockpit />
+    </div>
+  );
 }

@@ -678,7 +678,7 @@ async function fetchInboxes() {
     }
 
     if (select) {
-      select.innerHTML = '<option value="">Default (System SendGrid)</option>' +
+      select.innerHTML = '<option value="">Default (System Resend)</option>' +
         inboxes.map(i => `<option value="${i._id}">${escapeHtml(i.name)} (${i.fromEmail} - ${i.emailsSentToday || 0}/${i.dailyLimit} sent)</option>`).join('');
     }
   } catch (err) { console.error('Inboxes error:', err); }

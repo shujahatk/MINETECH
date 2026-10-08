@@ -1,291 +1,394 @@
 'use client';
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Users,
-  Mail,
   Inbox,
-  Send,
-  Sparkles,
-  Layers,
+  Radio,
+  GitFork,
   FileText,
-  Phone,
-  MessageSquare,
+  Target,
   BarChart3,
   Settings,
-  Flame,
-  ChevronDown,
-  PhoneCall,
+  Plus,
   LogOut,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Activity,
+  Search,
+  Command,
 } from 'lucide-react';
-import DialerModal from '@/components/twilio/DialerModal';
-import ComposeModal from '@/components/email/ComposeModal';
-import LoginPage from '@/app/login/page';
+import ThemeToggle from '@/components/theme/ThemeToggle';
+import { Button } from '@/components/ui/button';
+import { ModalFrame } from '@/components/ui/modal-frame';
+import { useVisibleInterval } from '@/lib/hooks/useVisibleInterval';
+
+// Loaded only when the user opens Compose — not on every page load.
+const ComposeModal = dynamic(() => import('@/components/email/ComposeModal'), { ssr: false });
+
+// Calls / SMS are intentionally not in the navigation: MineTech is email-first.
+// Their pages, API routes and webhooks still exist (see lib/config/features.js to re-enable).
+const sections = [
+  {
+    title: 'Workspace',
+    items: [
+      ['Dashboard', '/dashboard', LayoutDashboard],
+      ['Workstation', '/workstation', Target],
+      ['Leads', '/leads', Users],
+      ['Pipeline', '/pipeline', GitFork],
+      ['Campaigns', '/email/blasts', Radio],
+      ['Inbox', '/email/inbox', Inbox],
+    ],
+  },
+  {
+    title: 'Email',
+    items: [
+      ['Templates', '/email/templates', FileText],
+      ['Sequences', '/email/sequences', Activity],
+    ],
+  },
+  {
+    title: 'Intelligence',
+    items: [
+      ['Analytics', '/analytics', BarChart3],
+    ],
+  },
+  {
+    title: 'System',
+    items: [
+      ['Settings', '/settings', Settings],
+      ['System health', '/command-center', Command],
+    ],
+  },
+];
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
-  const router = useRouter();
-
+  const isLoginPage = pathname === '/login';
   const [user, setUser] = useState(null);
-  const [authState, setAuthState] = useState('loading'); // 'loading' | 'authenticated' | 'unauthenticated'
-  const [emailExpanded, setEmailExpanded] = useState(true);
-  const [twilioExpanded, setTwilioExpanded] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isDialerOpen, setIsDialerOpen] = useState(false);
   const [isComposeOpen, setIsComposeOpen] = useState(false);
-
-  const checkAuth = async () => {
-    try {
-      const res = await fetch('/api/auth/me');
-      if (res.ok) {
-        const j = await res.json();
-        if (j.user) {
-          setUser(j.user);
-          setAuthState('authenticated');
-          return;
-        }
-      }
-      setUser(null);
-      setAuthState('unauthenticated');
-    } catch (err) {
-      setUser(null);
-      setAuthState('unauthenticated');
-    }
-  };
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
-    checkAuth();
+    try {
+      setCollapsed(localStorage.getItem('minetech-sidebar') === 'collapsed');
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    setMobileOpen(false);
   }, [pathname]);
 
   useEffect(() => {
-    if (authState !== 'authenticated') return;
-    const fetchUnread = async () => {
-      try {
-        const res = await fetch('/api/email/inbox');
-        if (res.ok) {
-          const data = await res.json();
-          setUnreadCount(data.counts?.unread || 0);
-        }
-      } catch (err) {}
-    };
-    fetchUnread();
-    const interval = setInterval(fetchUnread, 30000);
-    return () => clearInterval(interval);
-  }, [authState, pathname]);
+    if (isLoginPage) return;
+    fetch('/api/auth/me')
+      .then((r) => {
+        if (!r.ok) throw new Error('Not authenticated');
+        return r.json();
+      })
+      .then((j) => {
+        if (j.user) setUser(j.user);
+      })
+      .catch(() => {});
+  }, [isLoginPage]);
+
+  // Sidebar badge: one head-only COUNT query (not the full inbox payload), paused while the tab is hidden.
+  const fetchUnread = useCallback(async () => {
+    try {
+      const res = await fetch('/api/email/inbox/unread');
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!isLoginPage) fetchUnread();
+  }, [isLoginPage, fetchUnread]);
+
+  useVisibleInterval(fetchUnread, 60000, !isLoginPage);
 
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) {}
-    setUser(null);
-    setAuthState('unauthenticated');
+    } catch {}
     window.location.href = '/login';
   };
 
-  const navItemClass = (path, exact = false) => {
-    const isActive = exact ? pathname === path : pathname.startsWith(path);
-    return `flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
-      isActive
-        ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-[0_0_12px_rgba(99,102,241,0.25)]'
-        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border border-transparent'
-    }`;
+  const toggleSidebar = () => {
+    const next = !collapsed;
+    setCollapsed(next);
+    try {
+      localStorage.setItem('minetech-sidebar', next ? 'collapsed' : 'expanded');
+    } catch {}
   };
 
-  const isLoginPage = pathname === '/login';
+  if (isLoginPage) return children;
 
-  // 1. Loading state
-  if (authState === 'loading') {
-    return (
-      <div className="min-h-screen bg-[#090d16] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-600/30 border border-indigo-500 flex items-center justify-center animate-pulse">
-            <Flame className="w-6 h-6 text-indigo-400" />
+  const current = sections.flatMap((s) => s.items).find(([, href]) => pathname === href)?.[0] || 'Workspace';
+  const initials = user?.name?.split(' ').slice(0, 2).map((n) => n[0]).join('') || 'M';
+
+  const navigation = (compact = false) => (
+    <nav aria-label="Main navigation" className={`px-2.5 py-3 ${compact ? 'space-y-3' : 'space-y-5'}`}>
+      {sections.map((section, sectionIndex) => (
+        <div key={section.title}>
+          {compact ? (
+            sectionIndex > 0 && <div className="mx-2 mb-3 h-px bg-sidebar-border" aria-hidden="true" />
+          ) : (
+            <p className="mb-1.5 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80">
+              {section.title}
+            </p>
+          )}
+          <div className="space-y-0.5">
+            {section.items.map(([label, href, Icon]) => {
+              const isActive = pathname === href || (href !== '/dashboard' && pathname.startsWith(href));
+              const showUnread = href === '/email/inbox' && unreadCount > 0;
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  title={compact ? label : undefined}
+                  aria-label={compact ? label : undefined}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`group relative flex min-h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13px] font-medium transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    isActive
+                      ? 'bg-sidebar-accent font-semibold text-sidebar-accent-foreground'
+                      : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground'
+                  } ${compact ? 'justify-center px-0' : ''}`}
+                >
+                  {/* Active rail: small, brand-coloured, fades in with the route change */}
+                  {isActive && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute -left-2.5 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-primary anim-fade-in"
+                    />
+                  )}
+                  <Icon
+                    className={`h-4 w-4 shrink-0 transition-transform duration-200 ${
+                      isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground group-hover:scale-110'
+                    }`}
+                    aria-hidden="true"
+                  />
+                  {!compact && <span className="flex-1 truncate">{label}</span>}
+                  {!compact && showUnread && (
+                    <span className="rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums text-primary">
+                      {unreadCount}
+                    </span>
+                  )}
+                  {compact && showUnread && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute right-2 top-1.5 h-1.5 w-1.5 rounded-full bg-primary ring-2 ring-sidebar"
+                    />
+                  )}
+                </Link>
+              );
+            })}
           </div>
-          <span className="text-xs text-slate-400 font-medium font-mono">Verifying authentication...</span>
         </div>
-      </div>
-    );
-  }
+      ))}
+    </nav>
+  );
 
-  // 2. Unauthenticated state or on /login page
-  if (authState === 'unauthenticated' || isLoginPage) {
-    return (
-      <div className="min-h-screen bg-[#090d16] flex flex-col justify-center">
-        <LoginPage />
-      </div>
-    );
-  }
-
-  // 3. Authenticated state: Full Workstation Shell
   return (
-    <div className="flex min-h-screen bg-[#090d16]">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-slate-800/80 bg-[#0c1220]/90 backdrop-blur-md flex flex-col justify-between shrink-0 sticky top-0 h-screen overflow-y-auto">
-        <div>
-          {/* Logo Brand */}
-          <div className="p-5 border-b border-slate-800/60 flex items-center justify-between">
-            <Link href="/workstation" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
-                <Flame className="w-5 h-5 text-white" />
+    <div className="flex min-h-screen bg-background text-foreground">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
+
+      {/* Main Desktop Sidebar */}
+      <aside
+        className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-all duration-200 ease-out lg:flex ${
+          collapsed ? 'w-[64px]' : 'w-[232px]'
+        }`}
+      >
+        {/* Brand Header */}
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-3.5">
+          <Link href="/dashboard" aria-label="MineTech dashboard" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground shadow-subtle">
+              M
+            </div>
+            {!collapsed && (
+              <div className="flex flex-col">
+                <span className="text-sm font-semibold tracking-tight text-foreground">MineTech</span>
+                <span className="text-[10px] font-medium text-muted-foreground">Outbound CRM</span>
               </div>
-              <div>
-                <span className="font-extrabold text-base tracking-tight text-white block">
-                  MINETECH <span className="text-indigo-400">OUTBOUND</span>
-                </span>
-                <span className="text-[10px] text-slate-500 font-mono block -mt-0.5 tracking-wider uppercase">
-                  Dialer & Workstation
-                </span>
-              </div>
-            </Link>
-          </div>
-
-          {/* Quick Action Buttons */}
-          <div className="p-3 grid grid-cols-2 gap-2">
+            )}
+          </Link>
+          {!collapsed && (
             <button
-              onClick={() => setIsComposeOpen(true)}
-              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition"
+              onClick={toggleSidebar}
+              aria-label="Collapse sidebar"
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
             >
-              <Send className="w-3.5 h-3.5" /> Compose
+              <PanelLeftClose className="h-4 w-4" />
             </button>
-            <button
-              onClick={() => setIsDialerOpen(true)}
-              className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition"
-            >
-              <PhoneCall className="w-3.5 h-3.5" /> Dial Pad
-            </button>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="p-3 space-y-1">
-            <Link href="/workstation" className={navItemClass('/workstation', true)}>
-              <LayoutDashboard className="w-4 h-4 text-indigo-400" />
-              <span>Dashboard</span>
-            </Link>
-
-            <Link href="/leads" className={navItemClass('/leads')}>
-              <Users className="w-4 h-4 text-blue-400" />
-              <span>Leads CRM</span>
-            </Link>
-
-            {/* Email Section */}
-            <div className="pt-2">
-              <button
-                onClick={() => setEmailExpanded(!emailExpanded)}
-                className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300"
-              >
-                <span>Email Outreach</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${emailExpanded ? '' : '-rotate-90'}`} />
-              </button>
-
-              {emailExpanded && (
-                <div className="mt-1 space-y-0.5 pl-1.5">
-                  <Link href="/email/inbox" className={navItemClass('/email/inbox')}>
-                    <Inbox className="w-4 h-4 text-amber-400" />
-                    <span className="flex-1">Unified Inbox</span>
-                    {unreadCount > 0 && (
-                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-500 text-white animate-pulse">
-                        {unreadCount}
-                      </span>
-                    )}
-                  </Link>
-
-                  <Link href="/email/blasts" className={navItemClass('/email/blasts')}>
-                    <Sparkles className="w-4 h-4 text-purple-400" />
-                    <span>Email Blasts</span>
-                  </Link>
-
-                  <Link href="/email/sequences" className={navItemClass('/email/sequences')}>
-                    <Layers className="w-4 h-4 text-cyan-400" />
-                    <span>Sequences</span>
-                  </Link>
-
-                  <Link href="/email/templates" className={navItemClass('/email/templates')}>
-                    <FileText className="w-4 h-4 text-emerald-400" />
-                    <span>Templates</span>
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            {/* Twilio Section */}
-            <div className="pt-2">
-              <button
-                onClick={() => setTwilioExpanded(!twilioExpanded)}
-                className="w-full flex items-center justify-between px-3 py-1.5 text-xs font-semibold text-slate-500 uppercase tracking-wider hover:text-slate-300"
-              >
-                <span>Twilio Channels</span>
-                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${twilioExpanded ? '' : '-rotate-90'}`} />
-              </button>
-
-              {twilioExpanded && (
-                <div className="mt-1 space-y-0.5 pl-1.5">
-                  <Link href="/twilio/calls" className={navItemClass('/twilio/calls')}>
-                    <Phone className="w-4 h-4 text-emerald-400" />
-                    <span>Voice Calling</span>
-                  </Link>
-
-                  <Link href="/twilio/sms" className={navItemClass('/twilio/sms')}>
-                    <MessageSquare className="w-4 h-4 text-sky-400" />
-                    <span>SMS / WhatsApp</span>
-                  </Link>
-                </div>
-              )}
-            </div>
-
-            <div className="pt-2">
-              <Link href="/analytics" className={navItemClass('/analytics')}>
-                <BarChart3 className="w-4 h-4 text-pink-400" />
-                <span>Analytics</span>
-              </Link>
-
-              <Link href="/settings" className={navItemClass('/settings')}>
-                <Settings className="w-4 h-4 text-slate-400" />
-                <span>Settings</span>
-              </Link>
-            </div>
-          </nav>
+          )}
         </div>
 
-        {/* Footer User Profile & System Status */}
-        <div className="p-4 border-t border-slate-800/60 bg-slate-900/40">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-indigo-500/30 border border-indigo-400/50 flex items-center justify-center font-bold text-xs text-indigo-300 shrink-0">
-                {user?.name ? user.name[0] : 'A'}
-              </div>
-              <div className="text-xs truncate">
-                <span className="text-slate-200 font-semibold block leading-tight truncate">
-                  {user?.name || 'Admin User'}
-                </span>
-                <span className="text-[10px] text-slate-400 font-mono block truncate">
-                  {user?.email || 'admin@8020outbound.com'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
+        {/* Navigation Items */}
+        <div className="flex-1 overflow-y-auto py-2">{navigation(collapsed)}</div>
+
+        {/* Footer: expand control when collapsed */}
+        {collapsed && (
+          <div className="border-t border-sidebar-border p-3">
+            <div className="flex flex-col items-center gap-2">
               <button
-                onClick={handleLogout}
-                className="text-[11px] text-slate-500 hover:text-rose-400 transition"
-                title="Log Out"
+                onClick={() => setIsComposeOpen(true)}
+                title="Compose email"
+                aria-label="Compose email"
+                className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary transition-colors hover:bg-primary/20"
               >
-                Logout
+                <Plus className="h-4 w-4" />
               </button>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="System Online"></span>
+              <button
+                onClick={toggleSidebar}
+                aria-label="Expand sidebar"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+              </button>
             </div>
           </div>
-        </div>
+        )}
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-w-0 bg-[#090d16] overflow-y-auto">
-        <div className="flex-1 p-6 md:p-8 max-w-7xl w-full mx-auto">{children}</div>
-      </main>
+      <div className="min-w-0 flex-1 flex flex-col">
+        {/* Top Header */}
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-4 border-b border-border bg-card/90 px-4 backdrop-blur-md sm:px-5 xl:px-6">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              aria-label="Open navigation"
+              onClick={() => setMobileOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
+            <div className="hidden items-center gap-2 text-xs font-medium sm:flex">
+              <span className="text-muted-foreground">Workspace</span>
+              <span className="text-muted-foreground/60">/</span>
+              <span className="text-foreground font-semibold">{current}</span>
+            </div>
+            <span className="font-semibold sm:hidden text-foreground">MineTech</span>
+          </div>
 
-      {/* Quick Launch Modals */}
-      {isDialerOpen && <DialerModal onClose={() => setIsDialerOpen(false)} />}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Search Pill */}
+            <Link
+              href="/leads"
+              className="hidden h-8 items-center gap-2 rounded-lg border border-border bg-muted/50 px-2.5 text-xs text-muted-foreground transition-colors hover:border-muted-foreground/40 hover:bg-muted sm:flex"
+            >
+              <Search className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Search leads, campaigns...</span>
+              <kbd className="kbd ml-3">
+                /
+              </kbd>
+            </Link>
+
+            {/* Quick Actions */}
+            <Button
+              variant="outline"
+              size="sm"
+              className="hidden items-center gap-1.5 sm:flex"
+              onClick={() => setIsComposeOpen(true)}
+            >
+              <Plus className="h-3.5 w-3.5 text-primary" />
+              <span>Compose</span>
+            </Button>
+
+            {/* Theme Toggle Component */}
+            <ThemeToggle />
+
+            <Link
+              href="/email/inbox"
+              aria-label={`Inbox, ${unreadCount} unread`}
+              className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground shadow-subtle transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Inbox className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-primary px-0.5 text-[10px] font-semibold leading-none text-primary-foreground">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </Link>
+
+            <div className="h-5 w-px bg-border" />
+
+            {/* User Profile Pill */}
+            <Link
+              href="/settings"
+              className="flex items-center gap-2 rounded-lg border border-transparent p-1 pr-2 transition-colors hover:border-border hover:bg-muted"
+              aria-label="Account settings"
+            >
+              <div className="flex h-6 w-6 items-center justify-center rounded-full border border-border bg-secondary text-[10px] font-semibold text-foreground">
+                {initials}
+              </div>
+              <span className="hidden text-xs font-medium text-foreground md:block max-w-[120px] truncate">
+                {user?.name || 'Admin'}
+              </span>
+            </Link>
+
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Sign out"
+              onClick={handleLogout}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        </header>
+
+        {/* Main Routed Page Content */}
+        <main id="main-content" tabIndex={-1} className="page-content flex-1 outline-none">
+          <div key={pathname} className="page-enter">
+            {children}
+          </div>
+        </main>
+      </div>
+
+      {/* Mobile Drawer */}
+      {mobileOpen && (
+        <ModalFrame title="Navigation" onClose={() => setMobileOpen(false)} drawer className="left-0 right-auto max-w-xs">
+          <div className="flex items-center justify-between border-b border-border p-4 bg-sidebar">
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground">
+                M
+              </div>
+              <span className="text-sm font-semibold text-foreground">MineTech Outbound</span>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setMobileOpen(false)}>
+              Close
+            </Button>
+          </div>
+          <div className="py-2 bg-sidebar flex-1">{navigation()}</div>
+          <div className="border-t border-border p-4 space-y-2 bg-sidebar">
+            <Button
+              className="w-full justify-center"
+              onClick={() => {
+                setMobileOpen(false);
+                setIsComposeOpen(true);
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Compose email
+            </Button>
+          </div>
+        </ModalFrame>
+      )}
+
+      {/* Persistent Modals */}
       {isComposeOpen && <ComposeModal onClose={() => setIsComposeOpen(false)} />}
     </div>
   );

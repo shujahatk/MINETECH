@@ -3,11 +3,11 @@ import { connectToDatabase } from '@/lib/db/mongoose';
 import User from '@/lib/models/User';
 import { signToken, ensureDefaultAdmin } from '@/lib/services/authService';
 import { checkRateLimit, recordFailedAttempt, resetLoginAttempts } from '@/lib/services/rateLimiter';
-import bcrypt from 'bcryptjs';
+import { isHoneypotTriggered } from '@/lib/utils/botProtection';
+import { isValidEmail } from '@/lib/utils/validators';
+import { sanitizeApiResponse } from '@/lib/utils/responseFilter';
 
 export const dynamic = 'force-dynamic';
-
-const DUMMY_HASH = '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy';
 
 function getClientIp(request) {
   const forwarded = request.headers.get('x-forwarded-for');
@@ -21,112 +21,123 @@ export async function POST(request) {
   try {
     const clientIp = getClientIp(request);
 
-    // 1. Check rate limit
+    // 1. Check brute force rate limit
     const rateCheck = checkRateLimit(clientIp);
     if (!rateCheck.allowed) {
       return NextResponse.json(
         {
           success: false,
-          message: rateCheck.message,
+          error: rateCheck.message,
           retryAfter: rateCheck.retryAfterSeconds,
         },
         { status: 429 }
       );
     }
 
-    const { email, password } = await request.json();
+    const body = await request.json();
 
-    if (!email || !password || typeof email !== 'string' || typeof password !== 'string') {
+    // 2. Honeypot Bot Trap Check
+    if (isHoneypotTriggered(body)) {
+      console.warn(`[Security] Bot honeypot triggered from IP: ${clientIp}`);
       return NextResponse.json(
-        { success: false, message: 'Valid email and password are required.' },
+        { success: false, error: 'Invalid authentication request.' },
+        { status: 400 }
+      );
+    }
+
+    const { email, password } = body;
+
+    if (!email || !password || typeof email !== 'string' || typeof password !== 'string' || !isValidEmail(email)) {
+      return NextResponse.json(
+        { success: false, error: 'Valid email and password are required.' },
         { status: 400 }
       );
     }
 
     const normalizedEmail = email.toLowerCase().trim();
-    const envAdminEmail = (process.env.ADMIN_EMAIL || 'admin@8020outbound.com').toLowerCase().trim();
-    const envAdminPassword = process.env.ADMIN_PASSWORD || 'AdminPassword2026!';
 
-    let user = null;
-    let isMatch = false;
+    await connectToDatabase();
+    await ensureDefaultAdmin();
 
-    // Check database first
-    try {
-      await connectToDatabase();
-      await ensureDefaultAdmin();
-      user = await User.findOne({ email: normalizedEmail });
-      if (user) {
-        isMatch = await user.matchPassword(password);
-      }
-    } catch (dbErr) {
-      // Offline fallback
-    }
-
-    // Fallback check against configured admin credentials in .env if DB not connected or user matches
-    if (!isMatch && normalizedEmail === envAdminEmail && password === envAdminPassword) {
-      isMatch = true;
-      user = {
-        _id: 'local-admin-id',
-        name: 'Admin User',
-        email: envAdminEmail,
-        role: 'admin',
-      };
-    }
-
-    if (!isMatch) {
-      // Timing attack protection
-      await bcrypt.compare(password, DUMMY_HASH);
-      const attemptResult = recordFailedAttempt(clientIp);
-
-      if (attemptResult.locked) {
-        return NextResponse.json(
-          { success: false, message: 'Too many failed login attempts. IP locked for 15 minutes.' },
-          { status: 429 }
-        );
-      }
-
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      recordFailedAttempt(clientIp);
       return NextResponse.json(
-        {
-          success: false,
-          message: `Invalid email or password. (${attemptResult.remaining} attempt${attemptResult.remaining === 1 ? '' : 's'} remaining)`,
-        },
+        { success: false, error: 'Invalid email or password.' },
         { status: 401 }
       );
     }
 
-    // Reset rate limiter on successful login
-    resetLoginAttempts(clientIp);
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      recordFailedAttempt(clientIp);
+      return NextResponse.json(
+        { success: false, error: 'Invalid email or password.' },
+        { status: 401 }
+      );
+    }
 
-    const token = signToken({
-      userId: (user._id || user.id || 'local-admin-id').toString(),
+    // 2. Check approval & active status
+    if (user.role !== 'admin' && user.role !== 'owner' && !user.approved) {
+      return NextResponse.json(
+        { success: false, error: 'Account pending administrator approval. Please contact your manager.' },
+        { status: 403 }
+      );
+    }
+
+    if (user.active === false) {
+      return NextResponse.json(
+        { success: false, error: 'Account has been deactivated. Please contact your administrator.' },
+        { status: 403 }
+      );
+    }
+
+    // 3. Reset rate limiter and update last login
+    resetLoginAttempts(clientIp);
+    user.lastLogin = new Date();
+    await user.save();
+
+    // 4. Generate JWT token
+    const tokenPayload = {
+      userId: user._id.toString(),
+      id: user._id.toString(),
       email: user.email,
       name: user.name,
-      role: user.role || 'admin',
-    });
+      role: user.role || 'salesperson',
+      approved: user.approved !== false,
+      active: user.active !== false,
+    };
 
+    const token = signToken(tokenPayload);
+
+    // 5. Construct response with secure HttpOnly cookie
     const response = NextResponse.json({
       success: true,
+      message: 'Authentication successful',
+      token,
       user: {
-        id: user._id || user.id,
+        id: user._id.toString(),
         name: user.name,
         email: user.email,
-        role: user.role || 'admin',
+        role: user.role || 'salesperson',
+        dailyCallTarget: user.dailyCallTarget || 50,
+        dailyEmailLimit: user.dailyEmailLimit || 200,
       },
-      token,
     });
 
-    // Secure HTTP-only session cookie (24 hours standard session lifetime)
-    response.cookies.set('auth_token', token, {
+    response.cookies.set({
+      name: 'auth_token',
+      value: token,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      maxAge: 8 * 60 * 60, // 8 hours
       path: '/',
-      maxAge: 60 * 60 * 24, // 24 hours
     });
 
     return response;
   } catch (err) {
-    console.error('[Auth Login] Error:', err);
-    return NextResponse.json({ success: false, message: 'Authentication error' }, { status: 500 });
+    console.error('[Login API Error]:', err.message);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

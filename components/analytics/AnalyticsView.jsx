@@ -1,4 +1,6 @@
 'use client';
+import { ErrorState } from '@/components/ui/error-state';
+import { LoadingState, LinesSkeleton } from '@/components/ui/loading-state';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -6,34 +8,76 @@ import {
   BarChart3,
   TrendingUp,
   Users,
-  ChevronRight,
   ArrowUpRight,
   Filter,
-  CheckCircle2,
-  AlertCircle,
   Flame,
-  ArrowRight,
-  Sparkles,
+  Mail,
+  Send,
+  PieChart,
+  X,
 } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import MetricCard from '@/components/ui/MetricCard';
+import { PageHeader } from '@/components/ui/page-header';
+import { SectionCard } from '@/components/ui/section-card';
+import StatusBadge from '@/components/ui/StatusBadge';
+import DonutChart from '@/components/charts/DonutChart';
+import BarList from '@/components/charts/BarList';
+
+// Stage colours follow the same five buckets the dashboard donut uses, so both screens read alike.
+const C_NEW = 'hsl(var(--chart-6))';
+const C_CONTACTED = 'hsl(var(--chart-3))';
+const C_ENGAGED = 'hsl(var(--chart-2))';
+const C_WON = 'hsl(var(--chart-4))';
+const C_CLOSED = 'hsl(var(--chart-5))';
 
 const STAGE_CONFIG = {
-  NEW: { label: 'New Lead', color: 'from-blue-600 to-blue-500', text: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/30' },
-  CONTACTED: { label: 'Contacted', color: 'from-indigo-600 to-indigo-500', text: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/30' },
-  ENGAGED: { label: 'Engaged', color: 'from-cyan-600 to-cyan-500', text: 'text-cyan-400', bg: 'bg-cyan-500/10', border: 'border-cyan-500/30' },
-  INTERESTED: { label: 'Interested', color: 'from-emerald-600 to-emerald-500', text: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/30' },
-  QUALIFIED: { label: 'Qualified', color: 'from-amber-600 to-amber-500', text: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/30' },
-  CUSTOMER: { label: 'Won / Customer', color: 'from-green-600 to-green-500', text: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/30' },
-  FOLLOW_UP: { label: 'Follow Up', color: 'from-purple-600 to-purple-500', text: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/30' },
-  NO_RESPONSE: { label: 'No Response', color: 'from-slate-600 to-slate-500', text: 'text-slate-400', bg: 'bg-slate-500/10', border: 'border-slate-500/30' },
-  NOT_INTERESTED: { label: 'Not Interested', color: 'from-rose-600 to-rose-500', text: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/30' },
-  DO_NOT_CONTACT: { label: 'Do Not Contact', color: 'from-red-700 to-red-600', text: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/30' },
+  NEW: { label: 'New lead', color: C_NEW },
+  CONTACTED: { label: 'Contacted', color: C_CONTACTED },
+  ENGAGED: { label: 'Engaged', color: C_ENGAGED },
+  TECHNICAL_EVALUATION: { label: 'Tech evaluation', color: C_ENGAGED },
+  COMMERCIAL_DISCUSSION: { label: 'Commercial discussion', color: C_ENGAGED },
+  TRIAL_ORDER: { label: 'Trial order', color: C_WON },
+  APPROVED_SUPPLIER: { label: 'Approved supplier', color: C_WON },
+  RECURRING_CUSTOMER: { label: 'Recurring customer', color: C_WON },
+  ON_HOLD: { label: 'On hold', color: C_CLOSED },
+  LOST: { label: 'Lost', color: C_CLOSED },
+  DO_NOT_CONTACT: { label: 'Do not contact', color: C_CLOSED },
 };
 
-const FUNNEL_FLOW = ['NEW', 'CONTACTED', 'ENGAGED', 'INTERESTED', 'QUALIFIED', 'CUSTOMER'];
+const FUNNEL_FLOW = [
+  'NEW',
+  'CONTACTED',
+  'ENGAGED',
+  'TECHNICAL_EVALUATION',
+  'COMMERCIAL_DISCUSSION',
+  'TRIAL_ORDER',
+  'APPROVED_SUPPLIER',
+  'RECURRING_CUSTOMER',
+];
+const OFF_FUNNEL = ['ON_HOLD', 'LOST', 'DO_NOT_CONTACT'];
+
+const DONUT_GROUPS = [
+  { key: 'new', label: 'New', statuses: ['NEW'], color: C_NEW },
+  { key: 'contacted', label: 'Contacted', statuses: ['CONTACTED'], color: C_CONTACTED },
+  { key: 'engaged', label: 'Engaged & evaluating', statuses: ['ENGAGED', 'TECHNICAL_EVALUATION', 'COMMERCIAL_DISCUSSION'], color: C_ENGAGED },
+  { key: 'won', label: 'Trial, approved & recurring', statuses: ['TRIAL_ORDER', 'APPROVED_SUPPLIER', 'RECURRING_CUSTOMER'], color: C_WON },
+  { key: 'closed', label: 'On hold, lost & DNC', statuses: ['ON_HOLD', 'LOST', 'DO_NOT_CONTACT'], color: C_CLOSED },
+];
 
 export default function AnalyticsView() {
   const router = useRouter();
   const [data, setData] = useState(null);
+  const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [activeStage, setActiveStage] = useState(null);
   const [stageLeads, setStageLeads] = useState([]);
@@ -41,8 +85,9 @@ export default function AnalyticsView() {
 
   useEffect(() => {
     fetch('/api/analytics')
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error('Request failed'); return r.json(); })
       .then((j) => setData(j.data))
+      .catch(() => setLoadError('Could not load analytics. Please try again.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -73,218 +118,249 @@ export default function AnalyticsView() {
   };
 
   if (loading) {
-    return <div className="p-12 text-center text-xs text-slate-500">Loading performance analytics...</div>;
+    return (
+      <div className="space-y-4">
+        <PageHeader icon={BarChart3} title="Analytics" description="Deliverability, funnel conversion and prospect distribution across the workspace." className="mb-0" />
+        <LoadingState cards rows={4} label="Loading analytics" />
+        <div className="panel p-0"><LoadingState rows={6} label="Loading funnel" /></div>
+      </div>
+    );
   }
 
+  if (loadError) return <ErrorState message={loadError} onRetry={() => window.location.reload()} />;
+
   const email = data?.email || {};
-  const calls = data?.calls || {};
   const pipeline = data?.pipeline || {};
 
-  const totalLeads = Object.values(pipeline).reduce((a, b) => a + b, 0) || 1;
-  const activePipelineLeads = (pipeline.NEW || 0) + (pipeline.CONTACTED || 0) + (pipeline.ENGAGED || 0) + (pipeline.INTERESTED || 0) + (pipeline.QUALIFIED || 0);
+  const pipelineTotal = Object.values(pipeline).reduce((a, b) => a + b, 0);
+  const totalLeads = pipelineTotal || 1; // divisor only; never displayed
+  const activePipelineLeads = (pipeline.NEW || 0) + (pipeline.CONTACTED || 0) + (pipeline.ENGAGED || 0) + (pipeline.TECHNICAL_EVALUATION || 0) + (pipeline.COMMERCIAL_DISCUSSION || 0) + (pipeline.TRIAL_ORDER || 0);
+  const converted = (pipeline.APPROVED_SUPPLIER || 0) + (pipeline.RECURRING_CUSTOMER || 0);
+
+  const donutData = DONUT_GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    color: g.color,
+    value: g.statuses.reduce((sum, s) => sum + (pipeline[s] || 0), 0),
+  }));
+
+  const emailFunnel = [
+    { key: 'sent', label: 'Sent', value: email.sent || 0, color: 'hsl(var(--chart-3))' },
+    { key: 'delivered', label: 'Delivered', value: email.delivered || 0, color: 'hsl(var(--chart-4))' },
+    { key: 'opened', label: 'Opened', value: email.opened || 0, color: 'hsl(var(--chart-2))' },
+    { key: 'replied', label: 'Replied', value: email.replied || 0, color: 'hsl(var(--chart-1))' },
+    { key: 'bounced', label: 'Bounced', value: email.bounced || 0, color: 'hsl(var(--chart-5))' },
+  ];
+  const hasEmailData = (email.sent || 0) > 0;
+
+  const renderTile = (stageKey) => {
+    const conf = STAGE_CONFIG[stageKey];
+    const count = pipeline[stageKey] || 0;
+    const pct = Math.round((count / totalLeads) * 100);
+    const selected = activeStage === stageKey;
+    return (
+      <button
+        key={stageKey}
+        type="button"
+        onClick={() => handleStageClick(stageKey)}
+        aria-pressed={selected}
+        className={`flex flex-col justify-between rounded-lg border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+          selected ? 'row-selected border-primary/40' : 'border-border bg-card hover:border-muted-foreground/40 hover:bg-muted/30'
+        }`}
+      >
+        <div className="mb-2 flex items-center justify-between">
+          <span className="h-2 w-2 rounded-full" style={{ background: conf.color }} aria-hidden="true" />
+          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground">{pct}%</span>
+        </div>
+        <div>
+          <span className="block text-xl font-semibold tabular-nums tracking-tight text-foreground">{count.toLocaleString()}</span>
+          <span className="mt-0.5 block truncate text-xs font-medium text-muted-foreground">{conf.label}</span>
+        </div>
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-chart-track">
+          <div
+            className="h-full rounded-full transition-[width] duration-500 ease-out"
+            style={{ width: count > 0 ? `${Math.max(6, pct)}%` : '0%', background: conf.color }}
+          />
+        </div>
+      </button>
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <BarChart3 className="w-6 h-6 text-pink-400" /> Sales Intelligence & Pipeline Analytics
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Deliverability rates, conversion velocity, and interactive pipeline stage distribution.
-          </p>
-        </div>
+    <div className="space-y-4">
+      <PageHeader
+        icon={BarChart3}
+        title="Analytics"
+        description="Deliverability, funnel conversion and prospect distribution across the workspace."
+        className="mb-0"
+        actions={
+          <Button size="sm" onClick={() => router.push('/leads')} className="gap-1.5">
+            <Users className="h-3.5 w-3.5" /> View leads
+          </Button>
+        }
+      />
 
-        <button
-          onClick={() => router.push('/leads')}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/25 transition"
+      {/* KPI row: all values come from /api/analytics */}
+      <div className="stagger grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <MetricCard
+          title="Active outreach leads"
+          value={activePipelineLeads}
+          subtext="New through trial order"
+          icon={<Users className="h-3.5 w-3.5" />}
+          tone="brand"
+          href="/leads"
+        />
+        <MetricCard
+          title="Reply rate"
+          value={email.replyRate || '0.0%'}
+          subtext={`${(email.replied || 0).toLocaleString()} replies from ${(email.sent || 0).toLocaleString()} sent`}
+          icon={<Mail className="h-3.5 w-3.5" />}
+          tone="warning"
+        />
+        <MetricCard
+          title="Open rate"
+          value={email.openRate || '0.0%'}
+          subtext={`${(email.opened || 0).toLocaleString()} of ${(email.openTrackedSent ?? email.sent ?? 0).toLocaleString()} tracked sends`}
+          icon={<Send className="h-3.5 w-3.5" />}
+          tone="info"
+        />
+        <MetricCard
+          title="Approved & recurring"
+          value={converted}
+          subtext="Converted accounts"
+          icon={<Flame className="h-3.5 w-3.5" />}
+          tone="success"
+        />
+      </div>
+
+      {/* Two real-data visuals */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <SectionCard title="Pipeline distribution" description="Where every lead sits right now" icon={PieChart}>
+          <DonutChart
+            data={donutData}
+            centerLabel="Total leads"
+            ariaLabel="Lead pipeline distribution"
+            emptyMessage="No leads yet"
+            size={176}
+            thickness={18}
+          />
+        </SectionCard>
+
+        <SectionCard
+          title="Email performance"
+          description="Delivery and engagement across all sends"
+          icon={Mail}
+          action={
+            email.bounceRate ? (
+              <span className="text-xs text-muted-foreground">
+                Bounce rate <span className="font-semibold tabular-nums text-foreground">{email.bounceRate}</span>
+              </span>
+            ) : null
+          }
         >
-          <Users className="w-4 h-4" /> Open CRM Workspace &rarr;
-        </button>
+          {hasEmailData ? (
+            <BarList items={emailFunnel} max={email.sent} showPercentOfMax emptyMessage="No emails sent yet" />
+          ) : (
+            <p className="py-10 text-center text-xs text-muted-foreground">No emails sent yet. Launch a campaign to see delivery and engagement.</p>
+          )}
+        </SectionCard>
       </div>
 
-      {/* Top Metric Highlights */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-          <span className="text-xs text-slate-400 font-medium block">Active Outreach Leads</span>
-          <span className="text-3xl font-black text-white block mt-2">{activePipelineLeads}</span>
-          <span className="text-[10px] text-indigo-400 font-mono block mt-1">Total in active pipeline</span>
-        </div>
-
-        <div className="glass-panel p-5 rounded-2xl border border-emerald-500/20">
-          <span className="text-xs text-emerald-300 font-semibold block">Prospect Reply Rate</span>
-          <span className="text-3xl font-black text-emerald-300 block mt-2">{email.replyRate || '0.0%'}</span>
-          <span className="text-[10px] text-emerald-400/80 font-mono block mt-1">{email.replied || 0} replies received</span>
-        </div>
-
-        <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-          <span className="text-xs text-slate-400 font-medium block">Email Open Rate</span>
-          <span className="text-3xl font-black text-white block mt-2">{email.openRate || '0.0%'}</span>
-          <span className="text-[10px] text-slate-400 font-mono block mt-1">{email.opened || 0} opened of {email.sent || 0}</span>
-        </div>
-
-        <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-          <span className="text-xs text-slate-400 font-medium block">Qualified & Customers</span>
-          <span className="text-3xl font-black text-purple-300 block mt-2">
-            {(pipeline.QUALIFIED || 0) + (pipeline.CUSTOMER || 0)}
+      {/* Conversion funnel + drill-down */}
+      <SectionCard
+        title="Conversion funnel"
+        description="Select a stage to preview its prospects."
+        icon={TrendingUp}
+        action={
+          <span className="rounded-md border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+            Total leads <strong className="font-semibold tabular-nums text-foreground">{pipelineTotal.toLocaleString()}</strong>
           </span>
-          <span className="text-[10px] text-purple-400 font-mono block mt-1">High-value pipeline stages</span>
-        </div>
-      </div>
-
-      {/* FUNCTIONAL PIPELINE STAGE DISTRIBUTION & FUNNEL */}
-      <div className="glass-panel p-6 rounded-3xl border border-slate-800 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-4">
-          <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-indigo-400" /> Pipeline Stage Distribution & Funnel
-            </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Click any stage card to inspect filtered leads or view full CRM list.
-            </p>
-          </div>
-          <span className="text-xs font-mono text-slate-400 bg-slate-900/80 px-3 py-1.5 rounded-xl border border-slate-800">
-            Total Leads in System: <strong className="text-white">{totalLeads}</strong>
-          </span>
+        }
+        bodyClassName="space-y-4"
+      >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+          {FUNNEL_FLOW.map(renderTile)}
         </div>
 
-        {/* Visual Conversion Funnel Flow */}
-        <div className="space-y-3">
-          <span className="text-xs font-bold text-slate-300 block">Conversion Funnel Progression:</span>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-            {FUNNEL_FLOW.map((stageKey, idx) => {
-              const conf = STAGE_CONFIG[stageKey] || {};
-              const count = pipeline[stageKey] || 0;
-              const pctOfTotal = Math.round((count / totalLeads) * 100);
-              const isSelected = activeStage === stageKey;
-
-              return (
-                <div
-                  key={stageKey}
-                  onClick={() => handleStageClick(stageKey)}
-                  className={`p-4 rounded-2xl cursor-pointer transition-all border ${
-                    isSelected
-                      ? 'bg-indigo-600/20 border-indigo-500 shadow-lg shadow-indigo-600/20 scale-[1.02]'
-                      : 'glass-card border-slate-800/80 hover:border-slate-700 hover:bg-slate-800/40'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`w-2 h-2 rounded-full ${conf.bg} border ${conf.border}`}></span>
-                    <span className="text-[10px] font-mono text-slate-400">{pctOfTotal}%</span>
-                  </div>
-
-                  <span className="text-2xl font-extrabold text-white block">{count}</span>
-                  <span className={`text-xs font-semibold block truncate mt-0.5 ${conf.text}`}>
-                    {conf.label}
-                  </span>
-
-                  {/* Progress bar */}
-                  <div className="w-full bg-slate-800/80 rounded-full h-1.5 mt-3 overflow-hidden">
-                    <div
-                      className={`h-full bg-gradient-to-r ${conf.color} rounded-full transition-all duration-300`}
-                      style={{ width: `${Math.max(8, pctOfTotal)}%` }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
+        <div>
+          <span className="field-label mb-2 block">Outside the funnel</span>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
+            {OFF_FUNNEL.map(renderTile)}
           </div>
         </div>
 
-        {/* All Pipeline Stages Breakdown Table & Actions */}
-        <div className="space-y-3 pt-2">
-          <span className="text-xs font-bold text-slate-300 block">All Pipeline Stages Breakdown:</span>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {Object.entries(STAGE_CONFIG).map(([stageKey, conf]) => {
-              const count = pipeline[stageKey] || 0;
-              const pct = Math.round((count / totalLeads) * 100);
-              const isSelected = activeStage === stageKey;
-
-              return (
-                <div
-                  key={stageKey}
-                  onClick={() => handleStageClick(stageKey)}
-                  className={`p-3.5 rounded-2xl border transition flex items-center justify-between cursor-pointer ${
-                    isSelected
-                      ? 'bg-indigo-600/20 border-indigo-500 text-white'
-                      : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-800/40 text-slate-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs ${conf.bg} ${conf.text} border ${conf.border}`}>
-                      {count}
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-xs font-bold text-white block truncate">{conf.label}</span>
-                      <span className="text-[10px] text-slate-400 font-mono block">{pct}% of total leads</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigateToLeads(stageKey);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-semibold flex items-center gap-1 transition"
-                      title="Filter in CRM"
-                    >
-                      View CRM <ArrowUpRight className="w-3 h-3 text-slate-400" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Interactive Selected Stage Drawer & Lead Preview */}
         {activeStage && (
-          <div className="p-5 rounded-2xl bg-slate-900/90 border border-indigo-500/40 space-y-4 animate-in fade-in-50 duration-200">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-indigo-400" />
-                <span className="font-bold text-xs text-white">
-                  Prospects currently in stage: <span className="text-indigo-300">{STAGE_CONFIG[activeStage]?.label || activeStage}</span> ({stageLeads.length})
+          <div className="anim-fade-up rounded-xl border border-primary/25 bg-card">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+              <div className="flex items-center gap-2 text-xs">
+                <Filter className="h-3.5 w-3.5 text-primary" />
+                <span className="font-semibold text-foreground">
+                  {STAGE_CONFIG[activeStage]?.label || activeStage}
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    {loadingLeads ? '' : `showing ${stageLeads.length}${(pipeline[activeStage] || 0) > stageLeads.length ? ` of ${pipeline[activeStage]}` : ''}`}
+                  </span>
                 </span>
               </div>
-              <button
-                onClick={() => navigateToLeads(activeStage)}
-                className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
-              >
-                Open Full List in CRM <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => navigateToLeads(activeStage)}
+                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold text-primary hover:bg-primary/10"
+                >
+                  Open in leads <ArrowUpRight className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setActiveStage(null); setStageLeads([]); }}
+                  aria-label="Close stage preview"
+                  className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
 
             {loadingLeads ? (
-              <div className="p-4 text-center text-xs text-slate-500">Loading prospects...</div>
+              <div className="p-4"><LinesSkeleton lines={4} /></div>
             ) : stageLeads.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-500">No leads currently in this stage.</div>
+              <div className="py-8 text-center text-xs text-muted-foreground">No leads in this stage.</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-                {stageLeads.map((lead) => (
-                  <div
-                    key={lead._id}
-                    onClick={() => router.push(`/leads?leadId=${lead._id}`)}
-                    className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-indigo-500/50 cursor-pointer transition space-y-1"
-                  >
-                    <span className="font-semibold text-xs text-white block truncate">
-                      {lead.fullName || lead.firstName || lead.email}
-                    </span>
-                    <span className="text-[11px] text-slate-400 block truncate">
-                      {lead.company || lead.jobTitle || 'No company'}
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-mono block">
-                      {lead.email}
-                    </span>
-                  </div>
-                ))}
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="bg-muted/40">
+                    <TableRow className="border-border hover:bg-transparent">
+                      <TableHead className="text-xs font-semibold text-muted-foreground">Name</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground">Email</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground">Company</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground">Title</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="divide-y divide-border bg-card">
+                    {stageLeads.map((lead) => (
+                      <TableRow
+                        key={lead._id || lead.id}
+                        onClick={() => router.push(`/workstation`)}
+                        className="cursor-pointer border-border hover:bg-muted/40"
+                      >
+                        <TableCell className="py-2.5 text-xs font-semibold text-foreground">
+                          {lead.firstName} {lead.lastName}
+                        </TableCell>
+                        <TableCell className="py-2.5 text-xs text-muted-foreground">{lead.email || '—'}</TableCell>
+                        <TableCell className="py-2.5 text-xs font-medium text-foreground">{lead.company || '—'}</TableCell>
+                        <TableCell className="py-2.5 text-xs text-muted-foreground">{lead.title || lead.jobTitle || '—'}</TableCell>
+                        <TableCell className="py-2.5">
+                          <StatusBadge status={lead.status || 'NEW'} size="sm" />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             )}
           </div>
         )}
-      </div>
+      </SectionCard>
     </div>
   );
 }

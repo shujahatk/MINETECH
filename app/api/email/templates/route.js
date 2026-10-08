@@ -1,34 +1,51 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/db/mongoose';
 import EmailTemplate from '@/lib/models/EmailTemplate';
+import { requireAuth } from '@/lib/middleware/authGuard';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
-    try {
-      await connectToDatabase();
-      const templates = await EmailTemplate.find({ active: true }).sort({ createdAt: -1 }).lean();
-      return NextResponse.json({ success: true, data: templates || [] });
-    } catch (dbErr) {
-      return NextResponse.json({ success: true, data: [] });
-    }
+    await connectToDatabase();
+    const templates = await EmailTemplate.find({ active: true }).sort({ createdAt: -1 }).lean();
+    return NextResponse.json({ success: true, data: templates || [] });
   } catch (err) {
-    return NextResponse.json({ success: true, data: [] });
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
 
 export async function POST(request) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
   try {
     const body = await request.json();
-    try {
-      await connectToDatabase();
-      const template = await EmailTemplate.create(body);
-      return NextResponse.json({ success: true, data: template }, { status: 201 });
-    } catch (dbErr) {
-      return NextResponse.json({ success: true, data: { _id: 'temp-' + Date.now(), ...body } }, { status: 201 });
+    const { name, subject, bodyHtml, bodyText, category } = body;
+
+    if (!name || !subject || !bodyHtml) {
+      return NextResponse.json(
+        { success: false, error: 'Template name, subject, and body HTML are required.' },
+        { status: 400 }
+      );
     }
+
+    await connectToDatabase();
+    const template = await EmailTemplate.create({
+      name,
+      subject,
+      bodyHtml,
+      bodyText: bodyText || bodyHtml.replace(/<[^>]+>/g, '').trim(),
+      category: category || 'general',
+      createdBy: auth.user.id,
+      active: true,
+    });
+
+    return NextResponse.json({ success: true, data: template }, { status: 201 });
   } catch (err) {
-    return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }

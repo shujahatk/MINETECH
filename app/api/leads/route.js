@@ -1,27 +1,34 @@
 import { NextResponse } from 'next/server';
 import { getLeadsList, createLead } from '@/lib/services/leadService';
 
+import { requireAdmin } from '@/lib/auth/adminGuard';
+
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const search = searchParams.get('search') || '';
-    const status = searchParams.get('status') || '';
-    const tag = searchParams.get('tag') || '';
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '25', 10);
-    const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortDir = searchParams.get('sortDir') || 'desc';
+  const auth = await requireAdmin(request);
+  if (auth instanceof Response || !auth?.user) return auth;
 
-    const result = await getLeadsList({ search, status, tag, page, limit, sortBy, sortDir });
-    return NextResponse.json({ success: true, ...result });
+  try {
+    // All filtering / sorting / pagination happens in the database.
+    // Supported params: search, status, temperature (HOT|WARM|COLD), owner, campaign, followUp
+    // (overdue|today|week|none), product, ai, tag, page, limit (<=100), sortBy, sortDir, view=board.
+    const { searchParams } = new URL(request.url);
+    const result = await getLeadsList(searchParams);
+    return NextResponse.json(
+      { success: true, ...result },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (err) {
+    console.error('[GET /api/leads]', err);
     return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }
 
 export async function POST(request) {
+  const auth = await requireAdmin(request);
+  if (auth instanceof Response || !auth?.user) return auth;
+
   try {
     const body = await request.json();
     const lead = await createLead(body);

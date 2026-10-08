@@ -1,7 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Phone, PhoneCall, Clock, User, CheckCircle2, Play } from 'lucide-react';
+import { Phone, PhoneCall } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import StatusBadge from '@/components/ui/StatusBadge';
 import DialerModal from '@/components/twilio/DialerModal';
 
 export default function VoiceCallsPage() {
@@ -28,86 +39,92 @@ export default function VoiceCallsPage() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight flex items-center gap-2">
-            <Phone className="w-6 h-6 text-emerald-400" /> Twilio Voice Calling
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Browser calling logs, call recording recordings, and duration telemetry.
-          </p>
+    <div className="space-y-6 font-sans">
+      {/* Top Header */}
+      <Card className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-border bg-card">
+        <div className="flex items-center gap-3.5">
+          <div className="h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center shrink-0">
+            <Phone className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-foreground tracking-tight">Call History & Voice Telephony</h1>
+              <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-[10px] font-bold">
+                TWILIO WEBRTC
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Direct browser dialing, recorded calls, call duration, and prospect contact history.
+            </p>
+          </div>
         </div>
 
-        <button
+        <Button
           onClick={() => setIsDialerOpen(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-600/25 transition"
+          className="gap-2 h-9 px-4 shrink-0"
         >
-          <PhoneCall className="w-4 h-4" /> Open Dialer Pad
-        </button>
-      </div>
+          <PhoneCall className="h-4 w-4" /> Open Dialer Pad
+        </Button>
+      </Card>
 
       {/* Calls Table */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-slate-800">
+      <Card className="p-0 overflow-hidden shadow-subtle border-border bg-card">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-900/60 border-b border-slate-800 text-slate-400 uppercase font-semibold text-[10px]">
-              <tr>
-                <th className="py-3 px-4">Prospect</th>
-                <th className="py-3 px-4">To Phone</th>
-                <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Duration</th>
-                <th className="py-3 px-4">Recording</th>
-                <th className="py-3 px-4">Date & Time</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-800/50 text-slate-300">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="border-border hover:bg-transparent">
+                <TableHead className="text-xs font-bold text-muted-foreground">Prospect & Target</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground">Destination Phone</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground">Status</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground">Duration</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground">Call Recording</TableHead>
+                <TableHead className="text-xs font-bold text-muted-foreground">Timestamp</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody className="divide-y divide-border bg-card">
               {loading ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500">
+                <TableRow>
+                  <TableCell colSpan={6} className="p-12 text-center text-muted-foreground font-mono">
+                    <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2" />
                     Loading call history...
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ) : calls.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-500">
-                    No calls recorded yet. Open the dialer pad to place your first call.
-                  </td>
-                </tr>
+                <TableRow>
+                  <TableCell colSpan={6} className="p-12 text-center text-xs text-muted-foreground">
+                    No calls recorded yet. Click &quot;Open Dialer Pad&quot; to place your first call.
+                  </TableCell>
+                </TableRow>
               ) : (
                 calls.map((c) => (
-                  <tr key={c._id} className="hover:bg-slate-800/30 transition">
-                    <td className="py-3.5 px-4 font-semibold text-slate-200">
-                      {c.leadId?.fullName || c.leadId?.company || 'Direct Dial'}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-400">{c.to}</td>
-                    <td className="py-3.5 px-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] uppercase font-bold ${
-                          c.status === 'completed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
-                        }`}
-                      >
-                        {c.status}
-                      </span>
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-slate-400">{c.duration || 0}s</td>
-                    <td className="py-3.5 px-4">
+                  <TableRow key={c._id || c.id} className="hover:bg-muted/40 border-border transition-colors">
+                    <TableCell className="font-bold text-foreground py-3 text-xs">
+                      {c.leadId?.fullName || c.leadId?.company || 'Direct Dial Prospect'}
+                    </TableCell>
+                    <TableCell className="font-mono text-primary text-xs py-3 font-medium">{c.to}</TableCell>
+                    <TableCell className="py-3">
+                      <StatusBadge status={c.status} size="sm" />
+                    </TableCell>
+                    <TableCell className="font-mono text-muted-foreground font-medium py-3 text-xs">{c.duration || 0}s</TableCell>
+                    <TableCell className="py-3">
                       {c.recordingUrl ? (
-                        <audio controls className="h-6 w-36" src={c.recordingUrl}></audio>
+                        <div className="flex items-center gap-2">
+                          <audio controls className="h-7 w-40 opacity-90" src={c.recordingUrl} />
+                        </div>
                       ) : (
-                        <span className="text-slate-600">—</span>
+                        <span className="text-muted-foreground text-xs font-mono">—</span>
                       )}
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 text-[11px]">
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-xs font-mono py-3">
                       {new Date(c.startTime || c.createdAt).toLocaleString()}
-                    </td>
-                  </tr>
+                    </TableCell>
+                  </TableRow>
                 ))
               )}
-            </tbody>
-          </table>
+            </TableBody>
+          </Table>
         </div>
-      </div>
+      </Card>
 
       {isDialerOpen && <DialerModal onClose={() => setIsDialerOpen(false)} onCallEnded={fetchCalls} />}
     </div>
