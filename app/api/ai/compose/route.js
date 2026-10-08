@@ -166,10 +166,12 @@ MineTech Outbound
     if (anthropicComposeKey && anthropicComposeKey.startsWith('sk-ant')) {
       try {
         const candidateModels = [
-          'claude-sonnet-4-5-20250929',
+          process.env.ANTHROPIC_MODEL,
+          process.env.CLAUDE_MODEL,
           'claude-haiku-4-5-20251001',
-          'claude-3-5-sonnet-20241022',
-        ];
+          'claude-sonnet-4-6',
+          'claude-haiku-5-5',
+        ].filter(Boolean);
 
         const callClaude = async (customPrompt) => {
           let lastErr = null;
