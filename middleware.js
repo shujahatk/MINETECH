@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { jwtVerify } from 'jose/jwt/verify';
 
 function getEncodedSecret() {
   const secret = process.env.JWT_SECRET;
