@@ -33,7 +33,8 @@ function LoginForm() {
       if (res.ok && json.success) {
         window.location.href = callbackUrl;
       } else {
-        setError(res.status >= 500 ? 'Sign in is temporarily unavailable. Please try again.' : (json.message || json.error || 'Invalid email or password.'));
+        const errorDetail = json.error || json.message;
+        setError(errorDetail || (res.status >= 500 ? 'Sign in is temporarily unavailable. Please check server configuration.' : 'Invalid email or password.'));
       }
     } catch (err) {
       setError('Network connection error. Please try again.');
