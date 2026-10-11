@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/adminGuard';
 import { supabaseAdmin } from '@/lib/supabase';
+import { deleteLeadsByIds } from '@/lib/services/leadService';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,9 +34,22 @@ export async function POST(request) {
     }
 
     if (action === 'delete') {
-      const { error, count } = await supabaseAdmin.from('leads').delete({ count: 'exact' }).in('id', ids);
-      if (error) throw error;
-      return NextResponse.json({ success: true, action, affected: count ?? ids.length, leadIds: ids });
+      const result = await deleteLeadsByIds(ids);
+      const partial = result.failed.length > 0 || result.notFound.length > 0;
+      return NextResponse.json(
+        {
+          success: result.failed.length === 0,
+          action,
+          affected: result.affected,
+          deleted: result.deleted,
+          failed: result.failed,
+          notFound: result.notFound,
+          message: partial
+            ? `Deleted ${result.affected} of ${ids.length} lead(s). ${result.failed.length ? `${result.failed.length} could not be removed.` : ''} ${result.notFound.length ? `${result.notFound.length} not found.` : ''}`.trim()
+            : `Deleted ${result.affected} lead${result.affected === 1 ? '' : 's'}`,
+        },
+        { status: result.failed.length === 0 ? 200 : 207 }
+      );
     }
 
     if (action === 'status') {
@@ -54,6 +68,15 @@ export async function POST(request) {
     return NextResponse.json({ success: false, message: 'Unsupported bulk action' }, { status: 400 });
   } catch (err) {
     console.error('[POST /api/leads/bulk]', err);
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    const status = err.status || 500;
+    return NextResponse.json(
+      {
+        success: false,
+        message: err.message || 'Bulk action failed',
+        code: err.code || null,
+        dependency: err.dependency || null,
+      },
+      { status }
+    );
   }
 }
