@@ -155,7 +155,7 @@ export default function TemplateManager() {
         icon={FileText}
         title="Templates"
         meta={!loading ? String(templates.length) : undefined}
-        description="Reusable email copy with merge tags and Claude-assisted hooks."
+        description="Reusable email copy with merge tags and MineTech AI-assisted hooks."
         className="mb-0"
         actions={
           <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-1.5" disabled={isModalOpen}>
@@ -173,7 +173,7 @@ export default function TemplateManager() {
             </div>
             <Button type="button" variant="outline" size="sm" onClick={handleGenerateAIHook} disabled={isGeneratingAI} className="h-8 gap-1.5 text-primary">
               <Sparkles className={`h-3.5 w-3.5 ${isGeneratingAI ? 'animate-spin' : ''}`} />
-              <span>{isGeneratingAI ? 'Generating...' : 'Generate with Claude'}</span>
+              <span>{isGeneratingAI ? 'Generating...' : 'Generate with MineTech AI'}</span>
             </Button>
           </div>
 

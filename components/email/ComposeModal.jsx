@@ -438,7 +438,7 @@ export default function ComposeModal({
             )}
           </div>
 
-          {/* 3. AI drafting: type 2-4 words, Claude drafts, you review and send */}
+          {/* 3. AI drafting: type 2-4 words, MineTech AI drafts, you review and send */}
           <AiDraftBar
             leadId={activeLead?._id || activeLead?.id || selectedLeadId || null}
             surface="compose"
