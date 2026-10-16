@@ -75,7 +75,7 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
 
   const handleBulkAnalyzePostImport = async () => {
     setAnalyzingBatch(true);
-    setAnalyzeMsg('Analyzing imported leads with Claude...');
+    setAnalyzeMsg('Analyzing imported leads with MINE-TECH AI...');
     try {
       const res = await fetch('/api/leads/analyze-bulk', {
         method: 'POST',
@@ -84,7 +84,7 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setAnalyzeMsg(`Analyzed ${data.data?.analyzed || 0} leads with Claude (${data.data?.skipped || 0} cached)`);
+        setAnalyzeMsg(`Analyzed ${data.data?.analyzed || 0} leads with MINE-TECH AI (${data.data?.skipped || 0} cached)`);
         if (onImported) onImported();
       }
     } catch (e) {
@@ -165,7 +165,7 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
               />
             </div>
 
-            {/* Optional Claude Analysis Checkbox */}
+            {/* Optional MINE-TECH AI Analysis Checkbox */}
             <label className="flex items-center gap-2 p-2.5 rounded-xl border border-border bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors">
               <input
                 type="checkbox"
@@ -174,7 +174,7 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
                 className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
               />
               <span className="text-xs text-foreground font-medium">
-                Analyze imported Priority A leads with Claude after import
+                Analyze imported Priority A leads with MINE-TECH AI after import
               </span>
             </label>
 
@@ -246,7 +246,7 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
                 disabled={analyzingBatch}
                 className="w-full h-9 border-primary/40 text-primary hover:bg-primary/10"
               >
-                {analyzingBatch ? 'Analyzing...' : 'Analyze Imported with Claude'}
+                {analyzingBatch ? 'Analyzing...' : 'Analyze Imported with MINE-TECH AI'}
               </Button>
               <Button
                 onClick={handleModalClose}

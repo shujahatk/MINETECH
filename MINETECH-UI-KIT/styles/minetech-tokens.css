@@ -1,0 +1,144 @@
+/*
+  MINETECH DESIGN SYSTEM TOKENS
+  =============================
+  Every colour in the design system resolves to HSL channels (no hsl() wrapper)
+  so that light and dark are designed independently.
+
+  Surface ladder (dark):  sidebar < background < card < popover/dropdown < muted
+  Surface ladder (light): background < card (white) ; sidebar and muted are warm stone.
+*/
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --background: 30 18% 96%;          /* #F7F5F2 warm porcelain */
+  --foreground: 15 12% 11%;          /* #1F1A19 charcoal deep */
+  --card: 0 0% 100%;                 /* Clean pure white */
+  --card-foreground: 15 12% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 15 12% 11%;
+  --secondary: 30 12% 92%;
+  --secondary-foreground: 15 12% 15%;
+  --muted: 30 12% 92%;
+  --muted-foreground: 15 5% 42%;     /* 5.6:1 contrast ratio */
+  --accent: 15 40% 94%;
+  --accent-foreground: 15 76% 30%;
+
+  /* Brand Clay / Terracotta */
+  --primary: 15 76% 40%;             /* #B43C1B rich terracotta clay */
+  --primary-foreground: 0 0% 100%;
+  --primary-hover: 15 76% 35%;
+  --ring: 15 76% 40%;
+
+  /* Borders & Inputs */
+  --border: 30 10% 86%;
+  --input: 30 10% 84%;
+  --radius: 0.5rem;
+
+  /* Semantic status tokens */
+  --success: 160 84% 29%;            /* Emerald */
+  --warning: 28 92% 38%;             /* Amber/Ochre */
+  --info: 201 90% 36%;               /* Sky Cyan */
+  --danger: 350 72% 46%;             /* Rose / Ruby */
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* Data-viz palette */
+  --chart-1: 15 76% 44%;             /* Terracotta clay */
+  --chart-2: 36 90% 48%;             /* Rich amber */
+  --chart-3: 192 62% 34%;            /* Deep teal */
+  --chart-4: 152 48% 36%;            /* Forest green */
+  --chart-5: 262 36% 54%;            /* Muted violet */
+  --chart-6: 25 8% 56%;              /* Slate stone */
+  --chart-grid: 30 10% 88%;
+  --chart-track: 30 12% 91%;
+
+  /* Sidebar */
+  --sidebar-background: 30 14% 94%;
+  --sidebar-foreground: 15 12% 14%;
+  --sidebar-primary: 15 76% 40%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 15 36% 91%;
+  --sidebar-accent-foreground: 15 76% 26%;
+  --sidebar-border: 30 10% 84%;
+  --sidebar-ring: 15 76% 40%;
+
+  /* Shadows (Light) */
+  --shadow-subtle: 0 1px 1px 0 rgb(20 12 8 / 0.03);
+  --shadow-card: 0 1px 2px 0 rgb(20 12 8 / 0.04);
+  --shadow-popover: 0 6px 20px -4px rgb(20 12 8 / 0.12), 0 2px 6px -2px rgb(20 12 8 / 0.06);
+  --shadow-dialog: 0 16px 40px -8px rgb(20 12 8 / 0.18), 0 4px 12px -4px rgb(20 12 8 / 0.08);
+  --shadow-drawer: -12px 0 32px -12px rgb(20 12 8 / 0.20);
+  --shadow-hover: 0 4px 14px -4px rgb(20 12 8 / 0.10), 0 1px 3px 0 rgb(20 12 8 / 0.05);
+  --overlay: 20 12% 8% / 0.45;
+
+  /* Motion */
+  --motion-fast: 140ms;
+  --motion-normal: 200ms;
+  --motion-dialog: 220ms;
+  --motion-slow: 320ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dark {
+  color-scheme: dark;
+
+  /* Surfaces: neutral-warm charcoal, never pure black */
+  --background: 20 7% 8%;            /* #161413 deep charcoal */
+  --foreground: 30 12% 93%;          /* #EFECE8 warm off-white */
+  --card: 20 6% 11%;                 /* #1D1B1A raised card */
+  --card-foreground: 30 12% 93%;
+  --popover: 20 6% 13.5%;            /* #232120 floating dropdown */
+  --popover-foreground: 30 12% 93%;
+  --secondary: 20 5% 15%;            /* #282625 surface */
+  --secondary-foreground: 30 12% 93%;
+  --muted: 20 5% 15%;
+  --muted-foreground: 25 6% 67%;     /* 6.9:1 high contrast */
+  --accent: 16 26% 17%;
+  --accent-foreground: 16 72% 74%;
+
+  /* Brand luminous terracotta */
+  --primary: 16 72% 56%;             /* #E06A42 luminous glowing clay */
+  --primary-foreground: 15 30% 7%;
+  --primary-hover: 16 72% 62%;
+  --ring: 16 72% 56%;
+
+  --border: 20 5% 19%;               /* #313030 subtle boundary */
+  --input: 20 5% 22%;
+
+  --success: 158 62% 52%;
+  --warning: 40 94% 58%;
+  --info: 199 88% 62%;
+  --danger: 352 90% 70%;
+  --destructive: 0 62% 48%;
+  --destructive-foreground: 0 0% 100%;
+
+  --chart-1: 16 72% 58%;
+  --chart-2: 40 92% 58%;
+  --chart-3: 188 56% 54%;
+  --chart-4: 150 46% 52%;
+  --chart-5: 262 50% 74%;
+  --chart-6: 25 8% 62%;
+  --chart-grid: 20 5% 20%;
+  --chart-track: 20 5% 17%;
+
+  /* Sidebar sits one step BELOW the canvas */
+  --sidebar-background: 20 8% 6.5%;  /* #121110 */
+  --sidebar-foreground: 30 12% 88%;
+  --sidebar-primary: 16 72% 56%;
+  --sidebar-primary-foreground: 15 30% 7%;
+  --sidebar-accent: 16 22% 14%;
+  --sidebar-accent-foreground: 16 72% 76%;
+  --sidebar-border: 20 5% 14%;
+  --sidebar-ring: 16 72% 56%;
+
+  /* Shadows (Dark with top edge-lit highlights) */
+  --shadow-subtle: 0 1px 1px 0 rgb(0 0 0 / 0.30);
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.35), inset 0 1px 0 0 rgb(255 255 255 / 0.025);
+  --shadow-popover: 0 8px 24px -6px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.04);
+  --shadow-dialog: 0 20px 50px -10px rgb(0 0 0 / 0.65), 0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-drawer: -16px 0 40px -12px rgb(0 0 0 / 0.60);
+  --shadow-hover: 0 6px 18px -6px rgb(0 0 0 / 0.55), inset 0 1px 0 0 rgb(255 255 255 / 0.03);
+  --overlay: 0 0% 0% / 0.62;
+}

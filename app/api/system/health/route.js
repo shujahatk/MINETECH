@@ -68,10 +68,10 @@ export async function GET(request) {
     listmonk: email.listmonk,
     resend: email.resend,
     claude: {
-      name: 'Anthropic Claude',
+      name: 'MINE-TECH AI',
       status: claudeConfigured ? 'operational' : 'standby_fallback',
       connected: claudeConfigured,
-      model: process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || null,
+      model: process.env.ANTHROPIC_MODEL || process.env.CLAUDE_MODEL || 'MINE-TECH AI',
     },
     workers: {
       name: 'Background Dispatch Worker',

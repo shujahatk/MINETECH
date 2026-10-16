@@ -39,6 +39,7 @@
     "next": "^14.2.10",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "resend": "^6.33.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^2.5.2",
     "twilio": "^5.2.2",

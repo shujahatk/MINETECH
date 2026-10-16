@@ -568,7 +568,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
           </FilterSelect>
           <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={handleBulkAnalyze} className="h-8 gap-1.5">
             {busy === 'analyze' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Analyze with Claude
+            Analyze with MINE-TECH AI
           </Button>
           <Button
             variant="outline"

@@ -39,6 +39,8 @@ import { useMediaQuery } from '@/lib/hooks/useMediaQuery';
 import ReplyAiBrain from '@/components/ai/ReplyAiBrain';
 import AiDraftBar from '@/components/ai/AiDraftBar';
 
+import { sanitizeHtml } from '@/lib/utils/sanitizer';
+
 // The lead drawer is heavy and only needed when a lead is opened from the inbox.
 const LeadDrawer = dynamic(() => import('@/components/leads/LeadDrawer'), { ssr: false });
 
@@ -53,6 +55,9 @@ export default function InboxView() {
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [replyBody, setReplyBody] = useState('');
+  const [replyCc, setReplyCc] = useState('');
+  const [replyBcc, setReplyBcc] = useState('');
+  const [showReplyCcBcc, setShowReplyCcBcc] = useState(false);
   // Set when the reply box was filled from an AI Brain draft; sent along so the server can
   // run the send policy and record what the human actually sent.
   const [aiReplyDecisionId, setAiReplyDecisionId] = useState(null);
@@ -180,18 +185,26 @@ export default function InboxView() {
     setSendingReply(true);
     setStatusMessage('');
     try {
+      const ccList = replyCc ? replyCc.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const bccList = replyBcc ? replyBcc.split(',').map((s) => s.trim()).filter(Boolean) : [];
+
       const res = await fetch(`/api/email/threads/${selectedThreadId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           bodyHtml: `<p>${replyBody.replace(/\n/g, '<br/>')}</p>`,
           bodyText: replyBody,
+          cc: ccList,
+          bcc: bccList,
           ...(aiReplyDecisionId ? { aiDecisionId: aiReplyDecisionId } : {}),
         }),
       });
 
       if (res.ok) {
         setReplyBody('');
+        setReplyCc('');
+        setReplyBcc('');
+        setShowReplyCcBcc(false);
         setAiReplyDecisionId(null);
         setStatusMessage('Reply dispatched successfully!');
         setTimeout(() => setStatusMessage(''), 3000);
@@ -295,7 +308,7 @@ export default function InboxView() {
     } catch (e) {}
   };
 
-  // AI Reply Analysis (Claude Inbound Understanding)
+  // AI Reply Analysis (MINE-TECH AI Inbound Understanding)
   const handleAnalyzeReply = async () => {
     const lead = threadDetail?.thread?.leadId;
     const leadId = lead?.id || lead?._id || (typeof lead === 'string' ? lead : null);
@@ -308,7 +321,7 @@ export default function InboxView() {
     }
 
     setIsAnalyzingReply(true);
-    setStatusMessage('Analyzing supplier reply with Claude...');
+    setStatusMessage('Analyzing supplier reply with MINE-TECH AI...');
     try {
       const res = await fetch('/api/email/inbox/analyze-reply', {
         method: 'POST',
@@ -341,7 +354,7 @@ export default function InboxView() {
     }
   };
 
-  // AI Contextual Reply Copilot (Claude + Confirmed Conversation Facts)
+  // AI Contextual Reply Copilot (MINE-TECH AI + Confirmed Conversation Facts)
   const handleGenerateAIReply = async () => {
     const lead = threadDetail?.thread?.leadId;
     const leadId = lead?.id || lead?._id || (typeof lead === 'string' ? lead : null);
@@ -821,16 +834,43 @@ export default function InboxView() {
                   threadDetail.messages.map((msg, idx) => {
                     const isInbound = msg.direction === 'inbound';
                     const msgId = msg._id || msg.id;
+                    const status = (msg.status || '').toLowerCase();
+                    const isGmailSynced = Boolean(msg.gmail_synced || msg.gmailSynced);
+                    const isPendingGmail = msg.gmail_sync_status === 'pending_credentials' || msg.gmailSyncStatus === 'pending_credentials';
+
                     return (
                       <div key={msgId || idx} className={`group/msg flex flex-col ${isInbound ? 'items-start' : 'items-end'}`}>
                         <div className="mb-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[11px] text-muted-foreground">
                           <span className="font-semibold text-foreground">
-                            {isInbound ? threadLeadObj?.fullName || msg.sender || 'Prospect' : 'MineTech'}
+                            {isInbound ? threadLeadObj?.fullName || msg.sender || 'Prospect' : 'Rauf (MineTech)'}
                           </span>
                           {isInbound ? (
                             <span className="rounded border border-warning/30 bg-warning/10 px-1.5 py-px text-[10px] font-medium text-warning">Reply</span>
                           ) : (
-                            sourceChip(msg.isBlast)
+                            <>
+                              {sourceChip(msg.isBlast)}
+                              {status === 'delivered' ? (
+                                <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-600 dark:text-emerald-400">Delivered</span>
+                              ) : status === 'opened' ? (
+                                <span className="rounded border border-blue-500/30 bg-blue-500/10 px-1.5 py-px text-[10px] font-medium text-blue-600 dark:text-blue-400">Opened</span>
+                              ) : status === 'clicked' ? (
+                                <span className="rounded border border-purple-500/30 bg-purple-500/10 px-1.5 py-px text-[10px] font-medium text-purple-600 dark:text-purple-400">Clicked</span>
+                              ) : status === 'bounced' ? (
+                                <span className="rounded border border-destructive/30 bg-destructive/10 px-1.5 py-px text-[10px] font-medium text-destructive">Bounced</span>
+                              ) : (
+                                <span className="rounded border border-border bg-muted/60 px-1.5 py-px text-[10px] font-medium text-muted-foreground">Sent</span>
+                              )}
+                              {isGmailSynced && (
+                                <span className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-px text-[10px] font-medium text-sky-600 dark:text-sky-400" title="Synchronized to Google Workspace Gmail">
+                                  Gmail Synced
+                                </span>
+                              )}
+                              {isPendingGmail && (
+                                <span className="rounded border border-muted-foreground/30 bg-muted/40 px-1.5 py-px text-[10px] font-medium text-muted-foreground" title="Awaiting Google Workspace credentials">
+                                  Gmail Ready
+                                </span>
+                              )}
+                            </>
                           )}
                           <span className="tabular-nums">
                             {msg.sentAt || msg.createdAt ? new Date(msg.sentAt || msg.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
@@ -858,7 +898,7 @@ export default function InboxView() {
                           }`}
                         >
                           {msg.bodyHtml ? (
-                            <div className="email-html" dangerouslySetInnerHTML={{ __html: msg.bodyHtml }} />
+                            <div className="email-html" dangerouslySetInnerHTML={{ __html: sanitizeHtml(msg.bodyHtml) }} />
                           ) : (
                             <p className="whitespace-pre-wrap">{msg.bodyText || msg.body_plain}</p>
                           )}
@@ -894,6 +934,13 @@ export default function InboxView() {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-foreground">Reply to {threadLeadName}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowReplyCcBcc(!showReplyCcBcc)}
+                      className="text-[11px] font-medium text-primary hover:underline"
+                    >
+                      {showReplyCcBcc ? 'Hide CC/BCC' : '+ CC / BCC'}
+                    </button>
                     {aiReplyDecisionId && (
                       <span className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
                         <Sparkles className="h-2.5 w-2.5" /> AI draft · review before sending
@@ -917,6 +964,31 @@ export default function InboxView() {
                     {isGeneratingAI ? 'Generating...' : 'Suggest smart reply'}
                   </Button>
                 </div>
+
+                {showReplyCcBcc && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in">
+                    <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3 py-1">
+                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Cc:</span>
+                      <input
+                        type="text"
+                        value={replyCc}
+                        onChange={(e) => setReplyCc(e.target.value)}
+                        placeholder="comma-separated emails"
+                        className="w-full bg-transparent text-xs text-foreground focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3 py-1">
+                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Bcc:</span>
+                      <input
+                        type="text"
+                        value={replyBcc}
+                        onChange={(e) => setReplyBcc(e.target.value)}
+                        placeholder="comma-separated emails"
+                        className="w-full bg-transparent text-xs text-foreground focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <Textarea
                   value={replyBody}
@@ -952,7 +1024,7 @@ export default function InboxView() {
 
                 <div className="flex items-center justify-between gap-3">
                   <span className="truncate text-[11px] text-muted-foreground">
-                    From outreach@minetechresources.com · <kbd className="kbd">Ctrl</kbd> <kbd className="kbd">Enter</kbd> to send
+                    From Rauf &lt;rauf@mine-tech.be&gt; · <kbd className="kbd">Ctrl</kbd> <kbd className="kbd">Enter</kbd> to send
                   </span>
                   <Button type="submit" disabled={sendingReply || !replyBody.trim()} className="h-8 shrink-0 gap-2 px-4">
                     <Send className="h-3.5 w-3.5" />

@@ -89,12 +89,46 @@ export async function executeWebhookEventProcessing(eventType, data, eventUnique
   const messageId = data.email_id || data.id || data.message_id;
 
   // Inbound email received via Resend
-  if (eventType.includes('received') || eventType.includes('inbound')) {
+  if (eventType.includes('received') || eventType.includes('inbound') || eventType === 'email.received') {
+    let text = data.text || '';
+    let html = data.html || '';
+    let attachments = data.attachments || [];
+    let cc = data.cc || data.headers?.cc || [];
+    let bcc = data.bcc || data.headers?.bcc || [];
+
+    // If webhook is a lightweight notification and content is empty, fetch full message from Resend API
+    if (!text && !html && (data.email_id || messageId) && process.env.RESEND_API_KEY) {
+      try {
+        const fetchId = data.email_id || messageId;
+        const resendFetch = await fetch(`https://api.resend.com/emails/receiving/${fetchId}`, {
+          headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+        });
+        if (resendFetch.ok) {
+          const fetchedJson = await resendFetch.json();
+          text = fetchedJson.text || text;
+          html = fetchedJson.html || html;
+          attachments = fetchedJson.attachments || attachments;
+          if (fetchedJson.cc) cc = fetchedJson.cc;
+          if (fetchedJson.bcc) bcc = fetchedJson.bcc;
+        } else {
+          // Try standard emails endpoint
+          const resendFetch2 = await fetch(`https://api.resend.com/emails/${fetchId}`, {
+            headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+          });
+          if (resendFetch2.ok) {
+            const fetchedJson2 = await resendFetch2.json();
+            text = fetchedJson2.text || text;
+            html = fetchedJson2.html || html;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('[Resend Webhook] Could not fetch full email body via API:', fetchErr.message);
+      }
+    }
+
     const fromEmail = typeof data.from === 'string' ? data.from : (data.from?.email || data.from?.address || '');
     const toEmail = Array.isArray(data.to) ? data.to.join(', ') : (data.to || recipientEmail || '');
     const subject = data.subject || '(No Subject)';
-    const text = data.text || '';
-    const html = data.html || '';
     const inReplyTo = data.in_reply_to || data.inReplyTo || data.headers?.['in-reply-to'] || '';
     const references = data.references || data.headers?.['references'] || [];
     const msgId = messageId || data.message_id || data.headers?.['message-id'] || '';
@@ -102,9 +136,12 @@ export async function executeWebhookEventProcessing(eventType, data, eventUnique
     const inboundResult = await processInboundEmail({
       from: fromEmail,
       to: toEmail,
+      cc,
+      bcc,
       subject,
       text,
       html,
+      attachments,
       messageId: msgId,
       inReplyTo,
       references,

@@ -50,10 +50,12 @@ export default function ComposeModal({
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
   
   // UI tabs
   const [activeTab, setActiveTab] = useState('write'); // 'write' | 'preview'
-  const [copiedTag, setCopiedTag] = useState(null);
   // The AI draft currently in the editor (if any). Sent as aiDecisionId so the server can run the
   // send policy and record what the human actually sent. Bound to one lead.
   const [aiDecision, setAiDecision] = useState(
@@ -176,11 +178,6 @@ export default function ComposeModal({
     }
   };
 
-  const handleInsertTag = (tag) => {
-    setBody((prev) => `${prev} {{${tag}}}`);
-    setCopiedTag(tag);
-    setTimeout(() => setCopiedTag(null), 1500);
-  };
 
   // Interpolate merge tags for the preview tab
   const getRenderedPreview = () => {
@@ -216,6 +213,9 @@ export default function ComposeModal({
     setError('');
 
     try {
+      const ccList = cc ? cc.split(',').map((s) => s.trim()).filter(Boolean) : [];
+      const bccList = bcc ? bcc.split(',').map((s) => s.trim()).filter(Boolean) : [];
+
       const res = await fetch('/api/email/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -224,6 +224,8 @@ export default function ComposeModal({
           subject,
           bodyHtml: `<p>${finalBody.replace(/\n/g, '<br/>')}</p>`,
           bodyText: finalBody,
+          cc: ccList,
+          bcc: bccList,
           ...(aiDecision?.id && aiDecision.leadId === targetId ? { aiDecisionId: aiDecision.id } : {}),
         }),
       });
@@ -328,33 +330,78 @@ export default function ComposeModal({
           )}
 
           {/* Recipient Selector / Pill */}
-          <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3.5 py-2.5">
-            <span className="text-xs font-semibold text-primary uppercase tracking-wider shrink-0 mr-1">To:</span>
-            {activeLead ? (
-              <div className="flex items-center justify-between flex-1 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-foreground">{activeLead.fullName || activeLead.name || activeLead.firstName}</span>
-                  <span className="text-muted-foreground font-mono">({activeLead.email})</span>
-                  {activeLead.jobTitle && <span className="text-muted-foreground hidden sm:inline">• {activeLead.jobTitle}</span>}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3.5 py-2.5">
+              <span className="text-xs font-semibold text-primary uppercase tracking-wider shrink-0 mr-1">To:</span>
+              {activeLead ? (
+                <div className="flex items-center justify-between flex-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-foreground">{activeLead.fullName || activeLead.name || activeLead.firstName}</span>
+                    <span className="text-muted-foreground font-mono">({activeLead.email})</span>
+                    {activeLead.jobTitle && <span className="text-muted-foreground hidden sm:inline">• {activeLead.jobTitle}</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded-md bg-card border border-border text-foreground text-[10px] font-medium shadow-subtle">
+                      {activeLead.company || 'Direct Lead'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCcBcc(!showCcBcc)}
+                      className="text-[11px] font-medium text-primary hover:underline"
+                    >
+                      {showCcBcc ? 'Hide CC/BCC' : 'Cc / Bcc'}
+                    </button>
+                  </div>
                 </div>
-                <span className="px-2 py-0.5 rounded-md bg-card border border-border text-foreground text-[10px] font-medium shadow-subtle">
-                  {activeLead.company || 'Direct Lead'}
-                </span>
+              ) : (
+                <div className="flex items-center justify-between flex-1">
+                  <select
+                    value={selectedLeadId}
+                    onChange={(e) => setSelectedLeadId(e.target.value)}
+                    required
+                    className="w-full bg-transparent text-xs text-foreground focus:outline-none cursor-pointer"
+                  >
+                    <option value="" className="bg-card text-foreground">Select recipient lead...</option>
+                    {leadsList.map((l) => (
+                      <option key={l.id || l._id} value={l.id || l._id} className="bg-card text-foreground">
+                        {l.fullName || l.name || l.firstName || l.email} — {l.company || 'No Company'} ({l.email})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowCcBcc(!showCcBcc)}
+                    className="text-[11px] font-medium text-primary hover:underline shrink-0 ml-2"
+                  >
+                    {showCcBcc ? 'Hide' : 'Cc/Bcc'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {showCcBcc && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 animate-in fade-in">
+                <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3 py-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Cc:</span>
+                  <input
+                    type="text"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    placeholder="comma-separated emails"
+                    className="w-full bg-transparent text-xs text-foreground focus:outline-none font-mono"
+                  />
+                </div>
+                <div className="flex items-center gap-2 bg-muted/40 border border-border rounded-xl px-3 py-1.5">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider shrink-0">Bcc:</span>
+                  <input
+                    type="text"
+                    value={bcc}
+                    onChange={(e) => setBcc(e.target.value)}
+                    placeholder="comma-separated emails"
+                    className="w-full bg-transparent text-xs text-foreground focus:outline-none font-mono"
+                  />
+                </div>
               </div>
-            ) : (
-              <select
-                value={selectedLeadId}
-                onChange={(e) => setSelectedLeadId(e.target.value)}
-                required
-                className="w-full bg-transparent text-xs text-foreground focus:outline-none cursor-pointer"
-              >
-                <option value="" className="bg-card text-foreground">Select recipient lead...</option>
-                {leadsList.map((l) => (
-                  <option key={l.id || l._id} value={l.id || l._id} className="bg-card text-foreground">
-                    {l.fullName || l.name || l.firstName || l.email} — {l.company || 'No Company'} ({l.email})
-                  </option>
-                ))}
-              </select>
             )}
           </div>
 
@@ -385,7 +432,7 @@ export default function ComposeModal({
               required
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g. Quick question regarding {{company}}'s outbound workflow"
+              placeholder="e.g. Quick question regarding your outbound workflow"
               className="bg-muted/40 border-border rounded-xl font-medium text-foreground"
             />
           </div>
@@ -394,21 +441,6 @@ export default function ComposeModal({
           <div className="space-y-1.5 flex-1 flex flex-col min-h-[200px]">
             <div className="flex items-center justify-between text-xs">
               <label className="font-semibold text-foreground uppercase tracking-wider text-[11px]">Message Body</label>
-              
-              {/* Clean Merge Tag Quick Chips */}
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="text-[10px] hidden sm:inline">Insert:</span>
-                {['firstName', 'company', 'jobTitle'].map((tag) => (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => handleInsertTag(tag)}
-                    className="px-2 py-0.5 rounded-md bg-muted hover:bg-muted/80 text-foreground border border-border text-[10px] font-mono transition"
-                  >
-                    {copiedTag === tag ? '✓ Added' : `{{${tag}}}`}
-                  </button>
-                ))}
-              </div>
             </div>
 
             {activeTab === 'write' ? (
@@ -438,7 +470,7 @@ export default function ComposeModal({
             )}
           </div>
 
-          {/* 3. AI drafting: type 2-4 words, Claude drafts, you review and send */}
+          {/* 3. AI drafting: type 2-4 words, MINE-TECH AI drafts, you review and send */}
           <AiDraftBar
             leadId={activeLead?._id || activeLead?.id || selectedLeadId || null}
             surface="compose"
@@ -449,7 +481,7 @@ export default function ComposeModal({
           <div className="flex items-center justify-between pt-3 border-t border-border">
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-mono">
               <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-              <span>Resend Pro • <code>minetechresources.com</code></span>
+              <span>Resend Verified • <code>rauf@mine-tech.be</code></span>
             </div>
 
             <div className="flex items-center gap-2">

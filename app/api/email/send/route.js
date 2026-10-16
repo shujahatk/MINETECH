@@ -12,10 +12,22 @@ export async function POST(request) {
   }
 
   try {
-    const { leadId, subject, bodyHtml, bodyText, inboxId, templateId, aiDecisionId } = await request.json();
+    const {
+      leadId,
+      subject,
+      bodyHtml,
+      bodyText,
+      cc,
+      bcc,
+      replyTo,
+      attachments,
+      inboxId,
+      templateId,
+      aiDecisionId,
+    } = await request.json();
 
-    if (!leadId || !subject || !bodyHtml) {
-      return NextResponse.json({ success: false, message: 'leadId, subject, and bodyHtml are required' }, { status: 400 });
+    if (!leadId || !subject || (!bodyHtml && !bodyText)) {
+      return NextResponse.json({ success: false, message: 'leadId, subject, and body are required' }, { status: 400 });
     }
 
     const userId = auth.user.id || auth.user._id;
@@ -31,6 +43,10 @@ export async function POST(request) {
       subject,
       bodyHtml,
       bodyText,
+      cc,
+      bcc,
+      replyTo,
+      attachments,
       inboxId,
       templateId,
       userId,

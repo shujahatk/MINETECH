@@ -209,7 +209,7 @@ export async function POST(request, { params }) {
   try {
     const threadId = params.id;
     const body = await request.json();
-    const { bodyHtml, bodyText, subject, aiDecisionId } = body;
+    const { bodyHtml, bodyText, subject, aiDecisionId, cc, bcc, attachments } = body;
 
     if (!bodyHtml && !bodyText) {
       return NextResponse.json({ success: false, message: 'Reply content is required' }, { status: 400 });
@@ -233,12 +233,11 @@ export async function POST(request, { params }) {
       return NextResponse.json({ success: false, message: 'Thread is not linked to a lead' }, { status: 400 });
     }
 
-    // 2. Fetch Last Inbound Message to form In-Reply-To Header
-    const { data: lastInbound } = await supabaseAdmin
+    // 2. Fetch Last Message in thread to form In-Reply-To and References Headers
+    const { data: lastMsg } = await supabaseAdmin
       .from('email_messages')
       .select('id, resend_id, subject')
       .eq('thread_id', threadId)
-      .eq('direction', 'inbound')
       .order('sent_at', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -265,8 +264,13 @@ export async function POST(request, { params }) {
       subject: replySubject,
       bodyHtml: bodyHtml || `<p>${(bodyText || '').replace(/\n/g, '<br/>')}</p>`,
       bodyText: bodyText || bodyHtml?.replace(/<[^>]+>/g, ' '),
+      cc,
+      bcc,
+      attachments,
       threadId: threadId,
-      inReplyTo: lastInbound?.resend_id || null,
+      inReplyTo: lastMsg?.resend_id || null,
+      references: lastMsg?.resend_id ? [lastMsg.resend_id] : null,
+      userId: auth.user?.id || auth.user?._id || null,
     });
 
     await recordAiDraftSent({
