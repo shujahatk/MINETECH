@@ -211,8 +211,8 @@ export default function InboxView() {
         await fetchThreadDetail(selectedThreadId);
         await fetchThreads();
       } else {
-        const json = await res.json();
-        alert(json.message || 'Failed to send reply');
+        const json = await res.json().catch(() => ({}));
+        alert(json.message || json.error || 'Failed to send reply');
       }
     } catch (err) {
       alert('Error sending reply: ' + err.message);

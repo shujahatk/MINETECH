@@ -268,8 +268,8 @@ export async function POST(request, { params }) {
       bcc,
       attachments,
       threadId: threadId,
-      inReplyTo: lastMsg?.resend_id || null,
-      references: lastMsg?.resend_id ? [lastMsg.resend_id] : null,
+      inReplyTo: lastMsg?.resend_id ? String(lastMsg.resend_id) : null,
+      references: lastMsg?.resend_id ? String(lastMsg.resend_id) : null,
       userId: auth.user?.id || auth.user?._id || null,
     });
 
