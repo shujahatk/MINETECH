@@ -39,7 +39,7 @@ function Line({ label, children }) {
 /**
  * "AI Intelligence" section of the Lead Drawer.
  *
- * Opening the drawer only READS cached intelligence (no MINE-TECH AI call). MINE-TECH AI runs when the user
+ * Opening the drawer only READS cached intelligence (no AI call). MineTech AI runs when the user
  * clicks Analyze / Regenerate, and never blocks the rest of the drawer.
  */
 export default function LeadAiBrain({ leadId, legacySummary = null, lead = null, onOpenStudy = null, onSent = null }) {

@@ -24,6 +24,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
+const MERGE_TAGS = [
+  { tag: '{{firstName}}', label: 'First Name' },
+  { tag: '{{company}}', label: 'Company' },
+  { tag: '{{jobTitle}}', label: 'Job Title' },
+  { tag: '{{industry}}', label: 'Industry' },
+  { tag: '{{location}}', label: 'Location' },
+];
+
 export default function TemplateManager() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,6 +40,7 @@ export default function TemplateManager() {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [category, setCategory] = useState('cold-outreach');
+  const [copiedTag, setCopiedTag] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [previewLead, setPreviewLead] = useState({
     firstName: 'Sarah',
@@ -59,6 +68,12 @@ export default function TemplateManager() {
     fetchTemplates();
   }, []);
 
+  const handleInsertTag = (tag) => {
+    setBody((prev) => prev + ` ${tag} `);
+    setCopiedTag(tag);
+    setTimeout(() => setCopiedTag(''), 2000);
+  };
+
   const handleGenerateAIHook = async () => {
     setIsGeneratingAI(true);
     try {
@@ -66,7 +81,7 @@ export default function TemplateManager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Generate a high-converting cold email template for ${category} targeting B2B executives.`,
+          prompt: `Generate a high-converting cold email template for ${category} targeting B2B executives with {{firstName}} and {{company}} variables.`,
           tone: 'Direct & Value-First',
           goal: 'Schedule 15-min Call',
         }),
@@ -140,7 +155,7 @@ export default function TemplateManager() {
         icon={FileText}
         title="Templates"
         meta={!loading ? String(templates.length) : undefined}
-        description="Reusable email copy with merge tags and MINE-TECH AI-assisted hooks."
+        description="Reusable email copy with merge tags and MineTech AI-assisted hooks."
         className="mb-0"
         actions={
           <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-1.5" disabled={isModalOpen}>
@@ -154,11 +169,11 @@ export default function TemplateManager() {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
             <div>
               <h3 className="text-sm font-semibold tracking-tight text-foreground">Template studio</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">Write the copy and watch the preview update live.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Write the copy and watch the merge tags resolve in the preview.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={handleGenerateAIHook} disabled={isGeneratingAI} className="h-8 gap-1.5 text-primary">
               <Sparkles className={`h-3.5 w-3.5 ${isGeneratingAI ? 'animate-spin' : ''}`} />
-              <span>{isGeneratingAI ? 'Generating...' : 'Generate with MINE-TECH AI'}</span>
+              <span>{isGeneratingAI ? 'Generating...' : 'Generate with MineTech AI'}</span>
             </Button>
           </div>
 
@@ -181,7 +196,24 @@ export default function TemplateManager() {
 
             <div>
               <label htmlFor="tpl-subject" className="field-label mb-1.5 block">Subject line</label>
-              <Input id="tpl-subject" type="text" required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. A quick question for your team" className="font-medium" />
+              <Input id="tpl-subject" type="text" required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. A quick question for {{company}}" className="font-medium" />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="field-label block">Insert merge variable</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {MERGE_TAGS.map((t) => (
+                  <button
+                    type="button"
+                    key={t.tag}
+                    onClick={() => handleInsertTag(t.tag)}
+                    className="tone-brand inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs font-medium transition-opacity hover:opacity-80"
+                  >
+                    <span>{t.tag}</span>
+                    {copiedTag === t.tag ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3 opacity-60" />}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 gap-4 pt-1 md:grid-cols-2">
@@ -193,7 +225,7 @@ export default function TemplateManager() {
                   rows={8}
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  placeholder="Write your email template copy here..."
+                  placeholder={`Hi {{firstName}},\n\nSaw what your team is building at {{company}} in the {{industry}} space...\n\nWould you be open to a 15-min call this Thursday?`}
                   className="font-mono text-xs leading-relaxed"
                 />
               </div>

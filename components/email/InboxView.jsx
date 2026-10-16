@@ -308,7 +308,7 @@ export default function InboxView() {
     } catch (e) {}
   };
 
-  // AI Reply Analysis (MINE-TECH AI Inbound Understanding)
+  // AI Reply Analysis (MineTech AI Inbound Understanding)
   const handleAnalyzeReply = async () => {
     const lead = threadDetail?.thread?.leadId;
     const leadId = lead?.id || lead?._id || (typeof lead === 'string' ? lead : null);
@@ -321,7 +321,7 @@ export default function InboxView() {
     }
 
     setIsAnalyzingReply(true);
-    setStatusMessage('Analyzing supplier reply with MINE-TECH AI...');
+    setStatusMessage('Analyzing supplier reply with MineTech AI...');
     try {
       const res = await fetch('/api/email/inbox/analyze-reply', {
         method: 'POST',
@@ -354,7 +354,7 @@ export default function InboxView() {
     }
   };
 
-  // AI Contextual Reply Copilot (MINE-TECH AI + Confirmed Conversation Facts)
+  // AI Contextual Reply Copilot (MineTech AI + Confirmed Conversation Facts)
   const handleGenerateAIReply = async () => {
     const lead = threadDetail?.thread?.leadId;
     const leadId = lead?.id || lead?._id || (typeof lead === 'string' ? lead : null);

@@ -35,9 +35,22 @@ export async function DELETE(request, { params }) {
   if (!auth.authenticated) return auth.response;
 
   try {
-    await deleteLead(params.id);
-    return NextResponse.json({ success: true, message: 'Lead deleted' });
+    const result = await deleteLead(params.id);
+    return NextResponse.json({
+      success: true,
+      message: 'Lead permanently deleted',
+      data: { id: result.id, affected: result.affected },
+    });
   } catch (err) {
-    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+    const status = err.status || (err.code === 'NOT_FOUND' ? 404 : 500);
+    return NextResponse.json(
+      {
+        success: false,
+        message: err.message || 'Failed to delete lead',
+        code: err.code || null,
+        dependency: err.dependency || null,
+      },
+      { status }
+    );
   }
 }

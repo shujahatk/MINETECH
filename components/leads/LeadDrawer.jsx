@@ -1572,7 +1572,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
                         )}
                       </h3>
                       <p className="text-[11px] text-muted-foreground">
-                        Canonical MINE-TECH AI intelligence asset reused across email, dialing, SMS & campaigns.
+                        Canonical MineTech AI intelligence asset reused across email, dialing, SMS & campaigns.
                       </p>
                     </div>
                   </div>
@@ -1587,7 +1587,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
                         onClick={handleKeepExisting}
                         disabled={analyzingIntelligence}
                         className="h-7 px-2.5 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10"
-                        title="Accept current study without spending MINE-TECH AI tokens"
+                        title="Accept current study without spending MineTech AI tokens"
                       >
                         Keep Existing
                       </Button>
@@ -1634,8 +1634,8 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
 
                     <div className="p-2.5 rounded-xl bg-muted/20 border border-border">
                       <span className="field-label block">AI Model</span>
-                      <span className="text-[11px] font-mono text-muted-foreground mt-0.5 block truncate" title={intelligence.model || 'MINE-TECH AI'}>
-                        MINE-TECH AI
+                      <span className="text-[11px] font-mono text-muted-foreground mt-0.5 block truncate" title={intelligence.model}>
+                        {intelligence.model ? intelligence.model.replace('claude-', '').replace('-20241022', '') : 'MineTech AI'}
                       </span>
                     </div>
 
@@ -1874,12 +1874,12 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
                     {analyzingIntelligence ? (
                       <>
                         <RotateCcw className="h-3.5 w-3.5 animate-spin" />
-                        <span>Analyzing with MINE-TECH AI...</span>
+                        <span>Analyzing with MineTech AI...</span>
                       </>
                     ) : (
                       <>
                         <Sparkles className="h-3.5 w-3.5" />
-                        <span>Analyze Lead with MINE-TECH AI</span>
+                        <span>Analyze Lead with MineTech AI</span>
                       </>
                     )}
                   </Button>

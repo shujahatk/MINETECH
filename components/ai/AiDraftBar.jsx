@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
  * only sends { leadId, instruction } (plus the text currently on screen for edit commands such as
  * "make shorter"). The server loads all research, campaign, thread and playbook context itself.
  *
- * MINE-TECH AI only drafts. "Use draft" puts the text into the editor of the host screen; the human still
+ * MineTech AI only drafts. "Use draft" puts the text into the editor of the host screen; the human still
  * reviews, edits and presses that screen's own Send button. Nothing here sends email.
  *
  * It renders no <form>: hosts place it inside their own send form, so Enter is handled explicitly.
@@ -203,8 +203,8 @@ export default function AiDraftBar({
             onKeyDown={onKeyDown}
             disabled={busy || disabled || !leadId}
             maxLength={300}
-            aria-label="Tell MINE-TECH AI what to write"
-            placeholder={leadId ? 'Tell MINE-TECH AI what to write...' : 'Select a lead to use the AI assistant'}
+            aria-label="Tell MineTech AI what to write"
+            placeholder={leadId ? 'Tell MineTech AI what to write...' : 'Select a lead to use the AI assistant'}
             className="h-9 rounded-lg border-border bg-card pl-8 text-[13px]"
           />
         </div>
@@ -241,7 +241,7 @@ export default function AiDraftBar({
       {loading && (
         <div className="border-t border-border px-3 py-3" role="status" aria-live="polite">
           <p className="mb-2 flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-            <Sparkles className="h-3 w-3 animate-pulse text-primary" /> MINE-TECH AI is reading the lead&apos;s research and thread…
+            <Sparkles className="h-3 w-3 animate-pulse text-primary" /> MineTech AI is reading the lead&apos;s research and thread…
           </p>
           <div className="space-y-1.5">
             <div className="h-2.5 w-2/5 animate-pulse rounded bg-muted" />
@@ -283,7 +283,7 @@ export default function AiDraftBar({
               {INTENT_LABELS[pending.plan?.intent] || 'Draft'}
             </span>
             {pending.draft.tone && <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-muted-foreground">{pending.draft.tone}</span>}
-            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-muted-foreground" title="MINE-TECH AI's confidence in this draft">
+            <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-muted-foreground" title="MineTech AI's confidence in this draft">
               {confidencePct}% confidence
             </span>
           </div>

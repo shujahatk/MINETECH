@@ -351,14 +351,32 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
         body: JSON.stringify({ action: 'delete', leadIds: ids }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || json.success === false) throw new Error(json.message || 'Delete failed');
-      removeLeads(ids);
-      setSelected(new Set());
-      toast.success(`Deleted ${json.affected ?? ids.length} lead${ids.length === 1 ? '' : 's'}`);
-      if (leads.length === ids.length) {
-        // The whole page is gone: step back a page, or reload page 1 (other pages may still have rows)
-        if (page > 1) setPage(page - 1);
+      const deletedIds = Array.isArray(json.deleted) ? json.deleted : [];
+      const affected = typeof json.affected === 'number' ? json.affected : deletedIds.length;
+      const errMsg = json.message || json.error || 'Delete failed';
+
+      // Only update UI after the server confirms rows were actually removed.
+      if (affected > 0 && deletedIds.length > 0) {
+        removeLeads(deletedIds);
+        setSelected((prev) => {
+          const next = new Set(prev);
+          deletedIds.forEach((id) => next.delete(id));
+          return next;
+        });
+        toast.success(`Successfully deleted ${affected} lead${affected === 1 ? '' : 's'}`);
+        if (leads.length === deletedIds.length && page > 1) setPage(page - 1);
         else refetch();
+      }
+
+      if (!res.ok || json.success === false) {
+        if (affected > 0) {
+          // Partial success — keep a clear error for the remainder.
+          toast.error(errMsg);
+        } else {
+          throw new Error(errMsg);
+        }
+      } else if (affected === 0) {
+        throw new Error(errMsg || 'No leads were deleted');
       }
     } catch (err) {
       toast.error(err.message || 'Could not delete leads');
@@ -568,7 +586,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
           </FilterSelect>
           <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={handleBulkAnalyze} className="h-8 gap-1.5">
             {busy === 'analyze' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-            Analyze with MINE-TECH AI
+            Analyze with MineTech AI
           </Button>
           <Button
             variant="outline"
@@ -848,9 +866,15 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
       <AlertDialog open={confirmDelete} onOpenChange={(o) => !busy && setConfirmDelete(o)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete {selected.size} lead{selected.size === 1 ? '' : 's'}?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {selected.size === 1
+                ? 'Delete this lead?'
+                : `Delete ${selected.size} leads?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes the selected leads together with their email history and campaign records. This cannot be undone.
+              {selected.size === 1
+                ? 'Are you sure you want to permanently delete this lead? This action cannot be undone.'
+                : `Are you sure you want to permanently delete these ${selected.size} leads? This action cannot be undone.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -863,7 +887,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {busy === 'delete' ? 'Deleting…' : 'Delete'}
+              {busy === 'delete' ? 'Deleting…' : 'Delete permanently'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

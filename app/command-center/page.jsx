@@ -146,9 +146,9 @@ export default function CommandCenterPage() {
         <ServiceCard
           icon={Zap}
           title="AI engine"
-          subtitle="MINE-TECH AI"
+          subtitle="MineTech AI"
           badge={getStatusBadge(s.claude?.status, s.claude?.connected)}
-          rows={[['Model', s.claude?.model || 'MINE-TECH AI']]}
+          rows={[['Model', s.claude?.model || '—']]}
         />
       </div>
 
