@@ -50,9 +50,9 @@ export default function BlastWizard({ onClose, onCreated }) {
   const [auditing, setAuditing] = useState(false);
 
   // 3. Sender
-  const [senderEmail, setSenderEmail] = useState('outreach@8020aquisition.com');
-  const [senderName, setSenderName] = useState('80/20 Acquisition');
-  const [replyTo, setReplyTo] = useState('replies@8020aquisition.com');
+  const [senderEmail, setSenderEmail] = useState('rauf@mine-tech.be');
+  const [senderName, setSenderName] = useState('Rauf');
+  const [replyTo, setReplyTo] = useState('rauf@mine-tech.be');
 
   // 4. Subject & Base Email
   const [subject, setSubject] = useState('');

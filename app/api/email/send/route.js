@@ -52,6 +52,17 @@ export async function POST(request) {
       userId,
     });
 
+    if (!result.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: result.error || 'Failed to dispatch email via Resend',
+          code: result.code || 'EMAIL_SEND_FAILED',
+        },
+        { status: 400 }
+      );
+    }
+
     await recordAiDraftSent({ aiDecisionId: guard.decision ? aiDecisionId : null, bodyText, bodyHtml, userId });
 
     return NextResponse.json({ success: true, data: result });

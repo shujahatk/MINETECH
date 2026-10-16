@@ -121,8 +121,8 @@ export async function GET(request, { params }) {
         bodyHtml: trans.body_html || trans.bodyHtml,
         bodyText: trans.body_plain || trans.bodyText || (trans.body_html || '').replace(/<[^>]+>/g, ' '),
         from: {
-          email: trans.sender || 'outreach@minetechresources.com',
-          name: trans.direction === 'inbound' ? (lead?.fullName || 'Prospect') : 'MineTech Outbound',
+          email: trans.sender || process.env.EMAIL_FROM || 'rauf@mine-tech.be',
+          name: trans.direction === 'inbound' ? (lead?.fullName || 'Prospect') : (process.env.EMAIL_FROM_NAME || 'Rauf'),
         },
         to: [
           {
@@ -160,8 +160,8 @@ export async function GET(request, { params }) {
             bodyHtml: trans.body_html || trans.bodyHtml,
             bodyText: trans.body_plain || trans.bodyText || (trans.body_html || '').replace(/<[^>]+>/g, ' '),
             from: {
-              email: trans.sender || 'outreach@minetechresources.com',
-              name: trans.direction === 'inbound' ? (lead?.fullName || 'Prospect') : 'MineTech Outbound',
+              email: trans.sender || process.env.EMAIL_FROM || 'rauf@mine-tech.be',
+              name: trans.direction === 'inbound' ? (lead?.fullName || 'Prospect') : (process.env.EMAIL_FROM_NAME || 'Rauf'),
             },
             to: [
               {
@@ -272,6 +272,17 @@ export async function POST(request, { params }) {
       references: lastMsg?.resend_id ? [lastMsg.resend_id] : null,
       userId: auth.user?.id || auth.user?._id || null,
     });
+
+    if (!sendResult.success) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: sendResult.error || 'Failed to dispatch email reply via Resend',
+          code: sendResult.code || 'EMAIL_REPLY_FAILED',
+        },
+        { status: 400 }
+      );
+    }
 
     await recordAiDraftSent({
       aiDecisionId: guard.decision ? aiDecisionId : null,

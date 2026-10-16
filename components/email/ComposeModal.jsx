@@ -231,7 +231,7 @@ export default function ComposeModal({
       });
 
       const json = await res.json();
-      if (res.ok) {
+      if (res.ok && json.success) {
         if (onSent) onSent();
         onClose();
       } else {

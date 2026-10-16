@@ -48,8 +48,8 @@ export default function SettingsView() {
   const [email, setEmail] = useState('');
   const [lastLogin, setLastLogin] = useState('');
   const [dailyEmailLimit, setDailyEmailLimit] = useState(2500);
-  const [centralSendingEmail, setCentralSendingEmail] = useState('outreach@minetechresources.com');
-  const [centralReplyTo, setCentralReplyTo] = useState('outreach@minetechresources.com');
+  const [centralSendingEmail, setCentralSendingEmail] = useState('rauf@mine-tech.be');
+  const [centralReplyTo, setCentralReplyTo] = useState('rauf@mine-tech.be');
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [generalSuccess, setGeneralSuccess] = useState('');
 
@@ -104,13 +104,13 @@ export default function SettingsView() {
           setEmail(j.data.user?.email || 'admin@minetechresources.com');
           setLastLogin(j.data.user?.lastLogin ? new Date(j.data.user.lastLogin).toLocaleString() : 'Live Session');
           setDailyEmailLimit(j.data.user?.dailyEmailLimit || 2500);
-          setCentralSendingEmail(j.data.user?.centralSendingEmail || 'outreach@minetechresources.com');
-          setCentralReplyTo(j.data.user?.centralReplyTo || 'outreach@minetechresources.com');
+          setCentralSendingEmail(j.data.user?.centralSendingEmail || 'rauf@mine-tech.be');
+          setCentralReplyTo(j.data.user?.centralReplyTo || 'rauf@mine-tech.be');
           setInitialGeneral({
             name: j.data.user?.name || 'MineTech Administrator',
             dailyEmailLimit: j.data.user?.dailyEmailLimit || 2500,
-            centralSendingEmail: j.data.user?.centralSendingEmail || 'outreach@minetechresources.com',
-            centralReplyTo: j.data.user?.centralReplyTo || 'outreach@minetechresources.com',
+            centralSendingEmail: j.data.user?.centralSendingEmail || 'rauf@mine-tech.be',
+            centralReplyTo: j.data.user?.centralReplyTo || 'rauf@mine-tech.be',
           });
         }
       }
