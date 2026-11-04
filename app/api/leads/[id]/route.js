@@ -22,8 +22,23 @@ export async function PUT(request, { params }) {
   if (!auth.authenticated) return auth.response;
 
   try {
+    const { id } = await params;
     const body = await request.json();
-    const updated = await updateLead(params.id, body);
+    const updated = await updateLead(id, body);
+    return NextResponse.json({ success: true, data: updated });
+  } catch (err) {
+    return NextResponse.json({ success: false, message: err.message }, { status: 400 });
+  }
+}
+
+export async function PATCH(request, { params }) {
+  const auth = await requireAuth(request);
+  if (!auth.authenticated) return auth.response;
+
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const updated = await updateLead(id, body);
     return NextResponse.json({ success: true, data: updated });
   } catch (err) {
     return NextResponse.json({ success: false, message: err.message }, { status: 400 });

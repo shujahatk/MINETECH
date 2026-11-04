@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/adminGuard';
 import { supabaseAdmin } from '@/lib/supabase';
-import Lead from '@/lib/models/Lead';
-import EmailMessage from '@/lib/models/EmailMessage';
-import ActivityLog from '@/lib/models/ActivityLog';
 import { ensureMineTechSignatureText } from '@/lib/utils/signature';
+import { getCampaignPromptTemplate, validateGeneratedEmail, extractSubjectAndBody } from '@/lib/ai/campaignPromptTemplates';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +60,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { leadId, prompt, tone = 'Professional', goal = 'Intro Call' } = body;
+    const { leadId, prompt, tone = 'Professional', goal = 'Intro Call', templateType } = body;
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return NextResponse.json(
@@ -154,6 +152,12 @@ MineTech Outbound
 6. You MUST respond ONLY with a single valid JSON object with EXACTLY two keys: "subject" and "body".
 7. Do not include markdown codeblocks or commentary outside the JSON.`;
 
+    // If templateType is provided, get tailored system instruction
+    const selectedTemplate = templateType ? getCampaignPromptTemplate(templateType) : null;
+    const effectiveSystemPrompt = selectedTemplate
+      ? `${selectedTemplate.systemInstruction}\n\nTone: ${tone}. Objective: ${goal}.\nUser custom prompt: ${prompt}`
+      : systemPrompt;
+
     let generated = null;
     let telemetry = {
       model: 'rule-based',
@@ -170,7 +174,8 @@ MineTech Outbound
           process.env.CLAUDE_MODEL,
           'claude-haiku-4-5-20251001',
           'claude-sonnet-4-6',
-          'claude-haiku-5-5',
+          'claude-3-5-sonnet-20241022',
+          'claude-3-5-haiku-20241022',
         ].filter(Boolean);
 
         const callClaude = async (customPrompt) => {
@@ -186,8 +191,8 @@ MineTech Outbound
                 },
                 body: JSON.stringify({
                   model,
-                  max_tokens: 600,
-                  system: systemPrompt,
+                  max_tokens: 2000,
+                  system: effectiveSystemPrompt,
                   messages: [
                     {
                       role: 'user',
@@ -209,8 +214,22 @@ MineTech Outbound
 
         const initialPrompt = `User Prompt Instruction: "${prompt}"\n\nProspect Context:\n${xmlContext}`;
         const data = await callClaude(initialPrompt);
-        const textResponse = data.content?.[0]?.text || '';
-        generated = extractAndParseJson(textResponse);
+        const textResponse = (data?.content || [])
+          .filter((b) => b?.type === 'text' || typeof b?.text === 'string')
+          .map((b) => b.text)
+          .join('')
+          .trim() || data.content?.[0]?.text || '';
+        
+        const validated = validateGeneratedEmail(textResponse);
+        if (validated.valid) {
+          generated = {
+            subject: validated.subject,
+            body: validated.bodyText,
+            bodyHtml: validated.bodyHtml,
+          };
+        } else {
+          generated = extractAndParseJson(textResponse);
+        }
 
         // Defensive Retry once on parse failure
         if (!generated && textResponse) {

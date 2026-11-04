@@ -217,6 +217,19 @@ function OverviewTab({
 
       <Section title="Pipeline" icon={Layers}>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
+          <OverviewField label="Classification">
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
+                lead.classification === 'Buyer'
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                  : lead.classification === 'Seller'
+                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                  : 'bg-muted text-muted-foreground border border-border'
+              }`}
+            >
+              {lead.classification || 'Unclassified'}
+            </span>
+          </OverviewField>
           <OverviewField label="Status">
             <StatusBadge status={stage} label={statusLabel(stage)} size="sm" />
           </OverviewField>
@@ -314,7 +327,6 @@ function OverviewTab({
         leadId={lead.id || lead._id}
         lead={lead}
         legacySummary={summary?.ai || null}
-        onOpenStudy={() => onOpenTab('intelligence')}
       />
 
 
@@ -1128,16 +1140,6 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
             {[
               { id: 'overview', label: 'Overview' },
               { id: 'opportunity', label: 'Opportunity' },
-              {
-                id: 'intelligence',
-                label: 'AI study',
-                icon: Sparkles,
-                dot: (intelligence?.status || summary?.ai?.status) === 'OUTDATED'
-                  ? { cls: 'bg-amber-500', title: 'Outdated analysis' }
-                  : (intelligence?.status || summary?.ai?.status) === 'CURRENT'
-                    ? { cls: 'bg-primary', title: 'Current analysis' }
-                    : null,
-              },
               {
                 id: 'conversation_intel',
                 label: 'Conversation',

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sendLeadEmail } from '@/lib/services/emailService';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import { guardAiDraftSend, recordAiDraftSent } from '@/lib/ai/brain/sendGuard';
+import { deleteDraft } from '@/lib/services/draftService';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export async function POST(request) {
   try {
     const {
       leadId,
+      to,
       subject,
       bodyHtml,
       bodyText,
@@ -24,6 +26,9 @@ export async function POST(request) {
       inboxId,
       templateId,
       aiDecisionId,
+      scheduled_at,
+      scheduledAt,
+      draftId,
     } = await request.json();
 
     if (!leadId || !subject || (!bodyHtml && !bodyText)) {
@@ -40,6 +45,7 @@ export async function POST(request) {
 
     const result = await sendLeadEmail({
       leadId,
+      to,
       subject,
       bodyHtml,
       bodyText,
@@ -50,6 +56,7 @@ export async function POST(request) {
       inboxId,
       templateId,
       userId,
+      scheduled_at: scheduled_at || scheduledAt || null,
     });
 
     if (!result.success) {
@@ -61,6 +68,15 @@ export async function POST(request) {
         },
         { status: 400 }
       );
+    }
+
+    // Clean up draft if one existed
+    if (draftId) {
+      try {
+        await deleteDraft(draftId);
+      } catch (e) {
+        console.warn('Failed to delete draft after send:', e.message);
+      }
     }
 
     await recordAiDraftSent({ aiDecisionId: guard.decision ? aiDecisionId : null, bodyText, bodyHtml, userId });

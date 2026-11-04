@@ -45,6 +45,8 @@ import { localDateString, rowPatchFromDetail, STATUS_OPTIONS, statusLabel } from
 const LeadDrawer = dynamic(() => import('@/components/leads/LeadDrawer'), { ssr: false });
 const LeadImportModal = dynamic(() => import('@/components/leads/LeadImportModal'), { ssr: false });
 const LeadCreateModal = dynamic(() => import('@/components/leads/LeadCreateModal'), { ssr: false });
+const CampaignLeadsView = dynamic(() => import('@/components/leads/CampaignLeadsView'), { ssr: false });
+const ComposeModal = dynamic(() => import('@/components/email/ComposeModal'), { ssr: false });
 const PipelineKanban = dynamic(() => import('@/components/leads/PipelineKanban'), {
   ssr: false,
   loading: () => <BoardSkeleton />,
@@ -76,16 +78,9 @@ const FOLLOW_UP_OPTIONS = [
   { id: 'none', label: 'No next action date' },
 ];
 
-const AI_OPTIONS = [
-  { id: 'studied', label: 'AI studied' },
-  { id: 'highfit', label: 'High fit' },
-  { id: 'outdated', label: 'Outdated study' },
-  { id: 'unstudied', label: 'Needs study' },
-];
-
 const PAGE_SIZES = [25, 50, 100];
 const BOARD_LIMIT = 100;
-const FILTER_KEYS = ['temperature', 'status', 'owner', 'campaign', 'followUp', 'product', 'ai'];
+const FILTER_KEYS = ['temperature', 'status', 'owner', 'campaign', 'followUp', 'product', 'classification'];
 
 /* ------------------------------------------------------------------ */
 /* Small presentational helpers                                         */
@@ -203,6 +198,8 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [sort, setSort] = useState({ by: 'createdAt', dir: 'desc' });
+  const [activeTabClassification, setActiveTabClassification] = useState('ALL');
+  const [composeLead, setComposeLead] = useState(null);
 
   const [selected, setSelected] = useState(() => new Set());
   const [active, setActive] = useState(null); // { id, initial }
@@ -263,7 +260,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
     return () => clearTimeout(t);
   }, [searchInput, ready, filters.search]);
 
-  const { leads, total, pagination, loading, refreshing, error, refetch, patchLead, removeLeads } = useLeads({
+  const { leads, total, classificationCounts, pagination, loading, refreshing, error, refetch, patchLead, removeLeads } = useLeads({
     enabled: ready,
     view: isBoard ? 'board' : 'table',
     filters,
@@ -419,7 +416,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json.success === false) throw new Error(json.message || json.error || 'Analysis failed');
       toast.success(`Analyzed ${json.data?.analyzed || 0} leads (${json.data?.skipped || 0} cached)`);
-      if (filters.ai) refetch();
+      refetch();
     } catch (err) {
       toast.error(err.message || 'Could not analyze leads');
     } finally {
@@ -538,15 +535,6 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
         {PRODUCT_OPTIONS.map((p) => (
           <option key={p} value={p}>
             {p}
-          </option>
-        ))}
-      </FilterSelect>
-
-      <FilterSelect label="AI study" value={filters.ai} onChange={(v) => setFilter('ai', v)}>
-        <option value="">Any AI status</option>
-        {AI_OPTIONS.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.label}
           </option>
         ))}
       </FilterSelect>
@@ -739,7 +727,54 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
         </div>
       )}
 
-      {isBoard ? (
+      {/* Classification & Campaigns Navigation Tabs */}
+      <div className="flex items-center gap-1.5 border-b border-border pb-1 overflow-x-auto">
+        {[
+          { id: 'ALL', label: 'All Leads', count: classificationCounts?.all ?? total },
+          { id: 'Buyer', label: 'Buyers', count: classificationCounts?.buyers ?? 0, color: 'text-emerald-600 dark:text-emerald-400' },
+          { id: 'Seller', label: 'Sellers', count: classificationCounts?.sellers ?? 0, color: 'text-blue-600 dark:text-blue-400' },
+          { id: 'Unclassified', label: 'Unclassified', count: classificationCounts?.unclassified ?? 0 },
+          { id: 'campaigns', label: 'Campaigns', isCampaignTab: true },
+        ].map((tab) => {
+          const isActive = tab.isCampaignTab
+            ? viewMode === 'campaigns'
+            : viewMode !== 'campaigns' && activeTabClassification === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => {
+                if (tab.isCampaignTab) {
+                  setViewMode('campaigns');
+                } else {
+                  if (viewMode === 'campaigns') setViewMode('table');
+                  setActiveTabClassification(tab.id);
+                  setFilter('classification', tab.id === 'ALL' ? '' : tab.id);
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                isActive
+                  ? 'bg-primary/10 text-primary border border-primary/25 shadow-subtle'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent'
+              }`}
+            >
+              <span>{tab.label}</span>
+              {typeof tab.count === 'number' && (
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-muted ${tab.color || 'text-foreground'}`}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {viewMode === 'campaigns' ? (
+        <CampaignLeadsView
+          onOpenLead={openLeadById}
+          onComposeLead={(lead) => setComposeLead(lead)}
+        />
+      ) : isBoard ? (
         <>
           <div className="rounded-xl border border-border bg-card shadow-card">{toolbar}</div>
           {bulkBar}
@@ -858,6 +893,17 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
           onClose={() => setIsCreateOpen(false)}
           onSuccess={() => {
             setPage(1);
+            refetch();
+          }}
+        />
+      )}
+      {composeLead && (
+        <ComposeModal
+          lead={composeLead}
+          recipientEmail={composeLead.email}
+          onClose={() => setComposeLead(null)}
+          onSent={() => {
+            setComposeLead(null);
             refetch();
           }}
         />

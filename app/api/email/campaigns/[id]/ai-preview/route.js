@@ -1,9 +1,6 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth/adminGuard';
+import { requireAuth, requireAdmin } from '@/lib/auth/adminGuard';
 import { supabaseAdmin } from '@/lib/supabase';
-import EmailCampaign from '@/lib/models/EmailCampaign';
-import EmailRecipient from '@/lib/models/EmailRecipient';
-import Lead from '@/lib/models/Lead';
 import { runAiGenerationWorker } from '@/lib/workers/aiGenerationWorker';
 import { runEmailBlastWorker } from '@/lib/workers/emailBlastWorker';
 
@@ -11,7 +8,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/email/campaigns/[id]/ai-preview
- * Returns generation progress and 3-5 sample generated emails for review
+ * Returns generation progress and sample generated emails from Supabase
  */
 export async function GET(request, { params }) {
   const auth = await requireAuth(request);
@@ -19,52 +16,80 @@ export async function GET(request, { params }) {
 
   try {
     const { id } = params;
-    const campaign = await EmailCampaign.findById(id);
-    if (!campaign) {
-      return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 });
+
+    const { data: campaign, error: campErr } = await supabaseAdmin
+      .from('email_campaigns')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (campErr || !campaign) {
+      return NextResponse.json(
+        { success: false, error: 'Campaign not found' },
+        { status: 404 }
+      );
     }
 
-    // Fetch all recipients for this campaign
-    const recipients = await EmailRecipient.find({ campaignId: id }).limit(200);
+    // Fetch up to 200 recipients from Supabase
+    const { data: recipients, error: recErr } = await supabaseAdmin
+      .from('email_recipients')
+      .select('*')
+      .eq('campaign_id', id)
+      .order('created_at', { ascending: true })
+      .limit(200);
 
-    let total = recipients.length;
+    const recList = recipients || [];
     let pending = 0;
     let generating = 0;
     let ready = 0;
     let failed = 0;
 
-    const samples = [];
+    const leadIdsToFetch = recList
+      .slice(0, 10)
+      .map((r) => r.lead_id)
+      .filter(Boolean);
 
-    for (const rec of recipients) {
-      const status = rec.generationStatus || rec.tokens?.generation_status || 'ready';
+    let leadsMap = {};
+    if (leadIdsToFetch.length > 0) {
+      const { data: leads } = await supabaseAdmin
+        .from('leads')
+        .select('id, full_name, first_name, last_name, company, job_title, industry, email, website')
+        .in('id', leadIdsToFetch);
+
+      if (leads) {
+        leadsMap = leads.reduce((acc, l) => {
+          acc[l.id] = l;
+          return acc;
+        }, {});
+      }
+    }
+
+    const samples = [];
+    for (const rec of recList) {
+      const status = rec.generation_status || rec.tokens?.generation_status || 'ready';
       if (status === 'pending') pending++;
       else if (status === 'generating') generating++;
       else if (status === 'ready') ready++;
       else if (status === 'failed') failed++;
 
       if (samples.length < 5) {
-        let leadInfo = { name: 'Prospect', company: 'Company', email: rec.email };
-        if (rec.leadId || rec.lead_id) {
-          const lead = await Lead.findById(rec.leadId || rec.lead_id).catch(() => null);
-          if (lead) {
-            leadInfo = {
-              name: lead.fullName || lead.firstName || 'Prospect',
-              company: lead.company || 'Company',
-              industry: lead.industry || lead.niche || 'B2B',
-              jobTitle: lead.jobTitle || 'Executive',
-              email: lead.email,
-              website: lead.website || '',
-            };
-          }
-        }
+        const lead = leadsMap[rec.lead_id];
+        const leadInfo = {
+          name: lead?.full_name || lead?.first_name || rec.tokens?.firstName || 'Prospect',
+          company: lead?.company || rec.tokens?.company || 'Company',
+          industry: lead?.industry || 'B2B',
+          jobTitle: lead?.job_title || rec.tokens?.jobTitle || 'Executive',
+          email: rec.email,
+          website: lead?.website || '',
+        };
 
         samples.push({
           recipientId: rec.id,
           lead: leadInfo,
-          subject: rec.generatedSubject || rec.tokens?.generated_subject || rec.subject || campaign.subject,
-          body: rec.generatedBody || rec.tokens?.generated_body || rec.bodyText || rec.bodyHtml,
+          subject: rec.generated_subject || rec.tokens?.generated_subject || campaign.subject,
+          body: rec.generated_body || rec.tokens?.generated_body || rec.tokens?.bodyText || campaign.body_plain || campaign.body_html,
           generationStatus: status,
-          generationError: rec.generationError || rec.tokens?.generation_error || '',
+          generationError: rec.error_message || rec.tokens?.generation_error || '',
         });
       }
     }
@@ -74,9 +99,10 @@ export async function GET(request, { params }) {
       data: {
         campaignId: id,
         campaignName: campaign.name,
-        masterPrompt: campaign.masterPrompt || campaign.master_prompt || campaign.stats?.master_prompt || '',
-        stats: {
-          total,
+        masterPrompt: campaign.master_prompt || campaign.stats?.master_prompt || '',
+        totalRecipients: recList.length,
+        generationStats: {
+          total: recList.length,
           pending,
           generating,
           ready,
@@ -93,10 +119,10 @@ export async function GET(request, { params }) {
 
 /**
  * POST /api/email/campaigns/[id]/ai-preview
- * Triggers batch generation, retries failed generation rows, or approves & sends
+ * Triggers batch generation, retries failed rows, or approves & launches
  */
 export async function POST(request, { params }) {
-  const auth = await requireAuth(request);
+  const auth = await requireAdmin(request);
   if (auth instanceof Response || auth instanceof NextResponse) return auth;
 
   try {
@@ -104,13 +130,17 @@ export async function POST(request, { params }) {
     const body = await request.json().catch(() => ({}));
     const action = body.action || 'generate'; // 'generate' | 'retry_failed' | 'approve_and_launch'
 
-    const campaign = await EmailCampaign.findById(id);
-    if (!campaign) {
+    const { data: campaign, error: campErr } = await supabaseAdmin
+      .from('email_campaigns')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (campErr || !campaign) {
       return NextResponse.json({ success: false, error: 'Campaign not found' }, { status: 404 });
     }
 
     if (action === 'generate') {
-      // Run generation worker in background
       runAiGenerationWorker(id, { concurrency: 3 }).catch((e) =>
         console.error('[AI Preview Background Worker Error]:', e.message)
       );
@@ -123,19 +153,16 @@ export async function POST(request, { params }) {
     }
 
     if (action === 'retry_failed') {
-      // Reset failed recipients to pending
-      const recipients = await EmailRecipient.find({ campaignId: id });
-      for (const rec of recipients) {
-        const genStatus = rec.generationStatus || rec.tokens?.generation_status;
-        if (genStatus === 'failed') {
-          const updatedTokens = {
-            ...(rec.tokens || {}),
-            generation_status: 'pending',
-            generation_error: '',
-          };
-          await EmailRecipient.findByIdAndUpdate(rec.id, { tokens: updatedTokens });
-        }
-      }
+      const nowIso = new Date().toISOString();
+      await supabaseAdmin
+        .from('email_recipients')
+        .update({
+          generation_status: 'pending',
+          error_message: null,
+          updated_at: nowIso,
+        })
+        .eq('campaign_id', id)
+        .eq('generation_status', 'failed');
 
       runAiGenerationWorker(id, { concurrency: 3 }).catch((e) =>
         console.error('[AI Preview Retry Worker Error]:', e.message)
@@ -149,10 +176,13 @@ export async function POST(request, { params }) {
     }
 
     if (action === 'approve_and_launch') {
-      // Require all generation to be completed before launch
-      const recipients = await EmailRecipient.find({ campaignId: id });
-      const unready = recipients.filter((r) => {
-        const genStatus = r.generationStatus || r.tokens?.generation_status || 'ready';
+      const { data: recipients } = await supabaseAdmin
+        .from('email_recipients')
+        .select('id, generation_status, tokens')
+        .eq('campaign_id', id);
+
+      const unready = (recipients || []).filter((r) => {
+        const genStatus = r.generation_status || r.tokens?.generation_status || 'ready';
         return genStatus !== 'ready';
       });
 
@@ -166,9 +196,13 @@ export async function POST(request, { params }) {
         );
       }
 
-      // Mark campaign as running and trigger email blast worker
-      campaign.status = 'RUNNING';
-      await campaign.save();
+      await supabaseAdmin
+        .from('email_campaigns')
+        .update({
+          status: 'RUNNING',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', id);
 
       runEmailBlastWorker(id).catch((e) =>
         console.error('[Blast Worker Launch Error]:', e.message)

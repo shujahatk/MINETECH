@@ -27,6 +27,9 @@ import {
   Bot,
   Trash2,
   MessageSquareReply,
+  Reply,
+  ReplyAll,
+  Forward,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,6 +46,7 @@ import { sanitizeHtml } from '@/lib/utils/sanitizer';
 
 // The lead drawer is heavy and only needed when a lead is opened from the inbox.
 const LeadDrawer = dynamic(() => import('@/components/leads/LeadDrawer'), { ssr: false });
+const ComposeModal = dynamic(() => import('@/components/email/ComposeModal'), { ssr: false });
 
 export default function InboxView() {
   const [loadError, setLoadError] = useState('');
@@ -72,6 +76,36 @@ export default function InboxView() {
   const messagesEndRef = useRef(null);
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [forwardDraft, setForwardDraft] = useState(null);
+
+  const handleReplyAll = () => {
+    if (!threadDetail?.messages) return;
+    const allCcs = new Set();
+    threadDetail.messages.forEach((m) => {
+      if (Array.isArray(m.cc)) {
+        m.cc.forEach((c) => {
+          const lower = String(c || '').toLowerCase().trim();
+          if (lower && lower !== 'rauf@mine-tech.be' && lower !== (threadLeadObj?.email || '').toLowerCase()) {
+            allCcs.add(c.trim());
+          }
+        });
+      }
+    });
+    setReplyCc(Array.from(allCcs).join(', '));
+    setShowReplyCcBcc(true);
+  };
+
+  const handleForwardMessage = (msg) => {
+    const sender = msg?.sender || 'Prospect';
+    const sentDate = msg?.sentAt || msg?.createdAt ? new Date(msg.sentAt || msg.createdAt).toLocaleString() : '';
+    const fwdBody = `\n\n---------- Forwarded message ---------\nFrom: ${sender}\nDate: ${sentDate}\nSubject: ${threadDetail?.thread?.subject || ''}\nTo: ${msg?.recipient || ''}\n\n${msg?.bodyText || msg?.body_plain || ''}`;
+
+    setForwardDraft({
+      subject: `Fwd: ${threadDetail?.thread?.subject || ''}`,
+      body_text: fwdBody,
+      attachments: msg?.attachments || [],
+    });
+  };
 
   const fetchConversationIntel = async (leadId) => {
     if (!leadId) {
@@ -875,6 +909,15 @@ export default function InboxView() {
                           <span className="tabular-nums">
                             {msg.sentAt || msg.createdAt ? new Date(msg.sentAt || msg.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => handleForwardMessage(msg)}
+                            title="Forward this message"
+                            aria-label="Forward this message"
+                            className="rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover/msg:opacity-100"
+                          >
+                            <Forward className="h-3 w-3" />
+                          </button>
                           {msgId && (
                             <button
                               type="button"
@@ -940,6 +983,25 @@ export default function InboxView() {
                       className="text-[11px] font-medium text-primary hover:underline"
                     >
                       {showReplyCcBcc ? 'Hide CC/BCC' : '+ CC / BCC'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleReplyAll}
+                      className="text-[11px] font-medium text-primary hover:underline flex items-center gap-1"
+                      title="Reply to sender and CC all other thread participants"
+                    >
+                      <ReplyAll className="h-3 w-3" /> Reply All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const lastMsg = threadDetail?.messages?.[threadDetail.messages.length - 1];
+                        handleForwardMessage(lastMsg);
+                      }}
+                      className="text-[11px] font-medium text-muted-foreground hover:text-foreground flex items-center gap-1"
+                      title="Forward this thread to another recipient"
+                    >
+                      <Forward className="h-3 w-3" /> Forward
                     </button>
                     {aiReplyDecisionId && (
                       <span className="inline-flex items-center gap-1 rounded border border-primary/20 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -1057,6 +1119,18 @@ export default function InboxView() {
           onUpdated={() => {
             fetchThreads();
             if (selectedThreadId) fetchThreadDetail(selectedThreadId);
+          }}
+        />
+      )}
+
+      {/* Forward Modal */}
+      {forwardDraft && (
+        <ComposeModal
+          initialDraft={forwardDraft}
+          onClose={() => setForwardDraft(null)}
+          onSent={() => {
+            setForwardDraft(null);
+            fetchThreads();
           }}
         />
       )}

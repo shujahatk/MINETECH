@@ -24,74 +24,183 @@ import {
   Clock,
   Lock,
   X,
+  Smartphone,
+  Monitor,
+  Copy,
+  Info,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 
-export default function BlastWizard({ onClose, onCreated }) {
-  // Navigation Tabs: 'recipients' | 'sender' | 'personalization' | 'content' | 'settings' | 'compliance' | 'review'
+const CAMPAIGN_TEMPLATES = [
+  {
+    id: 'initial_outreach',
+    name: 'Initial Outreach',
+    description: 'Direct, value-first introduction to MineTech mineral supply and processing capabilities.',
+    defaultPrompt: 'Introduce MineTech high-grade industrial mineral solutions (kaolin, calcined chamotte, bentonite) with guaranteed assay consistency and European warehousing in Lamswaarde.',
+    defaultGoal: 'Book a 15-min Discovery Call',
+    defaultTone: 'Direct',
+  },
+  {
+    id: 'follow_up',
+    name: 'Follow-Up Email',
+    description: 'Polite, value-additive follow-up referencing prior outreach without pressure or guilt.',
+    defaultPrompt: 'Follow up on our previous note regarding industrial mineral supply specifications, technical assays, and laboratory sample testing.',
+    defaultGoal: 'Gauge interest (Soft CTA)',
+    defaultTone: 'Professional',
+  },
+  {
+    id: 'personalized_b2b',
+    name: 'Personalized B2B Outreach',
+    description: 'Deeply tailored message connecting prospect operational focus with specific mineral grades.',
+    defaultPrompt: 'Tailor specifically to their manufacturing and refractory requirements with emphasis on certified technical data sheets (TDS) and supply security.',
+    defaultGoal: 'Book a 15-min Discovery Call',
+    defaultTone: 'Professional',
+  },
+  {
+    id: 'professional_intro',
+    name: 'Professional Introduction',
+    description: 'Executive-level corporate introduction highlighting Lamswaarde warehouse footprint.',
+    defaultPrompt: 'Executive introduction presenting MineTech Resources BV industrial distribution platform and strategic European supply reliability.',
+    defaultGoal: 'Book a 15-min Discovery Call',
+    defaultTone: 'Professional',
+  },
+  {
+    id: 'meeting_request',
+    name: 'Meeting Request',
+    description: 'Specific, low-friction invitation to a brief 10-minute technical review call.',
+    defaultPrompt: 'Request a brief 10-minute call to compare current mineral grade benchmarks against MineTech certified assay specifications.',
+    defaultGoal: 'Book a 15-min Discovery Call',
+    defaultTone: 'Direct',
+  },
+  {
+    id: 're_engagement',
+    name: 'Re-Engagement Campaign',
+    description: 'Gentle re-activation for dormant leads or uncompleted procurement conversations.',
+    defaultPrompt: 'Re-open dialogue for upcoming quarterly industrial mineral procurement and contract review.',
+    defaultGoal: 'Gauge interest (Soft CTA)',
+    defaultTone: 'Friendly',
+  },
+];
+
+const SAMPLE_LEADS = [
+  {
+    firstName: 'Abdullah',
+    lastName: 'Rauf',
+    fullName: 'Abdullah Rauf',
+    company: 'MineTech Resources BV',
+    jobTitle: 'Commercial Director',
+    industry: 'Industrial Minerals & Ceramics',
+    website: 'https://www.mine-tech.be',
+  },
+  {
+    firstName: 'Sarah',
+    lastName: 'Connor',
+    fullName: 'Sarah Connor',
+    company: 'Cyberdyne Systems',
+    jobTitle: 'VP of Engineering',
+    industry: 'Robotics & Automation',
+    website: 'https://www.cyberdyne.io',
+  },
+  {
+    firstName: 'Marcus',
+    lastName: 'Vance',
+    fullName: 'Marcus Vance',
+    company: 'Vanguard Dynamics',
+    jobTitle: 'Head of Procurement',
+    industry: 'Refractory & Metallurgy',
+    website: 'https://www.vanguard-dynamics.com',
+  },
+];
+
+export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = null }) {
+  const isEditing = Boolean(campaign && (campaign.id || campaign._id));
+  const campaignId = campaign ? (campaign.id || campaign._id) : null;
+
+  // Tabs: 'recipients' | 'sender' | 'personalization' | 'content' | 'preview' | 'settings' | 'compliance' | 'review'
   const [activeTab, setActiveTab] = useState('recipients');
 
   // 1. Campaign Details
-  const [name, setName] = useState('');
-  const [campaignType, setCampaignType] = useState('standard'); // 'standard' | 'ai_personalized'
+  const [name, setName] = useState(campaign?.name || '');
+  const [description, setDescription] = useState(campaign?.description || campaign?.stats?.description || '');
+  const [campaignType, setCampaignType] = useState(campaign?.campaignType || campaign?.campaign_type || 'standard');
+  const [selectedTemplateType, setSelectedTemplateType] = useState('initial_outreach');
 
   // 2. Recipients
-  const [filterCriteria, setFilterCriteria] = useState({
+  const initialFilter = campaign?.filterCriteria || campaign?.stats?.filterCriteria || {
     status: ['NEW', 'CONTACTED'],
     tags: [],
     onlyUncontacted: false,
-  });
+  };
+  const [filterCriteria, setFilterCriteria] = useState(initialFilter);
   const [availableTags, setAvailableTags] = useState([]);
   const [audit, setAudit] = useState(null);
   const [auditing, setAuditing] = useState(false);
 
   // 3. Sender
-  const [senderEmail, setSenderEmail] = useState('rauf@mine-tech.be');
-  const [senderName, setSenderName] = useState('Rauf');
-  const [replyTo, setReplyTo] = useState('rauf@mine-tech.be');
+  const initialSender = campaign?.sender || campaign?.stats?.sender || {};
+  const [senderEmail, setSenderEmail] = useState(initialSender.email || 'rauf@mine-tech.be');
+  const [senderName, setSenderName] = useState(initialSender.name || 'Rauf');
+  const [replyTo, setReplyTo] = useState(initialSender.replyTo || 'rauf@mine-tech.be');
 
-  // 4. Subject & Base Email
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  // 4. Subject & Email Body
+  const [subject, setSubject] = useState(campaign?.subject || '');
+  const [body, setBody] = useState(
+    campaign?.body_plain ||
+    (campaign?.bodyHtml || campaign?.body_html ? (campaign.bodyHtml || campaign.body_html).replace(/<br\s*\/?>/gi, '\n').replace(/<\/p><p>/gi, '\n\n').replace(/<[^>]+>/g, '') : '')
+  );
 
   // 5. Sending Settings
-  const [dailyLimit, setDailyLimit] = useState(50);
-  const [delayInterval, setDelayInterval] = useState(45); // seconds
-  const [scheduleWindow, setScheduleWindow] = useState('08:00 - 18:00 (Prospect Local Time)');
-  const [warmupEnabled, setWarmupEnabled] = useState(true);
+  const initialSettings = campaign?.sendingSettings || campaign?.stats?.sendingSettings || {};
+  const [dailyLimit, setDailyLimit] = useState(initialSettings.dailyLimit || 50);
+  const [delayInterval, setDelayInterval] = useState(initialSettings.delayInterval || 45);
+  const [scheduleWindow, setScheduleWindow] = useState(initialSettings.scheduleWindow || '08:00 - 18:00 (Prospect Local Time)');
+  const [warmupEnabled, setWarmupEnabled] = useState(initialSettings.warmupEnabled !== false);
 
   // 6. Tracking
-  const [trackOpens, setTrackOpens] = useState(true);
-  const [trackClicks, setTrackClicks] = useState(true);
-  const [unsubscribeHeader, setUnsubscribeHeader] = useState(true);
+  const initialTracking = campaign?.tracking || campaign?.stats?.tracking || {};
+  const [trackOpens, setTrackOpens] = useState(initialTracking.trackOpens !== false);
+  const [trackClicks, setTrackClicks] = useState(initialTracking.trackClicks !== false);
+  const [unsubscribeHeader, setUnsubscribeHeader] = useState(initialTracking.unsubscribeHeader !== false);
 
   // 7. Compliance
-  const [includePhysicalAddress, setIncludePhysicalAddress] = useState(true);
-  const [includeOneClickOptOut, setIncludeOneClickOptOut] = useState(true);
-  const [dncSuppressionActive, setDncSuppressionActive] = useState(true);
+  const initialCompliance = campaign?.compliance || campaign?.stats?.compliance || {};
+  const [includePhysicalAddress, setIncludePhysicalAddress] = useState(initialCompliance.includePhysicalAddress !== false);
+  const [includeOneClickOptOut, setIncludeOneClickOptOut] = useState(initialCompliance.includeOneClickOptOut !== false);
+  const [dncSuppressionActive, setDncSuppressionActive] = useState(initialCompliance.dncSuppressionActive !== false);
 
-  // 8. Personalization & MineTech AI
-  const [personalizationMode, setPersonalizationMode] = useState('claude'); // 'no_ai' | 'claude' | 'ai_personalized'
-  const [aiPrompt, setAiPrompt] = useState('Write a high-converting, personalized cold email introducing our outbound pipeline automation. Reference their company and role naturally. Keep it under 100 words.');
+  // 8. Personalization & Claude AI
+  const [personalizationMode, setPersonalizationMode] = useState(
+    campaign?.campaignType === 'ai_personalized' ? 'ai_personalized' : 'claude'
+  );
+  const [aiPrompt, setAiPrompt] = useState(
+    campaign?.masterPrompt ||
+    campaign?.master_prompt ||
+    campaign?.stats?.master_prompt ||
+    'Write a high-converting, professional cold email introducing MineTech mineral supply and Lamswaarde warehousing. Reference their company and role naturally. Keep it under 100 words.'
+  );
   const [aiTone, setAiTone] = useState('Direct');
-  const [aiGoal, setAiGoal] = useState('Book a 15-min Intro Call');
+  const [aiGoal, setAiGoal] = useState('Book a 15-min Discovery Call');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiFeedback, setAiFeedback] = useState('');
 
-  // Pre-flight Sample Previews for AI-Personalized Blasts
-  const [samplePreviews, setSamplePreviews] = useState([]);
-  const [generatingPreviews, setGeneratingPreviews] = useState(false);
+  // 9. Interactive Preview & Test Send
+  const [previewDevice, setPreviewDevice] = useState('desktop'); // 'desktop' | 'mobile'
+  const [previewFormat, setPreviewFormat] = useState('html'); // 'html' | 'text'
+  const [previewLeadIdx, setPreviewLeadIdx] = useState(0);
+  const [testEmailAddress, setTestEmailAddress] = useState('rauf@mine-tech.be');
+  const [testSending, setTestSending] = useState(false);
+  const [testSendResult, setTestSendResult] = useState(null);
 
-  // Test send & safety
-  const [confirmedSafety, setConfirmedSafety] = useState(false);
+  // Submitting state
   const [submitting, setSubmitting] = useState(false);
+  const [confirmedSafety, setConfirmedSafety] = useState(false);
 
+  // Fetch available tags and run initial audit
   useEffect(() => {
-    // Fetch distinct tags and initial lead counts
     fetch('/api/leads?limit=100')
       .then((r) => r.json())
       .then((j) => {
@@ -117,192 +226,240 @@ export default function BlastWizard({ onClose, onCreated }) {
         const json = await res.json();
         setAudit(json.data);
       } else {
-        setAudit({ eligible: 12, dncSuppressed: 1, total: 13 });
+        setAudit({ eligible: 0, suppressed: 0, missingEmail: 0, total: 0 });
       }
     } catch (e) {
-      setAudit({ eligible: 12, dncSuppressed: 1, total: 13 });
+      setAudit({ eligible: 0, suppressed: 0, missingEmail: 0, total: 0 });
     } finally {
       setAuditing(false);
     }
   };
 
-  // Generate live pre-flight sample previews for 3 sample leads
-  const handleGenerateSamplePreviews = async () => {
-    setGeneratingPreviews(true);
-    try {
-      const sampleLeads = [
-        { name: 'Sarah Connor', company: 'Cyberdyne Systems', title: 'VP of Engineering', industry: 'Robotics' },
-        { name: 'Alex Rivera', company: 'FinPulse Labs', title: 'Head of Growth', industry: 'Fintech' },
-        { name: 'Elena Rostova', company: 'HealthSphere Analytics', title: 'Chief Executive Officer', industry: 'Digital Health' },
-      ];
-
-      const previewResults = [];
-      for (const lead of sampleLeads) {
-        try {
-          const res = await fetch('/api/ai/compose', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: aiPrompt,
-              tone: aiTone,
-              goal: aiGoal,
-              leadContext: lead,
-            }),
-          });
-          if (res.ok) {
-            const j = await res.json();
-            previewResults.push({
-              lead,
-              subject: j.data?.subject || `Partnership with ${lead.company}`,
-              body: j.data?.body || j.data?.bodyText || 'Personalized copy generated by MineTech AI.',
-            });
-          } else {
-            previewResults.push({
-              lead,
-              subject: `Scaling outbound pipeline at ${lead.company}`,
-              body: `Hi ${lead.name.split(' ')[0]},\n\nI saw your work leading ${lead.title} initiatives at ${lead.company}. We help ${lead.industry} teams scale outbound pipeline seamlessly.\n\nWould you be open to a 15-minute intro call this week?`,
-            });
-          }
-        } catch {
-          previewResults.push({
-            lead,
-            subject: `Scaling outbound pipeline at ${lead.company}`,
-            body: `Hi ${lead.name.split(' ')[0]},\n\nI saw your work leading ${lead.title} initiatives at ${lead.company}. We help ${lead.industry} teams scale outbound pipeline seamlessly.\n\nWould you be open to a 15-minute intro call this week?`,
-          });
-        }
-      }
-      setSamplePreviews(previewResults);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setGeneratingPreviews(false);
+  // Switch prompt template
+  const handleSelectTemplate = (templateId) => {
+    setSelectedTemplateType(templateId);
+    const tmpl = CAMPAIGN_TEMPLATES.find((t) => t.id === templateId);
+    if (tmpl) {
+      setAiPrompt(tmpl.defaultPrompt);
+      setAiGoal(tmpl.defaultGoal);
+      setAiTone(tmpl.defaultTone);
+      toast.info(`Loaded "${tmpl.name}" prompt template`);
     }
   };
 
-  // MineTech AI Actions: Generate, Personalize, Regenerate
+  // Generate Email with Claude AI
   const handleClaudeGenerate = async () => {
     setAiLoading(true);
     try {
-      const res = await fetch('/api/ai/claude', {
+      const sampleLead = SAMPLE_LEADS[previewLeadIdx] || SAMPLE_LEADS[0];
+      const res = await fetch('/api/ai/compose', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'generate',
           prompt: aiPrompt,
           tone: aiTone,
           goal: aiGoal,
-          leadContext: { company: '{{company}}', name: '{{firstName}}' },
+          templateType: selectedTemplateType,
+          leadContext: sampleLead,
         }),
       });
+
       if (res.ok) {
         const json = await res.json();
-        if (json.data) {
-          if (json.data.subject) setSubject(json.data.subject);
-          if (json.data.body || json.data.bodyText) setBody(json.data.body || json.data.bodyText);
-        }
+        if (json.data?.subject) setSubject(json.data.subject);
+        if (json.data?.body) setBody(json.data.body);
+        toast.success('Generated email draft with Claude 3.5 Sonnet');
+        setActiveTab('content');
+      } else {
+        const err = await res.json();
+        toast.error(err.error || 'Failed to generate email');
       }
     } catch (e) {
-      console.error(e);
+      toast.error('Network error during AI generation: ' + e.message);
     } finally {
       setAiLoading(false);
     }
   };
 
-  const handleClaudeRegenerate = async (customInstruction) => {
-    setAiLoading(true);
+  // Send a real test email through Resend
+  const handleSendTestEmail = async () => {
+    if (!testEmailAddress || !testEmailAddress.includes('@')) {
+      toast.error('Please enter a valid test recipient email address');
+      return;
+    }
+    setTestSending(true);
+    setTestSendResult(null);
     try {
-      const res = await fetch('/api/ai/claude', {
+      const endpoint = isEditing ? `/api/email/campaigns/${campaignId}` : '/api/email/campaigns';
+      const payload = {
+        action: 'test_send',
+        testEmail: testEmailAddress,
+        subject: subject || 'MineTech Campaign Preview',
+        bodyHtml: body ? `<p>${body.replace(/\n\s*\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>` : '<p>Test email</p>',
+        bodyText: body || 'Test email',
+        sender: { email: senderEmail, name: senderName, replyTo },
+      };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'regenerate',
-          previousDraft: body,
-          feedback: customInstruction || aiFeedback || 'Make it punchier and more direct',
-          tone: aiTone,
-        }),
+        body: JSON.stringify(payload),
       });
-      if (res.ok) {
-        const json = await res.json();
-        if (json.data) {
-          if (json.data.subject) setSubject(json.data.subject);
-          if (json.data.body || json.data.bodyText) setBody(json.data.body || json.data.bodyText);
-        }
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setTestSendResult({
+          success: true,
+          providerMessageId: json.data?.providerMessageId || 'accepted',
+          recipient: testEmailAddress,
+        });
+        toast.success(`Test email sent to ${testEmailAddress}`);
+      } else {
+        setTestSendResult({
+          success: false,
+          error: json.message || json.error || 'Test send failed',
+        });
+        toast.error(json.message || json.error || 'Test send failed');
       }
     } catch (e) {
-      console.error(e);
+      setTestSendResult({ success: false, error: e.message });
+      toast.error('Error sending test email: ' + e.message);
     } finally {
-      setAiLoading(false);
+      setTestSending(false);
     }
   };
 
-  const handleLaunchCampaign = async () => {
+  // Save as Draft or Launch Campaign
+  const handleSaveCampaign = async ({ autoLaunch = false }) => {
     if (!name.trim()) {
-      alert('Please provide a campaign name.');
+      toast.error('Please provide a campaign name');
       setActiveTab('recipients');
       return;
     }
 
-    const isAiPersonalized = campaignType === 'ai_personalized' || personalizationMode === 'ai_personalized';
+    const isAiPersonalized = campaignType === 'ai_personalized';
 
     if (!isAiPersonalized && (!subject.trim() || !body.trim())) {
-      alert('Please provide both a Subject and Email Body.');
+      toast.error('Please provide both an Email Subject and Body');
       setActiveTab('content');
+      return;
+    }
+
+    if (autoLaunch && !confirmedSafety) {
+      toast.error('Please confirm compliance verification before launching');
+      setActiveTab('review');
       return;
     }
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/email/campaigns', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          campaignType: isAiPersonalized ? 'ai_personalized' : 'standard',
-          masterPrompt: isAiPersonalized ? aiPrompt : undefined,
-          subject: subject.trim() || (isAiPersonalized ? 'AI Generated Subject' : 'Quick inquiry'),
-          bodyHtml: body ? `<p>${body.replace(/\n/g, '<br/>')}</p>` : '<p>AI Generated Personalized Body</p>',
-          bodyText: body || 'AI Generated Personalized Body',
-          sender: { email: senderEmail, name: senderName, replyTo },
-          filterCriteria,
-          sendingSettings: { dailyLimit, delayInterval, scheduleWindow, warmupEnabled },
-          tracking: { trackOpens, trackClicks, unsubscribeHeader },
-          compliance: { includePhysicalAddress, includeOneClickOptOut, dncSuppressionActive },
-          personalization: {
-            mode: isAiPersonalized ? 'ai_personalized' : personalizationMode,
-            tone: aiTone,
-            goal: aiGoal,
-            masterPrompt: isAiPersonalized ? aiPrompt : undefined,
-          },
-          autoLaunch: true,
-        }),
-      });
+      const bodyHtmlFormatted = body
+        ? (body.startsWith('<p') || body.startsWith('<div') ? body : `<p>${body.replace(/\n\s*\n/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`)
+        : '<p>MineTech Outbound Update</p>';
 
-      if (res.ok) {
-        if (onCreated) onCreated();
+      const payload = {
+        name: name.trim(),
+        description: description.trim(),
+        subject: subject.trim() || (isAiPersonalized ? 'AI Synthesized Subject' : 'Quick inquiry'),
+        bodyHtml: bodyHtmlFormatted,
+        bodyText: body.trim() || 'MineTech Outbound Update',
+        campaignType: isAiPersonalized ? 'ai_personalized' : 'standard',
+        masterPrompt: isAiPersonalized ? aiPrompt : undefined,
+        sender: { email: senderEmail, name: senderName, replyTo },
+        filterCriteria,
+        sendingSettings: { dailyLimit, delayInterval, scheduleWindow, warmupEnabled },
+        tracking: { trackOpens, trackClicks, unsubscribeHeader },
+        compliance: { includePhysicalAddress, includeOneClickOptOut, dncSuppressionActive },
+        status: autoLaunch ? 'RUNNING' : (isEditing ? campaign.status : 'DRAFT'),
+        autoLaunch: autoLaunch && !isEditing,
+      };
+
+      let res;
+      if (isEditing) {
+        res = await fetch(`/api/email/campaigns/${campaignId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch('/api/email/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        toast.success(
+          isEditing
+            ? 'Campaign updated successfully'
+            : autoLaunch
+            ? 'Campaign created and launched successfully!'
+            : 'Campaign saved as Draft'
+        );
+        if (isEditing && onUpdated) onUpdated(json.data);
+        if (!isEditing && onCreated) onCreated(json.data);
         onClose();
       } else {
-        const err = await res.json();
-        alert(err.message || err.error || 'Failed to launch campaign');
+        toast.error(json.message || json.error || 'Failed to save campaign');
       }
     } catch (e) {
-      alert('Error launching campaign: ' + e.message);
+      toast.error('Error saving campaign: ' + e.message);
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Variable validation
+  const checkMergeVariables = () => {
+    const combined = `${subject} ${body}`;
+    const detectedTags = combined.match(/\{\{([^}]+)\}\}/g) || [];
+    const validTags = ['{{firstName}}', '{{lastName}}', '{{fullName}}', '{{company}}', '{{jobTitle}}', '{{website}}', '{{industry}}'];
+    const invalidTags = detectedTags.filter((t) => !validTags.includes(t));
+    const leakedArtifacts = /undefined|null|\[object Object\]/i.test(combined);
+
+    return {
+      detectedCount: detectedTags.length,
+      invalidTags,
+      leakedArtifacts,
+      isValid: invalidTags.length === 0 && !leakedArtifacts,
+    };
+  };
+
+  const varCheck = checkMergeVariables();
+  const currentSampleLead = SAMPLE_LEADS[previewLeadIdx] || SAMPLE_LEADS[0];
+
+  // Interpolate for preview
+  const previewSubject = subject
+    ? subject
+        .replace(/\{\{\s*firstName\s*\}\}/gi, currentSampleLead.firstName)
+        .replace(/\{\{\s*company\s*\}\}/gi, currentSampleLead.company)
+        .replace(/\{\{\s*jobTitle\s*\}\}/gi, currentSampleLead.jobTitle)
+    : '(No subject entered)';
+
+  const previewBody = body
+    ? body
+        .replace(/\{\{\s*firstName\s*\}\}/gi, currentSampleLead.firstName)
+        .replace(/\{\{\s*company\s*\}\}/gi, currentSampleLead.company)
+        .replace(/\{\{\s*jobTitle\s*\}\}/gi, currentSampleLead.jobTitle)
+        .replace(/\{\{\s*industry\s*\}\}/gi, currentSampleLead.industry)
+        .replace(/\{\{\s*website\s*\}\}/gi, currentSampleLead.website)
+    : 'Your email content will appear here...';
+
   const tabs = [
-    { id: 'recipients', label: '1. Recipients', icon: Users },
+    { id: 'recipients', label: '1. Audience', icon: Users },
     { id: 'sender', label: '2. Sender', icon: Mail },
-    { id: 'personalization', label: '3. Personalization & AI', icon: Sparkles },
-    { id: 'content', label: '4. Subject & Email', icon: FileText },
-    { id: 'settings', label: '5. Settings & Tracking', icon: Sliders },
-    { id: 'compliance', label: '6. Compliance', icon: ShieldCheck },
-    { id: 'review', label: '7. Review & Launch', icon: Send },
+    { id: 'personalization', label: '3. Claude AI & Templates', icon: Sparkles },
+    { id: 'content', label: '4. Subject & Body', icon: FileText },
+    { id: 'preview', label: '5. Preview & Test', icon: Eye },
+    { id: 'settings', label: '6. Settings', icon: Sliders },
+    { id: 'compliance', label: '7. Compliance', icon: ShieldCheck },
+    { id: 'review', label: '8. Review & Launch', icon: Send },
   ];
 
   return (
-    <ModalFrame title="Create campaign" onClose={onClose}>
+    <ModalFrame title={isEditing ? `Edit Campaign: ${name || 'Untitled'}` : 'Create New Campaign'} onClose={onClose}>
       <Card className="bg-card border-border rounded-xl w-full max-w-4xl overflow-hidden shadow-sm flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150">
         {/* Header */}
         <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
@@ -311,11 +468,18 @@ export default function BlastWizard({ onClose, onCreated }) {
               <Flame className="w-4 h-4" />
             </div>
             <div>
-              <span className="text-[10px] uppercase font-semibold text-primary font-mono tracking-wider">
-                Outbound Campaign Engine
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase font-semibold text-primary font-mono tracking-wider">
+                  MineTech Campaign Engine
+                </span>
+                {isEditing && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary">
+                    Edit Mode
+                  </Badge>
+                )}
+              </div>
               <h2 className="text-base font-semibold text-foreground">
-                {name || 'New Outbound Campaign'}
+                {name || (isEditing ? 'Edit Campaign' : 'New Outbound Campaign')}
               </h2>
             </div>
           </div>
@@ -329,16 +493,17 @@ export default function BlastWizard({ onClose, onCreated }) {
           </Button>
         </div>
 
-        {/* Navigation Step Bar */}
-        <div className="flex border-b border-border bg-muted/20 overflow-x-auto text-xs font-semibold">
+        {/* Step Navigation Bar */}
+        <div className="flex border-b border-border bg-muted/20 overflow-x-auto text-xs font-semibold scrollbar-none">
           {tabs.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
             return (
               <button
                 key={t.id}
+                type="button"
                 onClick={() => setActiveTab(t.id)}
-                className={`flex items-center gap-2 px-4 py-2.5 border-b-2 whitespace-nowrap transition text-xs ${
+                className={`flex items-center gap-1.5 px-3.5 py-2.5 border-b-2 whitespace-nowrap transition text-xs ${
                   active
                     ? 'border-primary text-primary bg-primary/10 font-semibold'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30'
@@ -353,22 +518,71 @@ export default function BlastWizard({ onClose, onCreated }) {
 
         {/* Tab Content Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* TAB 1: RECIPIENTS */}
+          {/* TAB 1: AUDIENCE & RECIPIENTS */}
           {activeTab === 'recipients' && (
             <div className="space-y-5">
-              <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-1">Campaign Name</label>
-                <Input
-                  type="text"
-                  placeholder="e.g. Q3 Mining Automation Outreach"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="bg-muted/20 border-border focus:border-primary"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                    Campaign Name <span className="text-danger">*</span>
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Q4 European Foundry & Refractory Outreach"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="bg-muted/20 border-border focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                    Internal Description / Purpose (Optional)
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Testing kaolin specs with German ceramic producers"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="bg-muted/20 border-border focus:border-primary"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-muted-foreground block mb-2">Audience Lead Status</label>
+                <label className="text-xs font-semibold text-muted-foreground block mb-2">Target Lead Classification</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'ALL', label: 'All Leads' },
+                    { id: 'Buyer', label: 'Buyers Only (Consumers)' },
+                    { id: 'Seller', label: 'Sellers Only (Producers / Suppliers)' },
+                  ].map((target) => {
+                    const isSelected = (filterCriteria.classification || 'ALL') === target.id;
+                    return (
+                      <button
+                        type="button"
+                        key={target.id}
+                        onClick={() => {
+                          setFilterCriteria({ ...filterCriteria, classification: target.id });
+                          runAudit();
+                        }}
+                        className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition ${
+                          isSelected
+                            ? 'bg-primary/15 border-primary/40 text-primary shadow-sm'
+                            : 'bg-muted/20 border-border text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        <span>{target.label}</span>
+                        <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[10px] ${isSelected ? 'bg-primary border-primary text-primary-foreground font-semibold' : 'border-border'}`}>
+                          {isSelected && '✓'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-2">Target Audience Lead Status</label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {['NEW', 'CONTACTED', 'FOLLOW_UP', 'NO_RESPONSE'].map((st) => {
                     const isChecked = filterCriteria.status.includes(st);
@@ -401,7 +615,7 @@ export default function BlastWizard({ onClose, onCreated }) {
 
               {availableTags.length > 0 && (
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-2">Target Tags</label>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-2">Filter by Tags (Optional)</label>
                   <div className="flex flex-wrap gap-2">
                     {availableTags.map((tag) => (
                       <button
@@ -427,24 +641,34 @@ export default function BlastWizard({ onClose, onCreated }) {
                 </div>
               )}
 
-              {/* Live Audience Audit Card */}
-              <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between">
-                <div>
-                  <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5">
+              {/* Live Audience Audit Breakdown */}
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/20">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-primary" />
-                    Live Audience Audit
-                  </h4>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Leads matching current filter criteria with DNC suppression applied.
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xl font-semibold text-primary font-mono">
-                    {auditing ? '...' : (audit?.eligible || 0)}
+                    <h4 className="text-xs font-semibold text-primary">Live Recipient Pre-Flight Audit</h4>
                   </div>
-                  <span className="text-[10px] text-primary font-semibold uppercase tracking-wider">
-                    Eligible Prospects
+                  <span className="text-[11px] font-mono text-primary font-semibold">
+                    {auditing ? 'Auditing CRM...' : `${audit?.eligible || 0} Eligible Recipients`}
                   </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                  <div className="p-2.5 rounded-lg bg-card border border-border">
+                    <div className="font-semibold text-foreground text-sm">{audit?.eligible || 0}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-medium">Eligible Leads</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-card border border-border">
+                    <div className="font-semibold text-warning text-sm">{audit?.suppressed || 0}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-medium">DNC / Opt-Out</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-card border border-border">
+                    <div className="font-semibold text-danger text-sm">{audit?.missingEmail || 0}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-medium">Missing Email</div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-card border border-border">
+                    <div className="font-semibold text-muted-foreground text-sm">{audit?.duplicates || 0}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase font-medium">Duplicates</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -454,16 +678,26 @@ export default function BlastWizard({ onClose, onCreated }) {
           {activeTab === 'sender' && (
             <div className="space-y-4">
               <div className="p-5 rounded-xl bg-muted/20 border border-border space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-foreground">Verified MineTech Sender Identity</span>
+                  </div>
+                  <Badge variant="outline" className="border-primary/40 bg-primary/10 text-primary text-[10px] font-mono">
+                    mine-tech.be (Verified)
+                  </Badge>
+                </div>
+
                 <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Sending Mailbox / Address</label>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">Sender Email Address</label>
                   <Input
                     type="email"
                     value={senderEmail}
                     onChange={(e) => setSenderEmail(e.target.value)}
-                    className="bg-muted/20 border-border focus:border-primary"
+                    className="bg-muted/20 border-border focus:border-primary font-mono text-xs"
                   />
-                  <span className="text-[10px] text-muted-foreground mt-1 block">
-                    Verified Resend SMTP Sending Domain: <code className="text-primary font-mono">8020aquisition.com</code>
+                  <span className="text-[11px] text-muted-foreground mt-1 block">
+                    Verified sender domain in Resend: <code className="text-primary font-mono">mine-tech.be</code>
                   </span>
                 </div>
 
@@ -474,8 +708,8 @@ export default function BlastWizard({ onClose, onCreated }) {
                       type="text"
                       value={senderName}
                       onChange={(e) => setSenderName(e.target.value)}
-                      placeholder="e.g. Alex from 80/20"
-                      className="bg-muted/20 border-border focus:border-primary"
+                      placeholder="e.g. Rauf"
+                      className="bg-muted/20 border-border focus:border-primary text-xs"
                     />
                   </div>
 
@@ -485,7 +719,7 @@ export default function BlastWizard({ onClose, onCreated }) {
                       type="email"
                       value={replyTo}
                       onChange={(e) => setReplyTo(e.target.value)}
-                      className="bg-muted/20 border-border focus:border-primary"
+                      className="bg-muted/20 border-border focus:border-primary text-xs font-mono"
                     />
                   </div>
                 </div>
@@ -493,276 +727,388 @@ export default function BlastWizard({ onClose, onCreated }) {
             </div>
           )}
 
-          {/* TAB 3: PERSONALIZATION & CLAUDE AI */}
+          {/* TAB 3: CLAUDE AI & PROMPT TEMPLATES */}
           {activeTab === 'personalization' && (
             <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPersonalizationMode('no_ai');
-                    setCampaignType('standard');
-                  }}
-                  className={`p-4 rounded-xl border text-left transition ${
-                    personalizationMode === 'no_ai' && campaignType === 'standard'
-                      ? 'bg-primary/10 border-primary/40 text-foreground shadow-sm'
-                      : 'bg-muted/20 border-border text-muted-foreground hover:border-border/80'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-semibold text-xs mb-1 text-primary">
-                    <Radio className="w-4 h-4 text-primary" />
-                    <span>Standard Template</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Static merge tags: <code className="text-primary font-mono">{`{{firstName}}`}</code>, <code className="text-primary font-mono">{`{{company}}`}</code>. High throughput.
-                  </p>
-                </button>
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-2">Campaign Mode</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCampaignType('standard');
+                      setPersonalizationMode('claude');
+                    }}
+                    className={`p-4 rounded-xl border text-left transition ${
+                      campaignType === 'standard'
+                        ? 'bg-primary/10 border-primary/40 text-foreground shadow-sm'
+                        : 'bg-muted/20 border-border text-muted-foreground hover:border-border/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-semibold text-xs mb-1 text-primary">
+                      <Radio className="w-4 h-4 text-primary" />
+                      <span>Standard / AI-Assisted Blast</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Use Claude 3.5 to craft high-converting copy, then interpolate variables per lead at dispatch.
+                    </p>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPersonalizationMode('claude');
-                    setCampaignType('standard');
-                  }}
-                  className={`p-4 rounded-xl border text-left transition ${
-                    personalizationMode === 'claude' && campaignType === 'standard'
-                      ? 'bg-primary/10 border-primary/40 text-foreground shadow-sm'
-                      : 'bg-muted/20 border-border text-muted-foreground hover:border-border/80'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-semibold text-xs text-primary mb-1">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    <span>AI Draft</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Generate/refine a master template with MineTech AI, then merge variables statically.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPersonalizationMode('ai_personalized');
-                    setCampaignType('ai_personalized');
-                  }}
-                  className={`p-4 rounded-xl border text-left transition ${
-                    campaignType === 'ai_personalized'
-                      ? 'bg-primary/15 border-primary/50 text-foreground shadow-sm'
-                      : 'bg-muted/20 border-border text-muted-foreground hover:border-border/80'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 font-semibold text-xs text-primary mb-1">
-                    <Flame className="w-4 h-4 text-primary" />
-                    <span>Per-Prospect AI Blast</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    MineTech AI generates bespoke copy for each recipient via background queue.
-                  </p>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCampaignType('ai_personalized');
+                      setPersonalizationMode('ai_personalized');
+                    }}
+                    className={`p-4 rounded-xl border text-left transition ${
+                      campaignType === 'ai_personalized'
+                        ? 'bg-primary/15 border-primary/50 text-foreground shadow-sm'
+                        : 'bg-muted/20 border-border text-muted-foreground hover:border-border/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 font-semibold text-xs text-primary mb-1">
+                      <Flame className="w-4 h-4 text-primary" />
+                      <span>Per-Prospect Bespoke AI Generation</span>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      Claude synthesizes unique, 1-to-1 tailored copy per recipient via the background worker queue.
+                    </p>
+                  </button>
+                </div>
               </div>
 
-              {/* Assisted AI or Per-Prospect AI Blast Configuration */}
-              {(personalizationMode === 'claude' || campaignType === 'ai_personalized') && (
-                <div className="p-5 rounded-xl bg-muted/20 border border-border space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                      <Bot className="w-4 h-4 text-primary" />
-                      {campaignType === 'ai_personalized'
-                        ? 'Master Prompt Engine (Per-Lead AI Generation)'
-                        : 'MineTech AI Controls'}
-                    </span>
-                    <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary text-[10px] font-mono">
-                      MineTech AI Active
-                    </Badge>
+              {/* 6 Specialized Prompt Templates */}
+              <div>
+                <label className="text-xs font-semibold text-muted-foreground block mb-2">
+                  Select Prompt Template Architecture (6 Proven B2B Types)
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                  {CAMPAIGN_TEMPLATES.map((tmpl) => {
+                    const isSelected = selectedTemplateType === tmpl.id;
+                    return (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        onClick={() => handleSelectTemplate(tmpl.id)}
+                        className={`p-3 rounded-xl border text-left transition ${
+                          isSelected
+                            ? 'bg-primary/15 border-primary/40 text-primary shadow-sm'
+                            : 'bg-muted/20 border-border text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold">{tmpl.name}</span>
+                          {isSelected && <span className="text-primary font-bold text-xs">✓</span>}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground line-clamp-2">
+                          {tmpl.description}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Claude AI Prompt Configuration */}
+              <div className="p-4 rounded-xl bg-muted/20 border border-border space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                    <Bot className="w-4 h-4 text-primary" />
+                    AI Value Proposition & Campaign Instructions
+                  </span>
+                  <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary text-[10px] font-mono">
+                    Claude 3.5 Sonnet
+                  </Badge>
+                </div>
+
+                <div>
+                  <Textarea
+                    rows={3}
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Provide specific product specs, value proposition, or European warehousing highlights..."
+                    className="bg-muted/20 border-border focus:border-primary text-xs"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-foreground/90 block mb-1">Tone</label>
+                    <select
+                      value={aiTone}
+                      onChange={(e) => setAiTone(e.target.value)}
+                      className="w-full h-8 rounded-md bg-background border border-border px-3 text-xs text-foreground focus:outline-none focus:border-primary"
+                    >
+                      <option value="Direct">Direct & Concise (High Converting)</option>
+                      <option value="Professional">Professional & Consultative</option>
+                      <option value="Technical">Technical & Specification-Oriented</option>
+                      <option value="Friendly">Friendly & Approachable</option>
+                    </select>
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-foreground/90">
-                        {campaignType === 'ai_personalized'
-                          ? 'Master Prompt / Value Proposition'
-                          : 'Campaign Value Proposition / Prompt'}
-                      </label>
-                      <span className="text-[10px] text-muted-foreground">
-                        Available variables: <code className="text-primary font-mono">{`{first_name}`}</code>,{' '}
-                        <code className="text-primary font-mono">{`{company}`}</code>,{' '}
-                        <code className="text-primary font-mono">{`{job_title}`}</code>,{' '}
-                        <code className="text-primary font-mono">{`{industry}`}</code>
-                      </span>
-                    </div>
-                    <Textarea
-                      rows={3}
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="e.g. Write a high-converting, personalized cold email introducing our outbound pipeline automation. Reference their company and role naturally. Keep it under 100 words."
-                      className="bg-muted/20 border-border focus:border-primary text-xs"
-                    />
+                    <label className="text-xs font-semibold text-foreground/90 block mb-1">Call to Action (Goal)</label>
+                    <select
+                      value={aiGoal}
+                      onChange={(e) => setAiGoal(e.target.value)}
+                      className="w-full h-8 rounded-md bg-background border border-border px-3 text-xs text-foreground focus:outline-none focus:border-primary"
+                    >
+                      <option value="Book a 15-min Discovery Call">Book a 15-min Discovery Call</option>
+                      <option value="Gauge interest (Soft CTA)">Gauge interest (Soft CTA)</option>
+                      <option value="Share technical data sheet">Offer Technical Data Sheet (TDS)</option>
+                    </select>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs font-semibold text-foreground/90 block mb-1">Tone of Voice</label>
-                      <select
-                        value={aiTone}
-                        onChange={(e) => setAiTone(e.target.value)}
-                        className="w-full h-9 rounded-md bg-background border border-border px-3 text-xs text-foreground focus:outline-none focus:border-primary"
-                      >
-                        <option value="Direct">Direct & Concise (High Converting)</option>
-                        <option value="Professional">Professional & Consultative</option>
-                        <option value="Friendly">Friendly & Approachable</option>
-                        <option value="Casual">Casual & Informal</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-foreground/90 block mb-1">Call to Action (Goal)</label>
-                      <select
-                        value={aiGoal}
-                        onChange={(e) => setAiGoal(e.target.value)}
-                        className="w-full h-9 rounded-md bg-background border border-border px-3 text-xs text-foreground focus:outline-none focus:border-primary"
-                      >
-                        <option value="Book a 15-min Intro Call">Book a 15-min Discovery Call</option>
-                        <option value="Reply with interest">Gauge interest (Soft CTA)</option>
-                        <option value="Check out a demo">Share a 2-minute Loom/Demo</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Anti-Hallucination Notice */}
-                  {campaignType === 'ai_personalized' && (
-                    <div className="p-3 rounded-xl bg-primary/10 border border-primary/20 text-[11px] text-foreground flex items-start gap-2">
-                      <ShieldCheck className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      <span>
-                        <strong className="text-primary">Anti-Hallucination Guardrail Active:</strong> MineTech AI is strictly prohibited from inventing
-                        metrics, funding numbers, or claims not verified in the lead data. Missing CRM attributes will be
-                        gracefully omitted.
-                      </span>
-                    </div>
-                  )}
-
-                  {/* AI Sub-actions for Single Template Draft */}
-                  {campaignType !== 'ai_personalized' && (
-                    <div className="flex flex-wrap gap-2 pt-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={aiLoading}
-                        onClick={handleClaudeGenerate}
-                        className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 gap-2"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>{aiLoading ? 'Generating...' : '1. Generate Full Email Draft'}</span>
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={aiLoading}
-                        onClick={() => handleClaudeRegenerate('Make it shorter and more direct')}
-                        className="border-border text-foreground hover:bg-muted h-8 gap-1.5"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>2. Regenerate (Shorter)</span>
-                      </Button>
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={aiLoading}
-                        onClick={() => handleClaudeRegenerate('Add a stronger value proposition hook')}
-                        className="border-border text-foreground hover:bg-muted h-8 gap-1.5"
-                      >
-                        <Zap className="w-3.5 h-3.5 text-primary" />
-                        <span>3. Personalize Hook</span>
-                      </Button>
-                    </div>
-                  )}
                 </div>
-              )}
+
+                <div className="flex items-center justify-between pt-2">
+                  <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                    <span>Anti-Hallucination active: verified MineTech mineral specs only.</span>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={aiLoading}
+                    onClick={handleClaudeGenerate}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{aiLoading ? 'Generating with Claude...' : 'Generate Email Copy'}</span>
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* TAB 4: SUBJECT & BASE EMAIL */}
+          {/* TAB 4: SUBJECT & EMAIL COMPOSER */}
           {activeTab === 'content' && (
             <div className="space-y-4">
-              {campaignType === 'ai_personalized' && (
-                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 space-y-1">
-                  <div className="text-xs font-semibold text-primary flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary" />
-                    AI-Personalized Generation Mode Active
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    MineTech AI will automatically synthesize unique subjects and body copy per prospect based on
-                    your Master Prompt. You may optionally specify a fallback subject or seed template below.
-                  </p>
-                </div>
-              )}
-
               <div>
                 <label className="text-xs font-semibold text-muted-foreground block mb-1">
-                  {campaignType === 'ai_personalized' ? 'Fallback Subject Line (Optional)' : 'Subject Line'}
+                  Email Subject Line <span className="text-danger">*</span>
                 </label>
                 <Input
                   type="text"
-                  placeholder={
-                    campaignType === 'ai_personalized'
-                      ? 'e.g. Quick question regarding {{company}} (Auto-synthesized if empty)'
-                      : 'e.g. Quick question regarding {{company}}'
-                  }
+                  placeholder="e.g. Kaolin & Chamotte supply specifications for {{company}}"
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="bg-muted/20 border-border focus:border-primary font-medium"
+                  className="bg-muted/20 border-border focus:border-primary font-medium text-xs"
                 />
+              </div>
+
+              {/* Personalization Variable Insertion Pills */}
+              <div className="p-3 rounded-xl bg-muted/20 border border-border">
+                <div className="text-[11px] font-semibold text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                  <Copy className="w-3 h-3 text-primary" />
+                  <span>Insert Personalization Variable (Click to append):</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { tag: '{{firstName}}', label: 'First Name' },
+                    { tag: '{{lastName}}', label: 'Last Name' },
+                    { tag: '{{company}}', label: 'Company' },
+                    { tag: '{{jobTitle}}', label: 'Job Title' },
+                    { tag: '{{industry}}', label: 'Industry' },
+                    { tag: '{{website}}', label: 'Website' },
+                  ].map((v) => (
+                    <button
+                      key={v.tag}
+                      type="button"
+                      onClick={() => setBody((prev) => `${prev} ${v.tag}`)}
+                      className="px-2 py-1 rounded bg-card hover:bg-primary/10 border border-border text-[11px] font-mono text-primary transition"
+                    >
+                      {v.tag} <span className="text-[9px] text-muted-foreground font-sans">({v.label})</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="text-xs font-semibold text-muted-foreground">
-                    {campaignType === 'ai_personalized' ? 'Fallback Base Copy (Optional)' : 'Base Email Copy'}
+                    Email Body Copy <span className="text-danger">*</span>
                   </label>
-                  <div className="text-[10px] text-muted-foreground flex items-center gap-2">
-                    <span>Available merge tags:</span>
-                    <button
-                      type="button"
-                      onClick={() => setBody((prev) => prev + ' {{firstName}}')}
-                      className="text-primary hover:underline font-mono"
-                    >
-                      {`{{firstName}}`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBody((prev) => prev + ' {{company}}')}
-                      className="text-primary hover:underline font-mono"
-                    >
-                      {`{{company}}`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBody((prev) => prev + ' {{jobTitle}}')}
-                      className="text-primary hover:underline font-mono"
-                    >
-                      {`{{jobTitle}}`}
-                    </button>
-                  </div>
+                  <span className="text-[11px] text-muted-foreground">
+                    Plain-text with auto-paragraph formatting and mandatory MineTech signature
+                  </span>
                 </div>
                 <Textarea
                   rows={9}
-                  placeholder={
-                    campaignType === 'ai_personalized'
-                      ? 'Leave empty for 100% bespoke AI generation, or supply a template structure...'
-                      : `Hi {{firstName}},\n\nI noticed your team at {{company}} is focused on scaling outbound pipeline...\n\nWould you be open to a 10-minute chat this Thursday?`
-                  }
+                  placeholder={`Hi {{firstName}},\n\nMineTech Resources BV supplies certified industrial minerals across Europe from our Lamswaarde warehouse...\n\nWould you be open to reviewing our technical data sheets this week?`}
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  className="bg-muted/20 border-border focus:border-primary text-xs leading-relaxed"
+                  className="bg-muted/20 border-border focus:border-primary text-xs leading-relaxed font-sans"
                 />
+              </div>
+
+              {/* Real-time Variable Health Check */}
+              {!varCheck.isValid && (
+                <div className="p-3 rounded-xl bg-danger/10 border border-danger/20 text-xs text-danger flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold">Variable Syntax Warning:</span>
+                    {varCheck.invalidTags.length > 0 && (
+                      <p>Unrecognized merge tags: {varCheck.invalidTags.join(', ')}</p>
+                    )}
+                    {varCheck.leakedArtifacts && (
+                      <p>Draft contains raw &apos;undefined&apos; or &apos;null&apos; placeholder leaks.</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: INTERACTIVE PREVIEW & TEST SEND */}
+          {activeTab === 'preview' && (
+            <div className="space-y-4">
+              {/* Preview Controls Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-muted/20 border border-border">
+                {/* Sample Lead Switcher */}
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-semibold text-muted-foreground">Preview with Prospect:</span>
+                  <select
+                    value={previewLeadIdx}
+                    onChange={(e) => setPreviewLeadIdx(Number(e.target.value))}
+                    className="h-8 rounded bg-background border border-border px-2 text-xs text-foreground focus:outline-none focus:border-primary"
+                  >
+                    {SAMPLE_LEADS.map((l, i) => (
+                      <option key={i} value={i}>
+                        {l.fullName} — {l.jobTitle} @ {l.company}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Device & Format Controls */}
+                <div className="flex items-center gap-2">
+                  <div className="flex border border-border rounded-lg overflow-hidden bg-background">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDevice('desktop')}
+                      className={`p-1.5 transition ${previewDevice === 'desktop' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Desktop Preview"
+                    >
+                      <Monitor className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDevice('mobile')}
+                      className={`p-1.5 transition ${previewDevice === 'mobile' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                      title="Mobile Preview (375px)"
+                    >
+                      <Smartphone className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex border border-border rounded-lg overflow-hidden bg-background text-[11px] font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFormat('html')}
+                      className={`px-2.5 py-1 transition ${previewFormat === 'html' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      HTML
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewFormat('text')}
+                      className={`px-2.5 py-1 transition ${previewFormat === 'text' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                      Plain Text
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rendered Email Preview Container */}
+              <div className="flex justify-center bg-muted/10 p-4 rounded-xl border border-border min-h-[300px]">
+                <div
+                  className={`bg-card border border-border rounded-xl shadow-sm overflow-hidden transition-all duration-200 ${
+                    previewDevice === 'mobile' ? 'w-[375px]' : 'w-full max-w-2xl'
+                  }`}
+                >
+                  {/* Email Header Simulation */}
+                  <div className="p-4 border-b border-border bg-muted/30 text-xs space-y-1.5">
+                    <div className="flex items-center justify-between text-muted-foreground text-[11px]">
+                      <span><strong>From:</strong> {senderName} &lt;{senderEmail}&gt;</span>
+                      <span className="font-mono">Now</span>
+                    </div>
+                    <div className="text-muted-foreground text-[11px]">
+                      <strong>To:</strong> {currentSampleLead.fullName} &lt;{currentSampleLead.firstName.toLowerCase()}@{currentSampleLead.company.toLowerCase().replace(/[^a-z]/g, '')}.com&gt;
+                    </div>
+                    <div className="text-foreground font-semibold text-sm pt-1">
+                      {previewSubject}
+                    </div>
+                  </div>
+
+                  {/* Email Body Simulation */}
+                  <div className="p-5 text-xs text-foreground leading-relaxed whitespace-pre-line min-h-[160px]">
+                    {previewFormat === 'html' ? (
+                      <div>
+                        {previewBody}
+                        <div className="mt-5 pt-3 border-t border-border/60 text-muted-foreground text-[11px]">
+                          <p className="font-semibold text-foreground">Abdullah Rauf</p>
+                          <p>Head of Sales</p>
+                          <p>MineTech Resources BV – Belgium</p>
+                          <p className="text-primary font-mono mt-0.5">rauf@mine-tech.be | +32 486 287 751</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <pre className="font-mono text-xs whitespace-pre-wrap text-muted-foreground">
+                        {previewBody}
+                        {'\n\n--\nAbdullah Rauf\nHead of Sales\nMineTech Resources BV\nrauf@mine-tech.be'}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Test Send Panel */}
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Send className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-primary">Dispatch Live Test Email (Resend SMTP)</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    Zero spam penalty • Controlled recipient
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    type="email"
+                    value={testEmailAddress}
+                    onChange={(e) => setTestEmailAddress(e.target.value)}
+                    placeholder="Enter test recipient email address..."
+                    className="bg-card border-border text-xs focus:border-primary flex-1"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={testSending}
+                    onClick={handleSendTestEmail}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-4 gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>{testSending ? 'Sending...' : 'Send Test'}</span>
+                  </Button>
+                </div>
+
+                {testSendResult && (
+                  <div className={`p-2.5 rounded-lg text-xs ${testSendResult.success ? 'bg-success/10 text-success border border-success/30' : 'bg-danger/10 text-danger border border-danger/30'}`}>
+                    {testSendResult.success ? (
+                      <span>✓ Dispatched successfully via Resend. Message ID: <code>{testSendResult.providerMessageId}</code></span>
+                    ) : (
+                      <span>✗ Test send failed: {testSendResult.error}</span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-          {/* TAB 5: SENDING SETTINGS & TRACKING */}
+          {/* TAB 6: SETTINGS & PACING */}
           {activeTab === 'settings' && (
             <div className="space-y-5">
               <div className="p-5 rounded-xl bg-muted/20 border border-border space-y-4">
@@ -778,20 +1124,20 @@ export default function BlastWizard({ onClose, onCreated }) {
                       type="number"
                       value={dailyLimit}
                       onChange={(e) => setDailyLimit(Number(e.target.value))}
-                      className="bg-muted/20 border-border focus:border-primary"
+                      className="bg-muted/20 border-border focus:border-primary text-xs"
                     />
                     <span className="text-[10px] text-muted-foreground mt-1 block">Maximum emails dispatched per 24 hours.</span>
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Delay Interval Between Emails</label>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1">Delay Interval Between Emails (Seconds)</label>
                     <Input
                       type="number"
                       value={delayInterval}
                       onChange={(e) => setDelayInterval(Number(e.target.value))}
-                      className="bg-muted/20 border-border focus:border-primary"
+                      className="bg-muted/20 border-border focus:border-primary text-xs"
                     />
-                    <span className="text-[10px] text-muted-foreground mt-1 block">Randomized spacing (seconds) to ensure high inbox delivery.</span>
+                    <span className="text-[10px] text-muted-foreground mt-1 block">Randomized spacing (seconds) to preserve high sender reputation.</span>
                   </div>
                 </div>
 
@@ -809,11 +1155,11 @@ export default function BlastWizard({ onClose, onCreated }) {
                 </div>
               </div>
 
-              {/* Tracking */}
+              {/* Engagement Tracking */}
               <div className="p-5 rounded-xl bg-muted/20 border border-border space-y-3">
                 <h4 className="text-xs font-semibold text-foreground flex items-center gap-2">
                   <Globe className="w-4 h-4 text-primary" />
-                  Engagement Tracking
+                  Engagement Tracking Telemetry
                 </h4>
 
                 <div className="space-y-2">
@@ -824,7 +1170,7 @@ export default function BlastWizard({ onClose, onCreated }) {
                       onChange={(e) => setTrackOpens(e.target.checked)}
                       className="rounded bg-muted border-border text-primary focus:ring-primary"
                     />
-                    <span>Open Tracking (1x1 invisible pixel)</span>
+                    <span>Open Tracking (1x1 transparent telemetry pixel)</span>
                   </label>
 
                   <label className="flex items-center gap-2.5 text-xs font-medium text-foreground/90 cursor-pointer">
@@ -851,7 +1197,7 @@ export default function BlastWizard({ onClose, onCreated }) {
             </div>
           )}
 
-          {/* TAB 6: COMPLIANCE */}
+          {/* TAB 7: COMPLIANCE & DELIVERABILITY */}
           {activeTab === 'compliance' && (
             <div className="space-y-4">
               <div className="p-5 rounded-xl bg-muted/20 border border-border space-y-4">
@@ -868,7 +1214,7 @@ export default function BlastWizard({ onClose, onCreated }) {
                       onChange={(e) => setIncludePhysicalAddress(e.target.checked)}
                       className="rounded bg-muted border-border text-primary focus:ring-primary"
                     />
-                    <span>Include Physical Company Postal Address in footer</span>
+                    <span>Include Physical Company Postal Address in footer (Lamswaarde, Netherlands)</span>
                   </label>
 
                   <label className="flex items-center gap-2.5 text-xs font-medium text-foreground/90 cursor-pointer">
@@ -895,13 +1241,13 @@ export default function BlastWizard({ onClose, onCreated }) {
             </div>
           )}
 
-          {/* TAB 7: REVIEW & LAUNCH */}
+          {/* TAB 8: REVIEW & LAUNCH */}
           {activeTab === 'review' && (
             <div className="space-y-5">
               <div className="p-5 rounded-xl bg-muted/20 border border-border space-y-4">
                 <h4 className="text-xs font-semibold text-foreground flex items-center gap-2">
                   <Eye className="w-4 h-4 text-primary" />
-                  Campaign Summary & Pre-Flight Checklist
+                  Campaign Pre-Flight Summary Checklist
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -918,104 +1264,41 @@ export default function BlastWizard({ onClose, onCreated }) {
                   <div className="p-3 rounded-xl bg-card border border-border">
                     <span className="text-[10px] text-muted-foreground font-semibold block uppercase">Mode</span>
                     <span className="font-semibold text-primary">
-                      {campaignType === 'ai_personalized'
-                        ? 'Per-Prospect AI Blast (MineTech AI)'
-                        : personalizationMode === 'claude'
-                        ? 'AI Assisted Template'
-                        : 'Static Merge Tags'}
+                      {campaignType === 'ai_personalized' ? 'Per-Prospect AI Generation' : 'Standard / AI Assisted'}
                     </span>
                   </div>
 
                   <div className="p-3 rounded-xl bg-card border border-border">
-                    <span className="text-[10px] text-muted-foreground font-semibold block uppercase">Delivery Protocol</span>
-                    <span className="font-semibold text-primary">Resend SMTP Live</span>
+                    <span className="text-[10px] text-muted-foreground font-semibold block uppercase">Delivery Infrastructure</span>
+                    <span className="font-semibold text-primary">Resend Live API (mine-tech.be)</span>
                   </div>
                 </div>
 
-                {/* Pre-Flight Sample Previews for AI Blasts */}
-                {campaignType === 'ai_personalized' && (
-                  <div className="p-4 rounded-xl bg-card border border-border space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                          <Sparkles className="w-4 h-4 text-primary" />
-                          Pre-Flight Sample Previews (3 Diverse Prospects)
-                        </span>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">
-                          Review how MineTech AI personalizes copy across different roles and industries before launching.
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={generatingPreviews}
-                        onClick={handleGenerateSamplePreviews}
-                        className="border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 h-7 gap-1.5"
-                      >
-                        <RefreshCw className={`w-3.5 h-3.5 ${generatingPreviews ? 'animate-spin' : ''}`} />
-                        <span>{generatingPreviews ? 'Synthesizing...' : samplePreviews.length > 0 ? 'Regenerate Samples' : 'Generate 3 Sample Previews'}</span>
-                      </Button>
-                    </div>
+                <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
+                  <span className="text-[10px] text-muted-foreground font-semibold uppercase">Subject Line</span>
+                  <div className="text-xs font-semibold text-foreground">{subject || '(No subject provided)'}</div>
+                </div>
 
-                    {samplePreviews.length > 0 ? (
-                      <div className="space-y-3 mt-3">
-                        {samplePreviews.map((p, idx) => (
-                          <div key={idx} className="p-3.5 rounded-xl bg-muted/30 border border-border space-y-2">
-                            <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-semibold text-foreground">
-                                {p.lead.name} — <span className="text-primary">{p.lead.title} @ {p.lead.company}</span>
-                              </span>
-                              <span className="text-[10px] text-muted-foreground uppercase">{p.lead.industry}</span>
-                            </div>
-                            <div className="text-xs font-semibold text-foreground/90">
-                              <span className="text-muted-foreground">Subject:</span> {p.subject}
-                            </div>
-                            <div className="text-xs text-muted-foreground whitespace-pre-line bg-muted/40 p-2.5 rounded-lg border border-border/60">
-                              {p.body}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-4 rounded-xl bg-muted/10 border border-dashed border-border text-center text-xs text-muted-foreground">
-                        Click &ldquo;Generate 3 Sample Previews&rdquo; to test copy output against sample prospect profiles.
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {campaignType !== 'ai_personalized' && (
-                  <div className="p-3.5 rounded-xl bg-card border border-border space-y-1">
-                    <span className="text-[10px] text-muted-foreground font-semibold uppercase">Subject Preview</span>
-                    <div className="text-xs font-semibold text-foreground">{subject || '(No subject provided)'}</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Safety Confirmation */}
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="safety"
-                  checked={confirmedSafety}
-                  onChange={(e) => setConfirmedSafety(e.target.checked)}
-                  className="rounded bg-muted border-amber-500/50 text-amber-500 focus:ring-amber-500"
-                />
-                <label htmlFor="safety" className="text-xs font-medium text-amber-700 dark:text-amber-400 cursor-pointer">
-                  I confirm that all compliance safeguards are enabled and approve launching this {campaignType === 'ai_personalized' ? 'AI-personalized' : ''} outreach campaign.
-                </label>
+                {/* Safety Confirmation Checkbox */}
+                <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    id="safety"
+                    checked={confirmedSafety}
+                    onChange={(e) => setConfirmedSafety(e.target.checked)}
+                    className="rounded bg-muted border-primary text-primary focus:ring-primary"
+                  />
+                  <label htmlFor="safety" className="text-xs font-medium text-foreground cursor-pointer">
+                    I confirm that deliverability safeguards are enabled and approve this campaign for dispatch.
+                  </label>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer Controls */}
+        {/* Footer Actions */}
         <div className="p-4 border-t border-border bg-muted/30 flex items-center justify-between">
-          <div className="text-xs text-muted-foreground font-mono">
-            Tab {tabs.findIndex((t) => t.id === activeTab) + 1} of {tabs.length}
-          </div>
-
           <div className="flex items-center gap-2">
             {activeTab !== 'recipients' && (
               <Button
@@ -1033,7 +1316,7 @@ export default function BlastWizard({ onClose, onCreated }) {
               </Button>
             )}
 
-            {activeTab !== 'review' ? (
+            {activeTab !== 'review' && (
               <Button
                 type="button"
                 size="sm"
@@ -1041,17 +1324,33 @@ export default function BlastWizard({ onClose, onCreated }) {
                   const currIdx = tabs.findIndex((t) => t.id === activeTab);
                   if (currIdx < tabs.length - 1) setActiveTab(tabs[currIdx + 1].id);
                 }}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-8 px-4 gap-1.5"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-8 px-4 gap-1.5"
               >
                 Next
                 <ArrowRight className="w-3.5 h-3.5" />
               </Button>
-            ) : (
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Always allow Save as Draft */}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting}
+              onClick={() => handleSaveCampaign({ autoLaunch: false })}
+              className="border-border text-foreground hover:bg-muted h-8 px-3.5 text-xs font-medium"
+            >
+              {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Save as Draft'}
+            </Button>
+
+            {/* Launch Campaign Button */}
+            {(!isEditing || campaign?.status === 'DRAFT') && (
               <Button
                 type="button"
                 disabled={submitting}
-                onClick={handleLaunchCampaign}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 px-5 gap-2 shadow-primary/20"
+                onClick={() => handleSaveCampaign({ autoLaunch: true })}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 px-4 gap-2 text-xs font-semibold shadow-sm"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>{submitting ? 'Launching...' : '🚀 Launch Campaign'}</span>

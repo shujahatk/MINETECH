@@ -37,3 +37,6 @@ scratch/
 # Local skills & tooling
 ui-ux-pro-max-skill/
 
+
+.vercel
+.env*

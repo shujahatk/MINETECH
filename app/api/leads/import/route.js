@@ -26,6 +26,7 @@ export async function POST(request) {
     }
 
     const defaultTags = formData.get('tags') ? formData.get('tags').split(',').map((t) => t.trim()).filter(Boolean) : [];
+    const defaultClassification = (formData.get('defaultClassification') || formData.get('classification') || 'Unclassified').trim();
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const rows = [];
@@ -209,6 +210,31 @@ export async function POST(request) {
         ].flat().filter(Boolean))
       );
 
+      const rawRole = (
+        row.classification ||
+        row.Classification ||
+        row.role ||
+        row.Role ||
+        row['Buyer/Seller'] ||
+        row['Buyer / Seller'] ||
+        row['buyer_or_seller'] ||
+        row.lead_type ||
+        row['Lead Type'] ||
+        row.type ||
+        row.Type ||
+        supplierType ||
+        ''
+      ).toLowerCase().trim();
+
+      let rowClassification = 'Unclassified';
+      if (rawRole.includes('buyer') || rawRole.includes('client') || rawRole.includes('customer') || rawRole.includes('purchaser')) {
+        rowClassification = 'Buyer';
+      } else if (rawRole.includes('seller') || rawRole.includes('producer') || rawRole.includes('processor') || rawRole.includes('supplier') || rawRole.includes('vendor') || rawRole.includes('mine')) {
+        rowClassification = 'Seller';
+      } else if (['Buyer', 'Seller', 'Unclassified'].includes(defaultClassification)) {
+        rowClassification = defaultClassification;
+      }
+
       leadsToScore.push({
         first_name: firstName || (fullName ? fullName.split(' ')[0] : 'Commercial'),
         last_name: lastName || (fullName && fullName.split(' ').length > 1 ? fullName.split(' ').slice(1).join(' ') : 'Lead'),
@@ -220,12 +246,14 @@ export async function POST(request) {
         website,
         industry,
         niche: industry,
+        classification: rowClassification,
         location: { city, country, timezone: 'UTC' },
         tags: generatedTags,
         status: 'NEW',
         pipeline_stage: 'NEW',
         assigned_to: assignedUserId,
         custom_fields: {
+          classification: rowClassification,
           priority,
           rank,
           supplier_type: supplierType,

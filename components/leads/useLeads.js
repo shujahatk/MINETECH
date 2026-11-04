@@ -30,8 +30,8 @@ export const EMPTY_FILTERS = {
   owner: '',
   campaign: '',
   followUp: '',
+  classification: '',
   product: '',
-  ai: '',
 };
 
 function toLocalDateString(d = new Date()) {
@@ -61,7 +61,12 @@ export function useLeads({ enabled = true, view, filters, page, limit, sortBy, s
     [view, filters, page, limit, sortBy, sortDir]
   );
 
-  const [data, setData] = useState({ leads: [], total: 0, pagination: { page: 1, totalPages: 1, total: 0, limit } });
+  const [data, setData] = useState({
+    leads: [],
+    total: 0,
+    classificationCounts: { all: 0, buyers: 0, sellers: 0, unclassified: 0 },
+    pagination: { page: 1, totalPages: 1, total: 0, limit },
+  });
   const [loading, setLoading] = useState(true); // no data to show yet -> skeleton
   const [refreshing, setRefreshing] = useState(false); // data visible, revalidating in background
   const [error, setError] = useState('');
@@ -111,6 +116,7 @@ export function useLeads({ enabled = true, view, filters, page, limit, sortBy, s
         const next = {
           leads: json.leads || [],
           total: json.total ?? json.pagination?.total ?? 0,
+          classificationCounts: json.classificationCounts || { all: 0, buyers: 0, sellers: 0, unclassified: 0 },
           pagination: json.pagination || { page, totalPages: 1, total: 0, limit },
         };
         cacheSet(query, next);

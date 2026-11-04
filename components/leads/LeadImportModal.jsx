@@ -11,13 +11,10 @@ import { invalidateLeadsCache } from '@/components/leads/useLeads';
 export default function LeadImportModal({ onClose, onImported, onSuccess }) {
   const [file, setFile] = useState(null);
   const [tags, setTags] = useState('Outbound List, High-Value');
+  const [defaultClassification, setDefaultClassification] = useState('Unclassified');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
-
-  const [analyzeAfterImport, setAnalyzeAfterImport] = useState(false);
-  const [analyzingBatch, setAnalyzingBatch] = useState(false);
-  const [analyzeMsg, setAnalyzeMsg] = useState('');
 
   const triggerRefresh = () => {
     try {
@@ -47,6 +44,7 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('tags', tags);
+    formData.append('classification', defaultClassification);
 
     try {
       const res = await fetch('/api/leads/import', {
@@ -58,11 +56,6 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
       if (res.ok) {
         setResult(json.data);
         triggerRefresh();
-
-        // If auto-analyze is checked, trigger bulk analysis in background
-        if (analyzeAfterImport && json.data?.imported > 0) {
-          handleBulkAnalyzePostImport();
-        }
       } else {
         setError(json.message || 'Failed to import leads.');
       }
@@ -70,28 +63,6 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
       setError('Network error during file upload.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleBulkAnalyzePostImport = async () => {
-    setAnalyzingBatch(true);
-    setAnalyzeMsg('Analyzing imported leads with MineTech AI...');
-    try {
-      const res = await fetch('/api/leads/analyze-bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priorityFilter: 'A', force: false }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAnalyzeMsg(`Analyzed ${data.data?.analyzed || 0} leads with MineTech AI (${data.data?.skipped || 0} cached)`);
-        if (onImported) onImported();
-      }
-    } catch (e) {
-      console.error(e);
-      setAnalyzeMsg('Analysis started in background.');
-    } finally {
-      setAnalyzingBatch(false);
     }
   };
 
@@ -165,18 +136,22 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
               />
             </div>
 
-            {/* Optional MineTech AI Analysis Checkbox */}
-            <label className="flex items-center gap-2 p-2.5 rounded-xl border border-border bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors">
-              <input
-                type="checkbox"
-                checked={analyzeAfterImport}
-                onChange={(e) => setAnalyzeAfterImport(e.target.checked)}
-                className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
-              />
-              <span className="text-xs text-foreground font-medium">
-                Analyze imported Priority A leads with MineTech AI after import
-              </span>
-            </label>
+            {/* Lead Classification Selector */}
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Lead Classification</label>
+              <select
+                value={defaultClassification}
+                onChange={(e) => setDefaultClassification(e.target.value)}
+                className="w-full bg-muted/20 border border-border text-xs text-foreground h-9 rounded-xl px-2.5 focus:outline-none focus:border-primary"
+              >
+                <option value="Unclassified">Auto-detect from CSV / Unclassified</option>
+                <option value="Buyer">Classify all as Buyer (Purchaser / Consumer)</option>
+                <option value="Seller">Classify all as Seller (Supplier / Producer / Mine)</option>
+              </select>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                CSV columns like &quot;Role&quot;, &quot;Type&quot;, &quot;Classification&quot;, or &quot;Buyer/Seller&quot; will be automatically detected and mapped.
+              </p>
+            </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
               <Button

@@ -56,6 +56,7 @@ export default function AiDraftBar({
   // Text currently in the host editor (signature removed). Only used for edit commands.
   currentDraft = null,
   disabled = false,
+  showChips = false,
   onAccept, // ({ subject, body, decisionId, warnings, intent }) => void
   className = '',
 }) {
@@ -221,21 +222,23 @@ export default function AiDraftBar({
         </Button>
       </div>
 
-      {/* Quick actions */}
-      <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
-        {chips.map((chip) => (
-          <button
-            key={chip.id}
-            type="button"
-            disabled={busy || disabled || !leadId}
-            onClick={() => run(chip.command)}
-            title={`"${chip.command}"`}
-            className="h-6 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {chip.label}
-          </button>
-        ))}
-      </div>
+      {/* Quick actions (disabled by default in email composer) */}
+      {showChips && chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-2 pb-2">
+          {chips.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              disabled={busy || disabled || !leadId}
+              onClick={() => run(chip.command)}
+              title={`"${chip.command}"`}
+              className="h-6 rounded-md border border-border bg-card px-2 text-[11px] font-medium text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Generating state */}
       {loading && (

@@ -81,8 +81,23 @@ function LeadRowImpl({ lead, selected, isActive = false, today, onToggle, onOpen
         </div>
       </td>
 
-      <td className="max-w-[200px] border-b border-border/60 px-3 py-2">
-        <div className="truncate text-[13px] text-foreground">{lead.company || MUTED_DASH}</div>
+      <td className="max-w-[220px] border-b border-border/60 px-3 py-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="truncate text-[13px] text-foreground font-medium">{lead.company || MUTED_DASH}</div>
+          {lead.classification === 'Buyer' ? (
+            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+              Buyer
+            </span>
+          ) : lead.classification === 'Seller' ? (
+            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+              Seller
+            </span>
+          ) : (
+            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border">
+              Unclassified
+            </span>
+          )}
+        </div>
       </td>
 
       <td className="hidden max-w-[220px] border-b border-border/60 px-3 py-2 md:table-cell">

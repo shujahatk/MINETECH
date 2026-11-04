@@ -21,6 +21,7 @@ import {
   Activity,
   Search,
   Command,
+  Sparkles,
 } from 'lucide-react';
 import ThemeToggle from '@/components/theme/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,7 @@ const sections = [
   {
     title: 'Intelligence',
     items: [
+      ['AI Drafting', '/ai/draft', Sparkles],
       ['Analytics', '/analytics', BarChart3],
     ],
   },
