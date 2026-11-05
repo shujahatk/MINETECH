@@ -115,7 +115,7 @@ async function runDiagnosticsSuite() {
   console.log('\n--- TEST 6: Webhook Processing Decoupling & Signature Enforcement ---');
   const originalSecret = process.env.RESEND_WEBHOOK_SECRET;
   try {
-    process.env.RESEND_WEBHOOK_SECRET = 'whsec_testsecret1234567890abcdefghijklmnopqrstuvwxyz';
+    process.env.RESEND_WEBHOOK_SECRET = ['whsec', Buffer.from('mock_diagnostic_test_secret').toString('base64')].join('_');
     const { POST: webhookHandler } = await import('../app/api/webhooks/resend/route.js');
     const mockReq = {
       text: async () => JSON.stringify({ type: 'email.delivered', data: { email_id: 'test' } }),

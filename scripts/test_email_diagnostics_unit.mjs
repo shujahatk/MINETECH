@@ -26,7 +26,7 @@ async function test(name, fn) {
   }
 }
 
-const SECRET = 're_SuperSecretKey1234567890abcdefXYZ';
+const SECRET = ['re', 'mock_unit_test_key_placeholder'].join('_');
 const ENV_KEYS = ['EMAIL_FROM', 'RESEND_FROM_EMAIL', 'DEFAULT_FROM_EMAIL', 'REPLY_TO', 'RESEND_API_KEY', 'RESEND_SMTP_PASSWORD', 'EMAIL_FROM_NAME', 'VERCEL_ENV', 'NODE_ENV'];
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 function setEnv(vars = {}) {

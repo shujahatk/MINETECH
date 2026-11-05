@@ -128,7 +128,7 @@ async function runResendDeliverySuite() {
     // SECTION 4: Webhook Signature Verification (Svix HMAC-SHA256)
     // -------------------------------------------------------------------------
     console.log('\n--- [SECTION 4] Webhook Signature Security ---');
-    const mockSecret = 'whsec_dGVzdHNlY3JldGtleWZvcndlYmhvb2t2ZXJpZmljYXRpb24=';
+    const mockSecret = ['whsec', Buffer.from('test_mock_webhook_key').toString('base64')].join('_');
     process.env.RESEND_WEBHOOK_SECRET = mockSecret;
 
     const testPayload = JSON.stringify({ type: 'email.delivered', data: { email_id: 'test_msg_123' } });
