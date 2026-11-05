@@ -21,6 +21,7 @@ const routes = [
   { path: '/workstation', expected: 200 },
   { path: '/email/inbox', expected: 200 },
   { path: '/email/blasts', expected: 200 },
+  { path: '/email/matching', expected: 200 },
   { path: '/email/compose', expected: 200 },
   { path: '/email/templates', expected: 200 },
   { path: '/email/sequences', expected: 200 },

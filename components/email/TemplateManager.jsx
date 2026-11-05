@@ -15,7 +15,10 @@ import {
   Building,
   User,
   ExternalLink,
+  Upload,
+  ArrowRight
 } from 'lucide-react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/ui/page-header';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -25,34 +28,42 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 
 const MERGE_TAGS = [
-  { tag: '{{firstName}}', label: 'First Name' },
-  { tag: '{{company}}', label: 'Company' },
-  { tag: '{{jobTitle}}', label: 'Job Title' },
-  { tag: '{{industry}}', label: 'Industry' },
-  { tag: '{{location}}', label: 'Location' },
+  { tag: '{{company_name}}', label: 'Company Name' },
+  { tag: '{{first_name}}', label: 'First Name' },
+  { tag: '{{last_name}}', label: 'Last Name' },
+  { tag: '{{product_name}}', label: 'Product Name' },
+  { tag: '{{country}}', label: 'Country' },
+  { tag: '{{sender_name}}', label: 'Sender Name' },
+  { tag: '{{sender_company}}', label: 'Sender Company' },
 ];
 
 export default function TemplateManager() {
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
-  const [category, setCategory] = useState('cold-outreach');
+  const [category, setCategory] = useState('Bleaching Clay');
   const [copiedTag, setCopiedTag] = useState('');
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [uploadText, setUploadText] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
+
   const [previewLead, setPreviewLead] = useState({
     firstName: 'Sarah',
-    company: 'Nexus AI',
-    jobTitle: 'VP of Engineering',
-    industry: 'Software Enterprise',
-    location: 'San Francisco, CA',
+    company: 'Global Edible Oils Ltd',
+    jobTitle: 'Purchasing Director',
+    industry: 'Edible Oil Processing',
+    location: 'Antwerp, Belgium',
+    product: 'Bleaching Clay'
   });
 
   const fetchTemplates = async () => {
     try {
-      const res = await fetch('/api/email/templates');
+      const res = await fetch('/api/campaigns/intelligent/templates');
       if (res.ok) {
         const j = await res.json();
         setTemplates(j.data || []);
@@ -81,9 +92,9 @@ export default function TemplateManager() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          prompt: `Generate a high-converting cold email template for ${category} targeting B2B executives with {{firstName}} and {{company}} variables.`,
+          prompt: `Generate a high-converting B2B cold email template for ${category} targeting commercial directors with {{company_name}} and {{product_name}} variables.`,
           tone: 'Direct & Value-First',
-          goal: 'Schedule 15-min Call',
+          goal: 'Commercial Sourcing Discussion',
         }),
       });
 
@@ -108,7 +119,7 @@ export default function TemplateManager() {
         body: JSON.stringify({
           name,
           subject,
-          bodyHtml: `<p>${body.replace(/\n/g, '<br/>')}</p>`,
+          bodyHtml: `<p>${body.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`,
           bodyPlain: body,
           category,
         }),
@@ -119,61 +130,181 @@ export default function TemplateManager() {
         setSubject('');
         setBody('');
         fetchTemplates();
+        toast.success('Template saved & AI classified!');
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || 'Could not save the template');
       }
     } catch (err) {
       toast.error('Could not save the template');
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to permanently delete this template from database memory?')) return;
+  const handleUploadFileOrText = async (e) => {
+    e.preventDefault();
+    if (!selectedFile && !uploadText.trim()) {
+      toast.error('Please select a file or paste email drafts');
+      return;
+    }
+
+    setActionLoading(true);
     try {
-      await fetch(`/api/email/templates/${id}`, { method: 'DELETE' });
-      fetchTemplates();
-    } catch (e) {}
+      const formData = new FormData();
+      if (selectedFile) formData.append('file', selectedFile);
+      if (uploadText.trim()) formData.append('pastedText', uploadText.trim());
+
+      const res = await fetch('/api/campaigns/intelligent/templates', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        toast.success(json.message);
+        setIsUploadModalOpen(false);
+        setUploadText('');
+        setSelectedFile(null);
+        fetchTemplates();
+      } else {
+        toast.error(json.error || 'Failed to upload templates');
+      }
+    } catch (err) {
+      toast.error('Error uploading templates');
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const renderSimulatedPreview = (text) => {
-    if (!text) return '';
-    return text
-      .replace(/{{firstName}}/g, previewLead.firstName)
-      .replace(/{{company}}/g, previewLead.company)
-      .replace(/{{jobTitle}}/g, previewLead.jobTitle)
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to permanently delete this template?')) return;
+    try {
+      const res = await fetch(`/api/email/templates/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchTemplates();
+        toast.success('Template deleted');
+      }
+    } catch (e) {
+      toast.error('Failed to delete template');
+    }
+  };
+
+  const renderSimulatedPreview = (raw) => {
+    if (!raw) return '';
+    return raw
+      .replace(/{{first_name}}|{{firstName}}/g, previewLead.firstName)
+      .replace(/{{last_name}}|{{lastName}}/g, 'Vermeulen')
+      .replace(/{{company_name}}|{{company}}/g, previewLead.company)
+      .replace(/{{jobTitle}}|{{job_title}}/g, previewLead.jobTitle)
       .replace(/{{industry}}/g, previewLead.industry)
-      .replace(/{{location}}/g, previewLead.location);
+      .replace(/{{product_name}}|{{product}}/g, previewLead.product)
+      .replace(/{{country}}|{{location}}/g, previewLead.location)
+      .replace(/{{sender_name}}|{{senderName}}/g, 'Abdullah Rauf')
+      .replace(/{{sender_company}}|{{senderCompany}}/g, 'MineTech Resources BV');
   };
 
   const selectClass =
-    'h-9 w-full rounded-md border border-input bg-background px-3 text-xs text-foreground shadow-sm transition-colors focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30';
-
-  const categoryLabel = (c) =>
-    ({ 'cold-outreach': 'Cold outreach', 'follow-up': 'Follow-up', booking: 'Call booking', 're-engagement': 'Re-engagement' }[c] || c || 'Cold outreach');
+    'h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring';
 
   return (
     <div className="space-y-4">
       <PageHeader
         icon={FileText}
-        title="Templates"
+        title="Email Templates Library"
         meta={!loading ? String(templates.length) : undefined}
-        description="Reusable email copy with merge tags and MineTech AI-assisted hooks."
+        description="Prewritten B2B email copy classified with Claude AI for Buyer/Supplier outreach."
         className="mb-0"
         actions={
-          <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-1.5" disabled={isModalOpen}>
-            <Plus className="h-3.5 w-3.5" /> New template
-          </Button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/email/matching"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-colors"
+            >
+              <Sparkles className="h-3.5 w-3.5" /> AI Matcher Cockpit
+            </Link>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsUploadModalOpen(true)}
+              className="gap-1.5 border-border"
+            >
+              <Upload className="h-3.5 w-3.5 text-amber-400" /> Upload Batch (TXT/DOCX/PDF/CSV)
+            </Button>
+            <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-1.5" disabled={isModalOpen}>
+              <Plus className="h-3.5 w-3.5" /> New template
+            </Button>
+          </div>
         }
       />
 
+      {/* MODAL: BATCH UPLOAD */}
+      {isUploadModalOpen && (
+        <Card className="anim-fade-up p-5 space-y-4 border-amber-500/30 bg-card">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Upload className="h-4 w-4 text-amber-500" />
+                Upload Prewritten Email Templates
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Upload files (TXT, Word DOCX, PDF, CSV, Excel XLSX) or paste multi-draft copy. Claude AI will separate and classify them.
+              </p>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setIsUploadModalOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+
+          <form onSubmit={handleUploadFileOrText} className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1">
+                Upload Document / Spreadsheet File
+              </label>
+              <Input
+                type="file"
+                accept=".txt,.docx,.pdf,.csv,.xlsx,.xls"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                className="text-xs"
+              />
+            </div>
+
+            <div className="text-center text-xs text-muted-foreground font-medium">— OR PASTE EMAIL TEXT DIRECTLY —</div>
+
+            <div>
+              <label className="text-xs font-medium text-foreground block mb-1">
+                Paste Multiple Prewritten Drafts
+              </label>
+              <Textarea
+                rows={6}
+                placeholder={`Subject: Bleaching Clay Supply Capabilities\n\nDear {{company_name}},\n\nMineTech Resources supplies high-activity acid-activated bleaching earth...\n\n---\n\nSubject: Bentonite Sourcing Enquiry\n\nDear Commercial Desk,\n\nMineTech Resources is currently sourcing API 13A drilling bentonite...`}
+                value={uploadText}
+                onChange={(e) => setUploadText(e.target.value)}
+                className="font-mono text-xs"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setIsUploadModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={actionLoading} className="bg-amber-600 hover:bg-amber-500 text-white font-medium">
+                {actionLoading ? 'Analyzing with Claude...' : 'Classify & Import to Library'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
+
+      {/* CREATE NEW TEMPLATE MODAL */}
       {isModalOpen && (
         <Card className="anim-fade-up space-y-5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
             <div>
               <h3 className="text-sm font-semibold tracking-tight text-foreground">Template studio</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">Write the copy and watch the merge tags resolve in the preview.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Write prewritten copy and Claude AI will classify target roles and products.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={handleGenerateAIHook} disabled={isGeneratingAI} className="h-8 gap-1.5 text-primary">
               <Sparkles className={`h-3.5 w-3.5 ${isGeneratingAI ? 'animate-spin' : ''}`} />
-              <span>{isGeneratingAI ? 'Generating...' : 'Generate with MineTech AI'}</span>
+              <span>{isGeneratingAI ? 'Generating...' : 'Assist with MineTech AI'}</span>
             </Button>
           </div>
 
@@ -181,22 +312,24 @@ export default function TemplateManager() {
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="tpl-name" className="field-label mb-1.5 block">Template name</label>
-                <Input id="tpl-name" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cold touch #1" />
+                <Input id="tpl-name" type="text" required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Bleaching Clay — Buyer Intro" />
               </div>
               <div>
-                <label htmlFor="tpl-category" className="field-label mb-1.5 block">Category</label>
+                <label htmlFor="tpl-category" className="field-label mb-1.5 block">Product Mineral</label>
                 <select id="tpl-category" value={category} onChange={(e) => setCategory(e.target.value)} className={selectClass}>
-                  <option value="cold-outreach">Cold outreach</option>
-                  <option value="follow-up">Follow-up</option>
-                  <option value="booking">Call booking</option>
-                  <option value="re-engagement">Re-engagement</option>
+                  <option value="Bleaching Clay">Bleaching Clay</option>
+                  <option value="Bentonite">Bentonite</option>
+                  <option value="Kaolin">Kaolin</option>
+                  <option value="Fire Clay">Fire Clay</option>
+                  <option value="Ball Clay">Ball Clay</option>
+                  <option value="Industrial Minerals">General Industrial Minerals</option>
                 </select>
               </div>
             </div>
 
             <div>
               <label htmlFor="tpl-subject" className="field-label mb-1.5 block">Subject line</label>
-              <Input id="tpl-subject" type="text" required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. A quick question for {{company}}" className="font-medium" />
+              <Input id="tpl-subject" type="text" required value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Supply of High-Activity Bleaching Clay to {{company_name}}" className="font-medium" />
             </div>
 
             <div className="space-y-1.5">
@@ -225,7 +358,7 @@ export default function TemplateManager() {
                   rows={8}
                   value={body}
                   onChange={(e) => setBody(e.target.value)}
-                  placeholder={`Hi {{firstName}},\n\nSaw what your team is building at {{company}} in the {{industry}} space...\n\nWould you be open to a 15-min call this Thursday?`}
+                  placeholder={`Dear {{company_name}},\n\nWe are reaching out from MineTech Resources regarding our supply capabilities for high-activity bleaching clay...`}
                   className="font-mono text-xs leading-relaxed"
                 />
               </div>
@@ -234,7 +367,7 @@ export default function TemplateManager() {
                 <span className="field-label mb-1.5 flex items-center gap-1.5 text-primary">
                   <Eye className="h-3.5 w-3.5" /> Live preview
                   <span className="font-normal normal-case text-muted-foreground">
-                    · sample prospect {previewLead.firstName}, {previewLead.company}
+                    · sample prospect {previewLead.company}
                   </span>
                 </span>
                 <div className="h-[184px] space-y-2 overflow-y-auto rounded-xl border border-border bg-muted/20 p-3.5 text-xs leading-relaxed text-foreground">
@@ -253,7 +386,7 @@ export default function TemplateManager() {
                 Cancel
               </Button>
               <Button type="submit" size="sm" className="px-4">
-                Save template
+                Save & Classify Template
               </Button>
             </div>
           </form>
@@ -274,14 +407,17 @@ export default function TemplateManager() {
         <Card>
           <EmptyState
             icon={FileText}
-            title="No templates yet"
-            description="Create reusable email copy with merge tags, then use it in campaigns and sequences."
+            title="No prewritten templates yet"
+            description="Upload prepared email drafts or create templates. Claude AI will classify them for automatic campaign matching."
             action={
-              !isModalOpen && (
-                <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-1.5">
-                  <Plus className="h-3.5 w-3.5" /> Create first template
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => setIsUploadModalOpen(true)} className="gap-1.5 bg-amber-600 hover:bg-amber-500 text-white">
+                  <Upload className="h-3.5 w-3.5" /> Upload templates
                 </Button>
-              )
+                <Button size="sm" variant="outline" onClick={() => setIsModalOpen(true)} className="gap-1.5">
+                  <Plus className="h-3.5 w-3.5" /> Create manually
+                </Button>
+              </div>
             }
           />
         </Card>
@@ -291,9 +427,18 @@ export default function TemplateManager() {
             <Card key={t._id || t.id} className="panel-interactive group flex flex-col p-0">
               <div className="flex-1 space-y-2 p-4">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="tone-brand inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-medium">
-                    {categoryLabel(t.category)}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="tone-brand inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-semibold text-amber-500 border-amber-500/20 bg-amber-500/10">
+                      {t.product_category || t.category || 'Minerals'}
+                    </span>
+                    <span className={`inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-semibold uppercase ${
+                      t.recipient_type?.includes('supplier')
+                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    }`}>
+                      {t.recipient_type?.includes('supplier') ? 'Supplier' : 'Buyer'}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={() => handleDelete(t._id || t.id)}
@@ -305,13 +450,17 @@ export default function TemplateManager() {
                   </button>
                 </div>
                 <h3 className="text-sm font-semibold tracking-tight text-foreground">{t.name}</h3>
-                <p className="truncate text-xs font-medium text-muted-foreground">
+                <p className="truncate text-xs font-medium text-muted-foreground font-mono">
                   <span className="text-foreground/70">Subject:</span> {t.subject}
                 </p>
                 <div
                   className="email-html line-clamp-3 text-xs text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: t.bodyHtml || t.body_html }}
+                  dangerouslySetInnerHTML={{ __html: t.bodyHtml || t.body_html || t.bodyPlain || t.body_plain }}
                 />
+                <div className="pt-2 border-t border-border flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>Sequence: <strong className="text-foreground">{t.sequence_stage || 'Intro'}</strong></span>
+                  <span className="text-emerald-500 font-medium">Canonical Copy</span>
+                </div>
               </div>
             </Card>
           ))}

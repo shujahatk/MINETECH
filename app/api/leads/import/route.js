@@ -20,28 +20,64 @@ export async function POST(request) {
 
     const formData = await request.formData();
     const file = formData.get('file');
+    const pastedText = formData.get('pastedText') || formData.get('text');
 
-    if (!file) {
-      return NextResponse.json({ success: false, message: 'No CSV file provided' }, { status: 400 });
+    if (!file && !pastedText) {
+      return NextResponse.json({ success: false, message: 'No file or pasted text provided' }, { status: 400 });
     }
 
     const defaultTags = formData.get('tags') ? formData.get('tags').split(',').map((t) => t.trim()).filter(Boolean) : [];
     const defaultClassification = (formData.get('defaultClassification') || formData.get('classification') || 'Unclassified').trim();
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const rows = [];
 
-    await new Promise((resolve, reject) => {
-      const stream = Readable.from(buffer.toString('utf-8'));
-      stream
-        .pipe(csv())
-        .on('data', (row) => rows.push(row))
-        .on('end', resolve)
-        .on('error', reject);
-    });
+    if (pastedText && typeof pastedText === 'string') {
+      const cleanText = pastedText.trim();
+      const lines = cleanText.split('\n').map((l) => l.trim()).filter(Boolean);
+      if (lines.length > 0) {
+        // Detect if first line is header
+        const delimiter = cleanText.includes('\t') ? '\t' : (cleanText.includes(',') ? ',' : ';');
+        const headers = lines[0].split(delimiter).map((h) => h.trim().replace(/^["']|["']$/g, ''));
+        const hasHeader = headers.some((h) => /company|email|name|phone/i.test(h));
+
+        const dataStart = hasHeader ? 1 : 0;
+        const colNames = hasHeader ? headers : ['company_name', 'email', 'phone'];
+
+        for (let i = dataStart; i < lines.length; i++) {
+          const cells = lines[i].split(delimiter).map((c) => c.trim().replace(/^["']|["']$/g, ''));
+          const rowObj = {};
+          colNames.forEach((col, idx) => {
+            rowObj[col] = cells[idx] || '';
+          });
+          rows.push(rowObj);
+        }
+      }
+    } else if (file) {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const fileName = file.name || '';
+      const isExcel = /\.xlsx?$|\.xls$/i.test(fileName);
+
+      if (isExcel) {
+        const XLSX = await import('xlsx');
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        rows.push(...sheetRows);
+      } else {
+        await new Promise((resolve, reject) => {
+          const stream = Readable.from(buffer.toString('utf-8'));
+          stream
+            .pipe(csv())
+            .on('data', (row) => rows.push(row))
+            .on('end', resolve)
+            .on('error', reject);
+        });
+      }
+    }
 
     if (rows.length === 0) {
-      return NextResponse.json({ success: false, message: 'CSV file is empty' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Uploaded file or text contains no rows' }, { status: 400 });
     }
 
     const columnMap = mapCsvHeaders(Object.keys(rows[0]));

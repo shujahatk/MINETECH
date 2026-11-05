@@ -25,6 +25,7 @@ async function verifyApp() {
     { path: '/leads', type: 'page' },
     { path: '/workstation', type: 'page' },
     { path: '/email/blasts', type: 'page' },
+    { path: '/email/matching', type: 'page' },
     { path: '/email/inbox', type: 'page' },
     { path: '/api/dashboard/stats', type: 'api' },
     { path: '/api/leads', type: 'api' },

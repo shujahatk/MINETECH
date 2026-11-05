@@ -48,6 +48,7 @@ const sections = [
   {
     title: 'Email',
     items: [
+      ['AI Matcher', '/email/matching', Sparkles],
       ['Templates', '/email/templates', FileText],
       ['Sequences', '/email/sequences', Activity],
     ],

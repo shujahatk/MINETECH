@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
-import { connectToDatabase } from '@/lib/db/mongoose';
-import EmailTemplate from '@/lib/models/EmailTemplate';
+import { supabaseAdmin } from '@/lib/supabase';
 import { requireAuth } from '@/lib/middleware/authGuard';
+import {
+  createAndClassifyTemplate,
+  unpackTemplateMetadata
+} from '@/lib/services/templateIntelligenceService';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,9 +13,24 @@ export async function GET(request) {
   if (auth instanceof Response) return auth;
 
   try {
-    await connectToDatabase();
-    const templates = await EmailTemplate.find({ active: true }).sort({ createdAt: -1 }).lean();
-    return NextResponse.json({ success: true, data: templates || [] });
+    const { data: templates, error } = await supabaseAdmin
+      .from('email_templates')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    }
+
+    const unpacked = (templates || []).map((t) => {
+      const meta = unpackTemplateMetadata(t);
+      return {
+        ...t,
+        ...meta
+      };
+    });
+
+    return NextResponse.json({ success: true, data: unpacked });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -24,27 +42,26 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { name, subject, bodyHtml, bodyText, category } = body;
+    const { name, subject, bodyHtml, bodyText, bodyPlain, category } = body;
 
-    if (!name || !subject || !bodyHtml) {
+    if (!name || !subject || (!bodyHtml && !bodyText && !bodyPlain)) {
       return NextResponse.json(
-        { success: false, error: 'Template name, subject, and body HTML are required.' },
+        { success: false, error: 'Template name, subject, and body content are required.' },
         { status: 400 }
       );
     }
 
-    await connectToDatabase();
-    const template = await EmailTemplate.create({
+    const bodyToUse = bodyPlain || bodyText || (bodyHtml ? bodyHtml.replace(/<[^>]+>/g, '').trim() : '');
+
+    const saved = await createAndClassifyTemplate({
       name,
       subject,
-      bodyHtml,
-      bodyText: bodyText || bodyHtml.replace(/<[^>]+>/g, '').trim(),
-      category: category || 'general',
-      createdBy: auth.user.id,
-      active: true,
+      body: bodyToUse,
+      bodyHtml: bodyHtml || `<p>${bodyToUse.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`,
+      userId: auth.user?.id || null
     });
 
-    return NextResponse.json({ success: true, data: template }, { status: 201 });
+    return NextResponse.json({ success: true, data: saved }, { status: 201 });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
