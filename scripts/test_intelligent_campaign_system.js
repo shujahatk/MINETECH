@@ -38,7 +38,8 @@ import {
 } from '../lib/services/templateIntelligenceService.js';
 import {
   matchLeadToTemplates,
-  runIntelligentMatching
+  runIntelligentMatching,
+  extractCompanyContacts
 } from '../lib/services/campaignMatchingEngine.js';
 import {
   getDynamicSegments,
@@ -398,6 +399,118 @@ We are writing from MineTech Resources regarding our kaolin supply for ceramic a
     assert(match.unmatched_reason.length > 0);
   });
 
+  // --- SECTION 5B: MULTI-CONTACT PER COMPANY EXTRACTION & TARGETING ---
+  console.log('\n--- 5B. MULTI-CONTACT TARGETING & COMPANY CONTACT EXTRACTION ---');
+  it('Extracts multiple contacts per company from primary, custom fields, and same-domain siblings', () => {
+    const primaryLead = {
+      id: 'lead-corp-001',
+      company: 'Apex Edible Oils NV',
+      email: 'purchasing@apex-oils.be',
+      full_name: 'Jan De Smet',
+      job_title: 'Procurement Director',
+      website: 'www.apex-oils.be',
+      custom_fields: {
+        additional_contacts: [
+          { name: 'Sarah Peeters', email: 'operations@apex-oils.be', job_title: 'Plant Manager' }
+        ]
+      }
+    };
+
+    const siblingLead = {
+      id: 'lead-corp-002',
+      company: 'Apex Edible Oils',
+      email: 'qa.lab@apex-oils.be',
+      full_name: 'Luc Van Damme',
+      job_title: 'QA Specialist',
+      website: 'apex-oils.be'
+    };
+
+    const contacts = extractCompanyContacts(primaryLead, [primaryLead, siblingLead]);
+    assert.strictEqual(contacts.length, 3, 'Should find 3 contacts for Apex Edible Oils');
+    
+    const emails = contacts.map((c) => c.email);
+    assert(emails.includes('purchasing@apex-oils.be'), 'Missing primary purchasing email');
+    assert(emails.includes('operations@apex-oils.be'), 'Missing operations email');
+    assert(emails.includes('qa.lab@apex-oils.be'), 'Missing sibling QA lab email');
+
+    const primaryContact = contacts.find((c) => c.email === 'purchasing@apex-oils.be');
+    assert(primaryContact.isPrimary, 'Primary contact should have isPrimary: true');
+  });
+
+  it('Supports configurable targeting mode (primary_only vs all_contacts vs custom_selected)', async () => {
+    const testLead = {
+      id: 'lead-corp-multi-1',
+      company: 'Global Refineries Ltd',
+      email: 'procurement@globalrefineries.com',
+      full_name: 'Robert Davis',
+      classification: 'Buyer',
+      custom_fields: {
+        company_intelligence: {
+          buyer_seller_status: 'Buyer',
+          relationship_types: ['prospective_buyer'],
+          relevant_products: ['Bleaching Clay'],
+          confidence: 'high'
+        },
+        additional_contacts: [
+          { name: 'Alice Smith', email: 'technical@globalrefineries.com', job_title: 'Technical Director' }
+        ]
+      }
+    };
+
+    const candidateTemplates = [
+      {
+        id: 'tpl-clay-01',
+        name: 'Bleaching Clay Intro',
+        subject: 'Bleaching Clay for Edible Oil Refineries',
+        category: 'Bleaching Clay',
+        variables: ['meta:{"recipient_type":"prospective_buyer","product_category":"Bleaching Clay"}']
+      }
+    ];
+
+    // Case 1: Default / primary_only
+    const resPrimary = await runIntelligentMatching({
+      leads: [testLead],
+      templates: candidateTemplates,
+      contactTargeting: {
+        'lead-corp-multi-1': { targetingMode: 'primary_only' }
+      }
+    });
+
+    assert.strictEqual(resPrimary.matches.length, 1);
+    assert.strictEqual(resPrimary.matches[0].company_contacts.length, 2);
+    assert.strictEqual(resPrimary.proposedCampaigns[0].targetRecipients.length, 1);
+    assert.strictEqual(resPrimary.proposedCampaigns[0].targetRecipients[0].email, 'procurement@globalrefineries.com');
+
+    // Case 2: all_contacts mode
+    const resAll = await runIntelligentMatching({
+      leads: [testLead],
+      templates: candidateTemplates,
+      contactTargeting: {
+        'lead-corp-multi-1': { targetingMode: 'all_contacts' }
+      }
+    });
+
+    assert.strictEqual(resAll.proposedCampaigns[0].targetRecipients.length, 2, 'Should target both company contacts');
+    const targetedEmails = resAll.proposedCampaigns[0].targetRecipients.map((r) => r.email);
+    assert(targetedEmails.includes('procurement@globalrefineries.com'));
+    assert(targetedEmails.includes('technical@globalrefineries.com'));
+
+    // Case 3: custom_selected mode choosing only the technical contact
+    const resCustom = await runIntelligentMatching({
+      leads: [testLead],
+      templates: candidateTemplates,
+      contactTargeting: {
+        'lead-corp-multi-1': {
+          targetingMode: 'custom_selected',
+          selectedEmails: ['technical@globalrefineries.com']
+        }
+      }
+    });
+
+    assert.strictEqual(resCustom.proposedCampaigns[0].targetRecipients.length, 1);
+    assert.strictEqual(resCustom.proposedCampaigns[0].targetRecipients[0].email, 'technical@globalrefineries.com');
+  });
+
   // --- SECTION 6: AUTOMATIC CAMPAIGN PREPARATION & SIGNATURE ENFORCEMENT ---
   console.log('\n--- 6. CAMPAIGN PREPARATION & SIGNATURE ENFORCEMENT ---');
   it('Assembles proposed campaign groups and includes mandatory MineTech signature in copy', async () => {
@@ -500,3 +613,4 @@ runTestSuite().catch((err) => {
   console.error('\n❌ TEST SUITE FAILED:', err);
   process.exit(1);
 });
+

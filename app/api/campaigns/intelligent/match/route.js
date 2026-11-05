@@ -16,6 +16,7 @@ export async function POST(request) {
       leadIds = [],
       autoApproveHighConfidence = false,
       manualOverrides = {},
+      contactTargeting = {},
       runAiClassification = true,
       model = 'claude-sonnet-5-5',
       limit = 200
@@ -72,7 +73,8 @@ export async function POST(request) {
       leads: enrichedLeads,
       templates: templates || [],
       autoApproveHighConfidence,
-      manualOverrides
+      manualOverrides,
+      contactTargeting
     });
 
     return NextResponse.json({
@@ -138,3 +140,4 @@ export async function PATCH(request) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
+

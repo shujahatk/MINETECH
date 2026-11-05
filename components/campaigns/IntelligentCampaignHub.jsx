@@ -26,7 +26,9 @@ import {
   Inbox,
   Clock,
   Check,
-  X
+  X,
+  UserCheck,
+  UserX
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -45,6 +47,7 @@ export default function IntelligentCampaignHub() {
   const [matchingData, setMatchingData] = useState(null);
   const [segments, setSegments] = useState([]);
   const [preparedCampaigns, setPreparedCampaigns] = useState([]);
+  const [contactTargeting, setContactTargeting] = useState({}); // { [leadId]: { targetingMode, selectedEmails } }
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -103,7 +106,8 @@ export default function IntelligentCampaignHub() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           autoApproveHighConfidence: autoApprove,
-          runAiClassification: true
+          runAiClassification: true,
+          contactTargeting
         })
       });
 
@@ -130,11 +134,48 @@ export default function IntelligentCampaignHub() {
 
     setActionLoading(true);
     try {
+      // Synchronize campaigns with current contact selections
+      const syncedCampaigns = (matchingData.proposedCampaigns || []).map((camp) => {
+        const campMatches = (matchingData.matches || []).filter(
+          (m) => (m.template_id === camp.templateId || m.matched_template?.id === camp.templateId) && m.status !== 'unmatched'
+        );
+        const dynamicRecipients = [];
+        for (const m of campMatches) {
+          const selected = (m.company_contacts || []).filter((c) => c.selected);
+          if (selected.length > 0) {
+            for (const c of selected) {
+              dynamicRecipients.push({
+                leadId: m.lead_id,
+                contactId: c.id,
+                email: c.email,
+                name: c.name,
+                jobTitle: c.job_title,
+                isPrimary: c.isPrimary
+              });
+            }
+          } else if (m.email) {
+            dynamicRecipients.push({
+              leadId: m.lead_id,
+              contactId: m.lead_id,
+              email: m.email,
+              name: m.contact_name || m.company_name,
+              isPrimary: true
+            });
+          }
+        }
+
+        return {
+          ...camp,
+          recipientCount: dynamicRecipients.length > 0 ? dynamicRecipients.length : camp.recipientCount,
+          targetRecipients: dynamicRecipients.length > 0 ? dynamicRecipients : camp.targetRecipients
+        };
+      });
+
       const res = await fetch('/api/campaigns/intelligent/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          proposedCampaigns: matchingData.proposedCampaigns,
+          proposedCampaigns: syncedCampaigns,
           senderEmail: 'rauf@mine-tech.be',
           senderName: 'Abdullah Rauf - MineTech Resources'
         })
@@ -155,6 +196,137 @@ export default function IntelligentCampaignHub() {
     }
   };
 
+  // Toggle contact targeting for a company
+  const handleToggleContactEmail = (leadId, email) => {
+    setMatchingData((prev) => {
+      if (!prev?.matches) return prev;
+      const updatedMatches = prev.matches.map((m) => {
+        if (m.lead_id !== leadId) return m;
+
+        const updatedContacts = (m.company_contacts || []).map((c) => {
+          if (c.email.toLowerCase() === email.toLowerCase()) {
+            return { ...c, selected: !c.selected };
+          }
+          return c;
+        });
+
+        const selectedEmails = updatedContacts.filter((c) => c.selected).map((c) => c.email);
+        const targetingMode = selectedEmails.length === updatedContacts.length ? 'all_contacts' : 'custom_selected';
+
+        // Update local preferences map
+        setContactTargeting((pref) => ({
+          ...pref,
+          [leadId]: { targetingMode, selectedEmails }
+        }));
+
+        const updatedMatch = {
+          ...m,
+          company_contacts: updatedContacts,
+          selected_emails: selectedEmails,
+          targeting_mode: targetingMode
+        };
+
+        if (inspectLead && inspectLead.lead_id === leadId) {
+          setInspectLead(updatedMatch);
+        }
+
+        return updatedMatch;
+      });
+
+      return { ...prev, matches: updatedMatches };
+    });
+  };
+
+  // Set company targeting mode (primary_only vs all_contacts)
+  const handleSetTargetingMode = (leadId, mode) => {
+    setMatchingData((prev) => {
+      if (!prev?.matches) return prev;
+      const updatedMatches = prev.matches.map((m) => {
+        if (m.lead_id !== leadId) return m;
+
+        const updatedContacts = (m.company_contacts || []).map((c) => {
+          if (mode === 'all_contacts') return { ...c, selected: true };
+          if (mode === 'primary_only') return { ...c, selected: Boolean(c.isPrimary) };
+          return c;
+        });
+
+        const selectedEmails = updatedContacts.filter((c) => c.selected).map((c) => c.email);
+
+        setContactTargeting((pref) => ({
+          ...pref,
+          [leadId]: { targetingMode: mode, selectedEmails }
+        }));
+
+        const updatedMatch = {
+          ...m,
+          company_contacts: updatedContacts,
+          selected_emails: selectedEmails,
+          targeting_mode: mode
+        };
+
+        if (inspectLead && inspectLead.lead_id === leadId) {
+          setInspectLead(updatedMatch);
+        }
+
+        return updatedMatch;
+      });
+
+      return { ...prev, matches: updatedMatches };
+    });
+  };
+
+  // Reassign template for a specific lead
+  const handleReassignTemplate = async (leadId, newTemplateId) => {
+    const selectedTpl = templates.find((t) => t.id === newTemplateId);
+    if (!selectedTpl) return;
+
+    setMatchingData((prev) => {
+      if (!prev?.matches) return prev;
+      const updatedMatches = prev.matches.map((m) => {
+        if (m.lead_id !== leadId) return m;
+        return {
+          ...m,
+          matched_template: selectedTpl,
+          template_id: selectedTpl.id,
+          template_name: selectedTpl.name,
+          subject: selectedTpl.subject,
+          product_category: selectedTpl.product_category || selectedTpl.category || m.product_category,
+          recipient_type: selectedTpl.recipient_type || m.recipient_type,
+          reason: `Manually reassigned to "${selectedTpl.name}" by user`,
+          match_confidence: 'high',
+          status: 'approved'
+        };
+      });
+      return { ...prev, matches: updatedMatches };
+    });
+
+    if (inspectLead && inspectLead.lead_id === leadId) {
+      setInspectLead((prev) => ({
+        ...prev,
+        matched_template: selectedTpl,
+        template_id: selectedTpl.id,
+        template_name: selectedTpl.name,
+        subject: selectedTpl.subject
+      }));
+    }
+
+    try {
+      await fetch('/api/campaigns/intelligent/match', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leadId,
+          templateId: newTemplateId,
+          recipientType: selectedTpl.recipient_type,
+          productCategory: selectedTpl.product_category || selectedTpl.category
+        })
+      });
+      toast.success(`Template updated to "${selectedTpl.name}"`);
+    } catch {
+      toast.error('Failed to save reassignment preference');
+    }
+  };
+
   // Handle template file/text upload
   const handleUploadTemplates = async (e) => {
     e.preventDefault();
@@ -166,12 +338,8 @@ export default function IntelligentCampaignHub() {
     setActionLoading(true);
     try {
       const formData = new FormData();
-      if (selectedFile) {
-        formData.append('file', selectedFile);
-      }
-      if (uploadText.trim()) {
-        formData.append('pastedText', uploadText.trim());
-      }
+      if (selectedFile) formData.append('file', selectedFile);
+      if (uploadText.trim()) formData.append('pastedText', uploadText.trim());
 
       const res = await fetch('/api/campaigns/intelligent/templates', {
         method: 'POST',
@@ -268,7 +436,7 @@ export default function IntelligentCampaignHub() {
                 </span>
               </h1>
               <p className="text-sm text-slate-400 mt-0.5">
-                MineTech Resources — Automated company identification, prewritten template classification & bulk campaign matching
+                MineTech Resources — Multi-contact company targeting, prewritten template classification & bulk campaign matching
               </p>
             </div>
           </div>
@@ -310,18 +478,16 @@ export default function IntelligentCampaignHub() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive
                   ? 'bg-amber-500/10 border border-amber-500/30 text-amber-400'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
+                }`}
             >
               <Icon className="w-4 h-4" />
               {tab.label}
               {tab.badge !== undefined && (
-                <span className={`text-xs px-2 py-0.2 rounded-full ${
-                  isActive ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'
-                }`}>
+                <span className={`text-xs px-2 py-0.2 rounded-full ${isActive ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'
+                  }`}>
                   {tab.badge}
                 </span>
               )}
@@ -492,6 +658,7 @@ export default function IntelligentCampaignHub() {
                 <thead className="bg-slate-900 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
                   <tr>
                     <th className="py-3 px-4">Company & Recipient</th>
+                    <th className="py-3 px-4">Target Contact(s)</th>
                     <th className="py-3 px-4">Role</th>
                     <th className="py-3 px-4">Product Category</th>
                     <th className="py-3 px-4">Assigned Template</th>
@@ -502,69 +669,97 @@ export default function IntelligentCampaignHub() {
                 <tbody className="divide-y divide-slate-800/60">
                   {filteredMatches.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-500">
+                      <td colSpan={7} className="py-8 text-center text-slate-500">
                         No matches match the selected criteria.
                       </td>
                     </tr>
                   ) : (
-                    filteredMatches.map((m, idx) => (
-                      <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                        <td className="py-3 px-4">
-                          <div className="font-semibold text-slate-200">{m.company_name || 'Unknown Company'}</div>
-                          <div className="text-slate-400 font-mono text-[11px]">{m.email}</div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${
-                            m.recipient_type?.includes('buyer')
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                              : (m.recipient_type?.includes('supplier')
+                    filteredMatches.map((m, idx) => {
+                      const totalContacts = m.company_contacts?.length || 1;
+                      const selectedCount = m.selected_emails?.length || 1;
+                      return (
+                        <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
+                          <td className="py-3 px-4">
+                            <div className="font-semibold text-slate-200">{m.company_name || 'Unknown Company'}</div>
+                            <div className="text-slate-400 font-mono text-[11px]">{m.email}</div>
+                          </td>
+
+                          {/* Multi-Contact Selector Indicator */}
+                          <td className="py-3 px-4">
+                            <button
+                              type="button"
+                              onClick={() => setInspectLead(m)}
+                              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-[11px] font-medium text-slate-200 transition-colors"
+                            >
+                              <Users className="w-3.5 h-3.5 text-amber-400" />
+                              <span>
+                                {totalContacts > 1
+                                  ? `${totalContacts} Contacts (${selectedCount} selected)`
+                                  : '1 Contact'}
+                              </span>
+                            </button>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              {m.targeting_mode === 'all_contacts'
+                                ? 'Targeting: All'
+                                : (totalContacts > 1 && selectedCount === 1 ? 'Targeting: Primary' : `Sending to ${selectedCount}`)}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase ${m.recipient_type?.includes('buyer')
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : (m.recipient_type?.includes('supplier')
                                   ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
                                   : 'bg-slate-800 text-slate-400')
-                          }`}>
-                            {m.recipient_type || 'Uncertain'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-slate-300 font-medium">
-                          {m.product_category}
-                        </td>
-                        <td className="py-3 px-4">
-                          {m.matched_template ? (
-                            <div>
-                              <div className="font-medium text-slate-200">{m.template_name}</div>
-                              <div className="text-[10px] text-slate-500 truncate max-w-xs">{m.subject}</div>
+                              }`}>
+                              {m.recipient_type || 'Uncertain'}
+                            </span>
+                          </td>
+
+                          <td className="py-3 px-4 text-slate-300 font-medium">
+                            {m.product_category}
+                          </td>
+
+                          <td className="py-3 px-4">
+                            {m.matched_template ? (
+                              <div>
+                                <div className="font-medium text-slate-200">{m.template_name}</div>
+                                <div className="text-[10px] text-slate-500 truncate max-w-xs">{m.subject}</div>
+                              </div>
+                            ) : (
+                              <span className="text-rose-400 flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5" />
+                                {m.unmatched_reason || 'No suitable template'}
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-4 max-w-xs">
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${m.match_confidence === 'high' ? 'bg-emerald-900/40 text-emerald-300' :
+                                  m.match_confidence === 'medium' ? 'bg-amber-900/40 text-amber-300' :
+                                    'bg-rose-900/40 text-rose-300'
+                                }`}>
+                                {m.match_confidence}
+                              </span>
                             </div>
-                          ) : (
-                            <span className="text-rose-400 flex items-center gap-1">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                              {m.unmatched_reason || 'No suitable template'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 max-w-xs">
-                          <div className="flex items-center gap-1.5 mb-1">
-                            <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold uppercase ${
-                              m.match_confidence === 'high' ? 'bg-emerald-900/40 text-emerald-300' :
-                              m.match_confidence === 'medium' ? 'bg-amber-900/40 text-amber-300' :
-                              'bg-rose-900/40 text-rose-300'
-                            }`}>
-                              {m.match_confidence}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{m.reason}</p>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setInspectLead(m)}
-                            className="text-slate-400 hover:text-white text-xs h-7 px-2"
-                          >
-                            <Eye className="w-3.5 h-3.5 mr-1" />
-                            Inspect
-                          </Button>
-                        </td>
-                      </tr>
-                    ))
+                            <p className="text-[11px] text-slate-400 line-clamp-2 leading-relaxed">{m.reason}</p>
+                          </td>
+
+                          <td className="py-3 px-4 text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setInspectLead(m)}
+                              className="text-slate-400 hover:text-white text-xs h-7 px-2"
+                            >
+                              <Eye className="w-3.5 h-3.5 mr-1" />
+                              Inspect & Select
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -595,11 +790,10 @@ export default function IntelligentCampaignHub() {
                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-amber-400 border border-slate-700">
                       {tpl.product_category || tpl.category || 'Industrial Minerals'}
                     </span>
-                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${
-                      tpl.recipient_type === 'potential_supplier'
+                    <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded ${tpl.recipient_type === 'potential_supplier'
                         ? 'bg-amber-500/10 text-amber-400'
                         : 'bg-emerald-500/10 text-emerald-400'
-                    }`}>
+                      }`}>
                       {tpl.recipient_type === 'potential_supplier' ? 'Supplier' : 'Buyer'}
                     </span>
                   </div>
@@ -734,6 +928,170 @@ export default function IntelligentCampaignHub() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: INSPECT LEAD & MULTI-CONTACT TARGETING SELECTION */}
+      {inspectLead && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  <Building className="w-5 h-5 text-amber-400" />
+                  {inspectLead.company_name}
+                </h3>
+                <p className="text-xs text-slate-400 font-mono mt-0.5">{inspectLead.email}</p>
+              </div>
+              <button onClick={() => setInspectLead(null)} className="text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Template Assignment Section */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                  Assigned Email Template
+                </label>
+                <span className="text-[11px] text-amber-400 font-medium">
+                  {inspectLead.product_category}
+                </span>
+              </div>
+
+              <select
+                value={inspectLead.template_id || ''}
+                onChange={(e) => handleReassignTemplate(inspectLead.lead_id, e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 text-xs rounded-lg px-3 py-2 text-slate-200"
+              >
+                <option value="">Select a template...</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name} ({t.product_category || t.category || 'General'}) — [{t.recipient_type?.includes('supplier') ? 'Supplier' : 'Buyer'}]
+                  </option>
+                ))}
+              </select>
+
+              <div className="text-xs text-slate-400 font-mono">
+                Subject: <span className="text-slate-200">{inspectLead.subject || 'No subject'}</span>
+              </div>
+            </div>
+
+            {/* Multiple Contacts & Email Targeting Selection */}
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800/80 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/60 pb-3">
+                <div>
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                    <Users className="w-4 h-4 text-blue-400" />
+                    Target Contacts ({inspectLead.company_contacts?.length || 1} available)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Choose which specific contacts/emails will receive this campaign.
+                  </p>
+                </div>
+
+                {/* Targeting Mode Buttons */}
+                <div className="flex items-center gap-1.5 bg-slate-900 p-1 rounded-lg border border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => handleSetTargetingMode(inspectLead.lead_id, 'primary_only')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all ${inspectLead.targeting_mode === 'primary_only' || (!inspectLead.targeting_mode && inspectLead.selected_emails?.length === 1)
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                  >
+                    Primary Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetTargetingMode(inspectLead.lead_id, 'all_contacts')}
+                    className={`px-2.5 py-1 rounded text-[11px] font-medium transition-all ${inspectLead.targeting_mode === 'all_contacts'
+                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                  >
+                    All Contacts
+                  </button>
+                </div>
+              </div>
+
+              {/* List of Contacts */}
+              <div className="space-y-2 pt-1">
+                {(inspectLead.company_contacts || [{
+                  id: inspectLead.lead_id,
+                  name: 'Primary Contact',
+                  email: inspectLead.email,
+                  job_title: 'Commercial Contact',
+                  isPrimary: true,
+                  selected: true
+                }]).map((c, cIdx) => (
+                  <div
+                    key={cIdx}
+                    onClick={() => handleToggleContactEmail(inspectLead.lead_id, c.email)}
+                    className={`p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between ${c.selected
+                        ? 'bg-slate-900/90 border-emerald-500/40 text-slate-100 shadow-sm'
+                        : 'bg-slate-900/40 border-slate-800/80 text-slate-500 opacity-60'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(c.selected)}
+                        onChange={() => { }} // handled by parent onClick
+                        className="rounded bg-slate-950 border-slate-700 text-emerald-500 focus:ring-0 cursor-pointer"
+                      />
+                      <div>
+                        <div className="font-semibold text-xs text-white flex items-center gap-2">
+                          {c.name}
+                          {c.isPrimary && (
+                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-bold uppercase">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] font-mono text-slate-400">{c.email}</div>
+                        {c.job_title && (
+                          <div className="text-[10px] text-slate-500">{c.job_title}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      {c.selected ? (
+                        <span className="text-[10px] font-semibold text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                          <Check className="w-3 h-3" /> Will Receive
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 bg-slate-800 px-2 py-0.5 rounded">
+                          Excluded
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-[11px] text-slate-400 pt-1 flex items-center justify-between">
+                <span>
+                  Sending to <strong className="text-white">{inspectLead.selected_emails?.length || 1}</strong> of{' '}
+                  <strong className="text-white">{inspectLead.company_contacts?.length || 1}</strong> company emails.
+                </span>
+                <span className="text-emerald-400 text-[10px] font-medium">Deduplicated at send-time</span>
+              </div>
+            </div>
+
+            {/* Why It Matched Section */}
+            <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/60">
+              <div className="text-[11px] font-semibold text-slate-400 uppercase mb-1">Matching Rationale</div>
+              <p className="text-xs text-slate-300 leading-relaxed">{inspectLead.reason}</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+              <Button onClick={() => setInspectLead(null)} className="bg-amber-600 hover:bg-amber-500 text-white text-xs">
+                Done & Apply Changes
+              </Button>
+            </div>
           </div>
         </div>
       )}
