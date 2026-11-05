@@ -28,6 +28,15 @@ import {
   Monitor,
   Copy,
   Info,
+  Trash2,
+  Brain,
+  Compass,
+  TrendingUp,
+  MessageSquare,
+  Check,
+  Lightbulb,
+  Layers,
+  Wand2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -173,7 +182,8 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
   const [includeOneClickOptOut, setIncludeOneClickOptOut] = useState(initialCompliance.includeOneClickOptOut !== false);
   const [dncSuppressionActive, setDncSuppressionActive] = useState(initialCompliance.dncSuppressionActive !== false);
 
-  // 8. Personalization & Claude AI
+  // 8. Personalization & Claude AI Campaign Brain
+  const [selectedModel, setSelectedModel] = useState('claude-sonnet-5-5');
   const [personalizationMode, setPersonalizationMode] = useState(
     campaign?.campaignType === 'ai_personalized' ? 'ai_personalized' : 'claude'
   );
@@ -186,6 +196,23 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
   const [aiTone, setAiTone] = useState('Direct');
   const [aiGoal, setAiGoal] = useState('Book a 15-min Discovery Call');
   const [aiLoading, setAiLoading] = useState(false);
+
+  // Campaign Brain Intelligence Hub States
+  const [brainTool, setBrainTool] = useState('strategy'); // 'strategy' | 'audience' | 'messaging' | 'critique' | 'sequence' | 'performance' | 'chat'
+  const [brainLoading, setBrainLoading] = useState(false);
+  const [strategyResult, setStrategyResult] = useState(null);
+  const [audienceResult, setAudienceResult] = useState(null);
+  const [messagingResult, setMessagingResult] = useState(null);
+  const [critiqueResult, setCritiqueResult] = useState(null);
+  const [sequenceResult, setSequenceResult] = useState(null);
+  const [performanceResult, setPerformanceResult] = useState(null);
+  const [brainChatMessages, setBrainChatMessages] = useState([]);
+  const [brainChatInput, setBrainChatInput] = useState('');
+  const [fetchedLeads, setFetchedLeads] = useState([]);
+
+  // Campaign Deletion Modal State for Edit/Details view
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingCampaign, setDeletingCampaign] = useState(false);
 
   // 9. Interactive Preview & Test Send
   const [previewDevice, setPreviewDevice] = useState('desktop'); // 'desktop' | 'mobile'
@@ -204,8 +231,10 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
     fetch('/api/leads?limit=100')
       .then((r) => r.json())
       .then((j) => {
+        const leadList = j.leads || [];
+        setFetchedLeads(leadList);
         const tags = new Set();
-        (j.leads || []).forEach((l) => (l.tags || []).forEach((t) => tags.add(t)));
+        leadList.forEach((l) => (l.tags || []).forEach((t) => tags.add(t)));
         setAvailableTags(Array.from(tags));
       })
       .catch(() => {});
@@ -261,6 +290,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
           goal: aiGoal,
           templateType: selectedTemplateType,
           leadContext: sampleLead,
+          model: selectedModel,
         }),
       });
 
@@ -268,7 +298,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
         const json = await res.json();
         if (json.data?.subject) setSubject(json.data.subject);
         if (json.data?.body) setBody(json.data.body);
-        toast.success('Generated email draft with Claude 3.5 Sonnet');
+        toast.success(`Generated email draft with ${selectedModel === 'claude-opus-5-5' ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5'}`);
         setActiveTab('content');
       } else {
         const err = await res.json();
@@ -278,6 +308,139 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
       toast.error('Network error during AI generation: ' + e.message);
     } finally {
       setAiLoading(false);
+    }
+  };
+
+  // Campaign Brain Intelligence Runner
+  const runBrainTool = async (action, customParams = {}) => {
+    setBrainLoading(true);
+    try {
+      const payload = {
+        action,
+        model: selectedModel,
+        name,
+        objective: aiGoal || description || 'Industrial mineral outreach',
+        tone: aiTone,
+        angle: aiPrompt,
+        campaignContext: {
+          id: campaignId,
+          name,
+          objective: aiGoal,
+          description,
+          subject,
+          body,
+          stats: campaign?.stats || {},
+          filterCriteria,
+        },
+        leadsContext: fetchedLeads.slice(0, 50),
+        filterCriteria,
+        currentSubject: subject,
+        currentBody: body,
+        stats: campaign?.stats || {},
+        ...customParams,
+      };
+
+      const res = await fetch('/api/email/campaigns/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        if (action === 'develop_strategy') {
+          setStrategyResult(json.data);
+          toast.success(`Campaign strategy formulated by ${json.actualModel || selectedModel}`);
+        } else if (action === 'analyze_audience') {
+          setAudienceResult(json.data);
+          toast.success(`Audience analysis complete with Buyer/Seller breakdown`);
+        } else if (action === 'generate_messaging') {
+          setMessagingResult(json.data);
+          toast.success(`Subject lines & email messaging generated`);
+        } else if (action === 'improve_messaging') {
+          setCritiqueResult(json.data);
+          toast.success(`Draft critique and improved copy ready`);
+        } else if (action === 'recommend_sequences') {
+          setSequenceResult(json.data);
+          toast.success(`Multi-step follow-up sequence generated`);
+        } else if (action === 'review_performance') {
+          setPerformanceResult(json.data);
+          toast.success(`Performance review complete`);
+        }
+      } else {
+        toast.error(json.error || 'Campaign intelligence request failed');
+      }
+    } catch (e) {
+      toast.error('Error running Campaign Brain: ' + e.message);
+    } finally {
+      setBrainLoading(false);
+    }
+  };
+
+  // Conversational Chat with Campaign Brain
+  const sendBrainChatMessage = async () => {
+    if (!brainChatInput.trim() || brainLoading) return;
+    const userMsg = { role: 'user', content: brainChatInput.trim() };
+    const updated = [...brainChatMessages, userMsg];
+    setBrainChatMessages(updated);
+    setBrainChatInput('');
+    setBrainLoading(true);
+
+    try {
+      const res = await fetch('/api/email/campaigns/intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'chat',
+          model: selectedModel,
+          messages: updated,
+          campaignContext: {
+            id: campaignId,
+            name,
+            objective: aiGoal,
+            subject,
+            body,
+            stats: campaign?.stats || {},
+          },
+          leadsContext: fetchedLeads.slice(0, 30),
+        }),
+      });
+
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setBrainChatMessages([...updated, json.data]);
+      } else {
+        toast.error(json.error || 'Failed to get answer from Campaign Brain');
+      }
+    } catch (e) {
+      toast.error('Chat error: ' + e.message);
+    } finally {
+      setBrainLoading(false);
+    }
+  };
+
+  // Delete Campaign directly from Wizard (Edit / Details Mode)
+  const handleDeleteFromWizard = async () => {
+    if (!campaignId) return;
+    setDeletingCampaign(true);
+    try {
+      const res = await fetch(`/api/email/campaigns/${campaignId}`, {
+        method: 'DELETE',
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        toast.success(json.message || 'Campaign deleted from database');
+        setShowDeleteConfirm(false);
+        onClose?.();
+        onUpdated?.();
+        onCreated?.();
+      } else {
+        toast.error(json.message || 'Failed to delete campaign');
+      }
+    } catch (e) {
+      toast.error('Error deleting campaign: ' + e.message);
+    } finally {
+      setDeletingCampaign(false);
     }
   };
 
@@ -450,7 +613,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
   const tabs = [
     { id: 'recipients', label: '1. Audience', icon: Users },
     { id: 'sender', label: '2. Sender', icon: Mail },
-    { id: 'personalization', label: '3. Claude AI & Templates', icon: Sparkles },
+    { id: 'personalization', label: '3. Campaign Brain (Claude)', icon: Brain },
     { id: 'content', label: '4. Subject & Body', icon: FileText },
     { id: 'preview', label: '5. Preview & Test', icon: Eye },
     { id: 'settings', label: '6. Settings', icon: Sliders },
@@ -750,7 +913,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                       <span>Standard / AI-Assisted Blast</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Use Claude 3.5 to craft high-converting copy, then interpolate variables per lead at dispatch.
+                      Use Claude Sonnet 5.5 / Opus 5.5 to craft high-converting copy, then interpolate variables per lead at dispatch.
                     </p>
                   </button>
 
@@ -809,15 +972,533 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                 </div>
               </div>
 
-              {/* Claude AI Prompt Configuration */}
+              {/* Claude Campaign Brain Model Configuration */}
+              <div className="p-4 rounded-xl bg-card border border-border shadow-subtle space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                      <Brain className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-foreground">Campaign Claude AI Model</h4>
+                      <p className="text-[11px] text-muted-foreground">Select the official Anthropic intelligence engine for this campaign</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/40 border border-border">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModel('claude-sonnet-5-5')}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition ${
+                        selectedModel === 'claude-sonnet-5-5'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Sonnet 5.5 (Default)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModel('claude-opus-5-5')}
+                      className={`px-2.5 py-1 rounded text-xs font-medium transition ${
+                        selectedModel === 'claude-opus-5-5'
+                          ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Opus 5.5 (Advanced Reasoning)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-lg bg-muted/20 border border-border text-[11px] text-muted-foreground flex items-center justify-between">
+                  <span>
+                    Active Engine:{' '}
+                    <strong className="text-foreground">
+                      {selectedModel === 'claude-opus-5-5' ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5'}
+                    </strong>{' '}
+                    — {selectedModel === 'claude-opus-5-5' ? 'Deep reasoning for complex multi-channel strategy and sequence planning' : 'High-speed intelligence for audience analysis, copy creation & segmentation'}
+                  </span>
+                  <Badge variant="outline" className="border-primary/30 text-primary font-mono text-[9px]">
+                    {selectedModel}
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Claude Campaign Brain Intelligence Hub */}
+              <div className="p-4 rounded-xl bg-card border border-border shadow-subtle space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-foreground">Claude Campaign Brain Intelligence</h4>
+                      <p className="text-[11px] text-muted-foreground">Strategic audience analysis, Buyer/Seller segmentation, messaging critique & sequencing</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {[
+                      { id: 'strategy', label: 'Strategy', icon: Compass },
+                      { id: 'audience', label: 'Audience & Segments', icon: Users },
+                      { id: 'messaging', label: 'Messaging & Subjects', icon: Wand2 },
+                      { id: 'critique', label: 'Critique Draft', icon: ShieldCheck },
+                      { id: 'sequence', label: 'Sequences', icon: Layers },
+                      ...(campaign?.stats?.sent > 0 ? [{ id: 'performance', label: 'Performance', icon: TrendingUp }] : []),
+                      { id: 'chat', label: 'Brain Chat', icon: MessageSquare },
+                    ].map((tool) => {
+                      const Icon = tool.icon;
+                      const active = brainTool === tool.id;
+                      return (
+                        <button
+                          key={tool.id}
+                          type="button"
+                          onClick={() => setBrainTool(tool.id)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${
+                            active
+                              ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                              : 'bg-muted/30 text-muted-foreground hover:text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <Icon className="w-3 h-3" />
+                          <span>{tool.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Tool 1: Strategy Formulation */}
+                {brainTool === 'strategy' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Formulate an end-to-end commercial outbound strategy based on your audience and MineTech mineral specs.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading}
+                        onClick={() => runBrainTool('develop_strategy')}
+                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        {brainLoading ? 'Formulating...' : 'Develop Strategy with Claude'}
+                      </Button>
+                    </div>
+
+                    {strategyResult && (
+                      <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-3 animate-in fade-in">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-primary font-mono tracking-wider">Strategic Summary</span>
+                          <p className="text-xs font-medium text-foreground mt-0.5 leading-relaxed">{strategyResult.strategySummary}</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div className="p-2.5 rounded bg-card border border-border">
+                            <span className="text-[10px] font-bold text-muted-foreground block mb-1">Recommended Angle</span>
+                            <p className="text-foreground">{strategyResult.recommendedAngle}</p>
+                          </div>
+                          <div className="p-2.5 rounded bg-card border border-border">
+                            <span className="text-[10px] font-bold text-muted-foreground block mb-1">Buyer / Seller Guidance</span>
+                            <p className="text-foreground">{strategyResult.buyerSellerRecommendation}</p>
+                          </div>
+                        </div>
+
+                        {strategyResult.messagingPillars?.length > 0 && (
+                          <div>
+                            <span className="text-[10px] font-bold text-muted-foreground block mb-1">Messaging Pillars</span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {strategyResult.messagingPillars.map((p, i) => (
+                                <Badge key={i} variant="outline" className="text-[10px] bg-card border-border">
+                                  ✓ {p}
+                                </Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-end pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              if (strategyResult.recommendedAngle) {
+                                setAiPrompt(`${strategyResult.recommendedAngle}. Emphasize: ${strategyResult.messagingPillars?.join(', ')}.`);
+                                toast.success('Strategy applied to Campaign Instructions');
+                              }
+                            }}
+                            className="h-7 text-xs text-primary border-primary/30 hover:bg-primary/10 gap-1"
+                          >
+                            <Check className="w-3 h-3" /> Apply Strategy to Campaign Prompt
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 2: Audience Analysis (Buyer/Seller Breakdown) */}
+                {brainTool === 'audience' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Inspect selected leads, Buyer/Seller distribution, and identify targeting risks.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading}
+                        onClick={() => runBrainTool('analyze_audience')}
+                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                      >
+                        <Users className="w-3.5 h-3.5" />
+                        {brainLoading ? 'Analyzing...' : 'Analyze Audience with Claude'}
+                      </Button>
+                    </div>
+
+                    {audienceResult && (
+                      <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-3 animate-in fade-in">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                          <div className="p-2 rounded bg-card border border-border">
+                            <span className="text-muted-foreground text-[10px] block">Total Sample</span>
+                            <span className="text-base font-bold text-foreground">{audienceResult.total || 0}</span>
+                          </div>
+                          <div className="p-2 rounded bg-card border border-border">
+                            <span className="text-primary text-[10px] block font-semibold">Buyers</span>
+                            <span className="text-base font-bold text-primary">{audienceResult.buyerCount || 0}</span>
+                          </div>
+                          <div className="p-2 rounded bg-card border border-border">
+                            <span className="text-warning text-[10px] block font-semibold">Sellers</span>
+                            <span className="text-base font-bold text-warning">{audienceResult.sellerCount || 0}</span>
+                          </div>
+                          <div className="p-2 rounded bg-card border border-border">
+                            <span className="text-muted-foreground text-[10px] block">Unclassified</span>
+                            <span className="text-base font-bold text-muted-foreground">{audienceResult.unclassifiedCount || 0}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs text-foreground leading-relaxed">{audienceResult.executiveSummary}</p>
+                        </div>
+
+                        {audienceResult.potentialRisks?.length > 0 && (
+                          <div className="p-2 rounded bg-warning/10 border border-warning/20 text-xs text-warning space-y-0.5">
+                            <span className="font-semibold block text-[11px]">⚠️ Segmentation Advisory:</span>
+                            {audienceResult.potentialRisks.map((r, i) => (
+                              <p key={i} className="text-[11px]">{r}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 3: Messaging & Subject Lines */}
+                {brainTool === 'messaging' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Generate 3 high-converting subject lines and a tailored cold email body with the official MineTech signature.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading}
+                        onClick={() => runBrainTool('generate_messaging')}
+                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                      >
+                        <Wand2 className="w-3.5 h-3.5" />
+                        {brainLoading ? 'Generating...' : 'Generate with Claude'}
+                      </Button>
+                    </div>
+
+                    {messagingResult && (
+                      <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-3 animate-in fade-in">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-primary font-mono tracking-wider">Subject Line Options</span>
+                          <div className="space-y-1.5 mt-1.5">
+                            {(messagingResult.subjectOptions || []).map((s, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-2 rounded bg-card border border-border text-xs gap-2">
+                                <div className="min-w-0 flex-1">
+                                  <span className="font-medium text-foreground block truncate">&ldquo;{s.subject}&rdquo;</span>
+                                  <span className="text-[10px] text-muted-foreground">{s.rationale} ({s.openRateAppeal} Appeal)</span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSubject(s.subject);
+                                    toast.success(`Applied subject: "${s.subject}"`);
+                                  }}
+                                  className="h-6 text-[11px] text-primary hover:bg-primary/10 shrink-0"
+                                >
+                                  Use Subject
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {messagingResult.emailBodyText && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground font-mono">Generated Body Draft</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setBody(messagingResult.emailBodyText);
+                                  toast.success('Applied generated copy to Email Body');
+                                }}
+                                className="h-6 text-[11px] text-primary border-primary/30 hover:bg-primary/10"
+                              >
+                                Use Email Body
+                              </Button>
+                            </div>
+                            <div className="p-2.5 rounded bg-card border border-border text-xs text-foreground whitespace-pre-wrap max-h-40 overflow-y-auto font-mono text-[11px]">
+                              {messagingResult.emailBodyText}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 4: Critique & Upgrade Draft */}
+                {brainTool === 'critique' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Have Claude evaluate your current Subject and Body for spam triggers, clarity, and conversion friction.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading || (!subject && !body)}
+                        onClick={() => runBrainTool('improve_messaging')}
+                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" />
+                        {brainLoading ? 'Critiquing...' : 'Critique & Upgrade Draft'}
+                      </Button>
+                    </div>
+
+                    {critiqueResult && (
+                      <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-foreground">
+                            Copy Score:{' '}
+                            <strong className="text-primary">{critiqueResult.critique?.overallScore || 85} / 100</strong>
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Spam Risk: <strong className="text-foreground">{critiqueResult.critique?.spamRisk || 'Low'}</strong>
+                          </span>
+                        </div>
+
+                        {critiqueResult.critique?.weaknesses?.length > 0 && (
+                          <div className="p-2 rounded bg-danger/10 border border-danger/20 text-xs text-danger space-y-0.5">
+                            <span className="font-semibold block text-[11px]">Areas for Improvement:</span>
+                            {critiqueResult.critique.weaknesses.map((w, i) => (
+                              <p key={i} className="text-[11px]">✗ {w}</p>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="p-2.5 rounded bg-card border border-border text-xs space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-primary uppercase font-mono">Improved Subject & Body</span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                if (critiqueResult.improvedSubject) setSubject(critiqueResult.improvedSubject);
+                                if (critiqueResult.improvedBodyText) setBody(critiqueResult.improvedBodyText);
+                                toast.success('Applied improved Subject and Email Body');
+                              }}
+                              className="h-6 text-[11px] text-primary border-primary/30 hover:bg-primary/10"
+                            >
+                              Apply Improvements
+                            </Button>
+                          </div>
+                          <p className="font-semibold text-foreground">&ldquo;{critiqueResult.improvedSubject}&rdquo;</p>
+                          <p className="text-muted-foreground whitespace-pre-wrap text-[11px] font-mono">{critiqueResult.improvedBodyText}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 5: Recommend Follow-Up Sequence */}
+                {brainTool === 'sequence' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Generate a 3-touch consultative follow-up cadence with optimal day delays.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading}
+                        onClick={() => runBrainTool('recommend_sequences')}
+                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        {brainLoading ? 'Generating...' : 'Recommend Sequence with Claude'}
+                      </Button>
+                    </div>
+
+                    {sequenceResult && (
+                      <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-2.5 animate-in fade-in">
+                        <p className="text-xs font-semibold text-foreground">{sequenceResult.sequenceSummary}</p>
+                        <div className="space-y-2">
+                          {(sequenceResult.steps || []).map((st, i) => (
+                            <div key={i} className="p-2.5 rounded bg-card border border-border text-xs space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-primary">
+                                  Step {st.step} (Day {st.dayOffset}): {st.title}
+                                </span>
+                                <Badge variant="outline" className="text-[10px]">
+                                  {st.angle}
+                                </Badge>
+                              </div>
+                              <p className="font-medium text-foreground">&ldquo;{st.subject}&rdquo;</p>
+                              <p className="text-[11px] text-muted-foreground whitespace-pre-wrap">{st.bodyText}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 6: Performance Review (if stats exist) */}
+                {brainTool === 'performance' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Review delivery rates, opens, and replies against industrial B2B benchmarks.
+                      </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading}
+                        onClick={() => runBrainTool('review_performance')}
+                        className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5" />
+                        {brainLoading ? 'Analyzing...' : 'Audit Performance with Claude'}
+                      </Button>
+                    </div>
+
+                    {performanceResult && (
+                      <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-3 animate-in fade-in">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-semibold text-foreground">
+                            Status:{' '}
+                            <strong className="text-primary">{performanceResult.performanceVerdict}</strong>
+                          </span>
+                          <span className="text-xs text-muted-foreground">{performanceResult.summary}</span>
+                        </div>
+
+                        {performanceResult.actionableOptimizations?.length > 0 && (
+                          <div className="p-2.5 rounded bg-card border border-border space-y-1 text-xs">
+                            <span className="font-bold text-foreground block text-[11px]">Recommended Optimizations:</span>
+                            {performanceResult.actionableOptimizations.map((opt, i) => (
+                              <p key={i} className="text-muted-foreground text-[11px]">✓ {opt}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tool 7: Interactive Brain Chat */}
+                {brainTool === 'chat' && (
+                  <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">
+                      Chat collaboratively with Claude about this campaign. Claude remembers your instructions and campaign context.
+                    </p>
+
+                    <div className="h-56 overflow-y-auto rounded-lg bg-muted/20 border border-border p-3 space-y-2.5">
+                      {brainChatMessages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-center text-xs text-muted-foreground space-y-1">
+                          <MessageSquare className="w-6 h-6 text-primary/40" />
+                          <p>Ask Claude anything about this campaign strategy, audience, or copy.</p>
+                          <p className="text-[10px]">e.g. &ldquo;Make this email more technical for ceramic engineers&rdquo; or &ldquo;How should we segment buyers vs sellers?&rdquo;</p>
+                        </div>
+                      ) : (
+                        brainChatMessages.map((m, idx) => (
+                          <div
+                            key={idx}
+                            className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
+                          >
+                            <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">
+                              {m.role === 'user' ? 'You' : `Claude (${m.model || selectedModel})`}
+                            </span>
+                            <div
+                              className={`p-2.5 rounded-xl max-w-[85%] text-xs leading-relaxed whitespace-pre-wrap ${
+                                m.role === 'user'
+                                  ? 'bg-primary text-primary-foreground font-medium'
+                                  : 'bg-card border border-border text-foreground shadow-subtle'
+                              }`}
+                            >
+                              {m.content}
+                            </div>
+                          </div>
+                        ))
+                      )}
+                      {brainLoading && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
+                          <Sparkles className="w-3.5 h-3.5 text-primary animate-spin" />
+                          <span>Claude is thinking...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={brainChatInput}
+                        onChange={(e) => setBrainChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            sendBrainChatMessage();
+                          }
+                        }}
+                        placeholder="Type instructions or questions for Claude..."
+                        className="h-8 text-xs bg-card border-border"
+                        disabled={brainLoading}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={brainLoading || !brainChatInput.trim()}
+                        onClick={sendBrainChatMessage}
+                        className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1 px-3"
+                      >
+                        <Send className="w-3 h-3" /> Send
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Standard Prompt & Email Generation Section */}
               <div className="p-4 rounded-xl bg-muted/20 border border-border space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-primary flex items-center gap-1.5">
                     <Bot className="w-4 h-4 text-primary" />
-                    AI Value Proposition & Campaign Instructions
+                    Custom Campaign Instructions & Objectives
                   </span>
                   <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary text-[10px] font-mono">
-                    Claude 3.5 Sonnet
+                    {selectedModel === 'claude-opus-5-5' ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5'}
                   </Badge>
                 </div>
 
@@ -826,8 +1507,8 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                     rows={3}
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
-                    placeholder="Provide specific product specs, value proposition, or European warehousing highlights..."
-                    className="bg-muted/20 border-border focus:border-primary text-xs"
+                    placeholder="Provide specific mineral specs, value proposition, or European warehousing highlights..."
+                    className="bg-card border-border focus:border-primary text-xs"
                   />
                 </div>
 
@@ -860,10 +1541,10 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-border">
                   <div className="text-[11px] text-muted-foreground flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-                    <span>Anti-Hallucination active: verified MineTech mineral specs only.</span>
+                    <span>Mandatory official MineTech signature automatically appended.</span>
                   </div>
                   <Button
                     type="button"
@@ -873,9 +1554,17 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                     className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 gap-2"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>{aiLoading ? 'Generating with Claude...' : 'Generate Email Copy'}</span>
+                    <span>{aiLoading ? 'Generating with Claude...' : `Generate Email with ${selectedModel === 'claude-opus-5-5' ? 'Opus 5.5' : 'Sonnet 5.5'}`}</span>
                   </Button>
                 </div>
+              </div>
+
+              {/* Strict User Control Notice */}
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                <span>
+                  <strong className="text-foreground">User Approval Control:</strong> Claude acts as your Campaign Brain to recommend strategy and draft messaging. Emails are never dispatched automatically without your explicit review and launch.
+                </span>
               </div>
             </div>
           )}
@@ -1333,6 +2022,22 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Delete Campaign in Edit/Details Mode */}
+            {isEditing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="border-danger/30 text-danger hover:bg-danger/10 hover:border-danger/60 h-8 px-3 text-xs gap-1.5"
+                title="Delete Campaign"
+                disabled={submitting}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Campaign
+              </Button>
+            )}
+
             {/* Always allow Save as Draft */}
             <Button
               type="button"
@@ -1359,6 +2064,63 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
           </div>
         </div>
       </Card>
+
+      {/* Delete Campaign Confirmation Modal in Details/Edit Mode */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-card border border-border rounded-xl p-5 max-w-md w-full shadow-lg space-y-4 animate-in zoom-in-95">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-danger/10 border border-danger/20 flex items-center justify-center text-danger shrink-0 mt-0.5">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1 flex-1">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Confirm Deletion of &ldquo;{name || 'Campaign'}&rdquo;
+                </h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Are you sure you want to permanently delete this campaign? This will remove the campaign record and its queued/sent recipient dispatch entries from Supabase.
+                </p>
+                {(campaign?.stats?.sent || 0) > 0 ? (
+                  <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger mt-2 space-y-1">
+                    <p className="font-semibold">⚠️ Previously Dispatched Campaign ({campaign.stats.sent} sent):</p>
+                    <p className="text-[11px] leading-relaxed">
+                      This campaign has already sent emails. Deleting it will permanently erase the campaign and its recipient logs. All CRM leads and contact records will remain 100% intact.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground italic pt-1">
+                    Associated leads and CRM records will remain completely intact.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(false)}
+                className="h-8 text-xs"
+                disabled={deletingCampaign}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={deletingCampaign}
+                onClick={handleDeleteFromWizard}
+                className="bg-danger hover:bg-danger/90 text-danger-foreground h-8 text-xs gap-1.5 font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deletingCampaign ? 'Deleting...' : 'Delete Campaign'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </ModalFrame>
   );
 }

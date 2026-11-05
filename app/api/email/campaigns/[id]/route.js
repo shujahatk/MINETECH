@@ -86,7 +86,7 @@ export async function DELETE(request, { params }) {
     });
   } catch (err) {
     console.error('[Campaign DELETE Error]:', err);
-    const statusCode = err.statusCode || (err.code === 'CAMPAIGN_ALREADY_SENT' ? 400 : 500);
+    const statusCode = err.statusCode || (err.message === 'Campaign not found' ? 404 : 500);
     return NextResponse.json(
       {
         success: false,

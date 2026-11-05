@@ -19,6 +19,8 @@ dist/
 
 # Database & local data stores (strictly confidential)
 data/
+.data/
+screenshots/
 *.db
 *.sqlite
 data/*.json

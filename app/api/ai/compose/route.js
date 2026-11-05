@@ -60,7 +60,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { leadId, prompt, tone = 'Professional', goal = 'Intro Call', templateType } = body;
+    const { leadId, prompt, tone = 'Professional', goal = 'Intro Call', templateType, model: requestedModel = 'claude-sonnet-5-5' } = body;
 
     if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       return NextResponse.json(
@@ -170,14 +170,15 @@ MineTech Outbound
     if (anthropicComposeKey && anthropicComposeKey.startsWith('sk-ant')) {
       try {
         const candidateModels = [
+          requestedModel,
           process.env.ANTHROPIC_MODEL,
           process.env.CLAUDE_MODEL,
-          'claude-haiku-4-5-20251001',
+          'claude-sonnet-5-5',
+          'claude-opus-5-5',
           'claude-sonnet-4-6',
-          'claude-3-5-sonnet-20241022',
-          'claude-3-5-haiku-20241022',
         ].filter(Boolean);
 
+        let actualModelUsed = requestedModel;
         const callClaude = async (customPrompt) => {
           let lastErr = null;
           for (const model of candidateModels) {
@@ -202,6 +203,7 @@ MineTech Outbound
                 }),
               });
               if (res.ok) {
+                actualModelUsed = model;
                 return res.json();
               }
               lastErr = new Error(`Claude API HTTP ${res.status}`);
@@ -241,7 +243,7 @@ MineTech Outbound
         }
 
         if (generated) {
-          telemetry.model = 'claude-3-5-sonnet-20241022';
+          telemetry.model = actualModelUsed || requestedModel || 'claude-sonnet-5-5';
           telemetry.inputTokens = data.usage?.input_tokens || 200;
           telemetry.outputTokens = data.usage?.output_tokens || 150;
         }

@@ -137,6 +137,10 @@ export default function BlastList() {
     if (!campaignToDelete) return;
     const campId = campaignToDelete.id || campaignToDelete._id;
     setDeleting(true);
+
+    // Optimistically remove campaign immediately from state
+    setCampaigns((prev) => prev.filter((c) => (c.id || c._id) !== campId));
+
     try {
       const res = await fetch(`/api/email/campaigns/${campId}`, {
         method: 'DELETE',
@@ -145,12 +149,14 @@ export default function BlastList() {
       if (res.ok && json.success) {
         toast.success(json.message || 'Campaign deleted from database');
         setCampaignToDelete(null);
-        fetchCampaigns();
+        await fetchCampaigns();
       } else {
         toast.error(json.message || 'Failed to delete campaign');
+        await fetchCampaigns();
       }
     } catch (e) {
       toast.error('Error deleting campaign: ' + e.message);
+      await fetchCampaigns();
     } finally {
       setDeleting(false);
     }
@@ -614,23 +620,23 @@ export default function BlastList() {
               <div className="w-10 h-10 rounded-xl bg-danger/10 border border-danger/20 flex items-center justify-center text-danger shrink-0 mt-0.5">
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1 flex-1">
                 <h3 className="text-sm font-semibold text-foreground">
                   Confirm Deletion of &ldquo;{campaignToDelete.name}&rdquo;
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Are you sure you want to delete this campaign? This will permanently remove the campaign record and its queued recipient dispatch entries from Supabase.
+                  Are you sure you want to permanently delete this campaign? This will remove the campaign record and its queued/sent recipient dispatch entries from Supabase.
                 </p>
                 {(campaignToDelete.stats?.sent || 0) > 0 ? (
-                  <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger mt-2">
-                    <p className="font-semibold">⚠️ Protected Campaign:</p>
-                    <p>
-                      This campaign has already dispatched {campaignToDelete.stats.sent} emails. To preserve deliverability logs and audit history, already-sent campaigns cannot be deleted. You can Archive it instead.
+                  <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger mt-2 space-y-1">
+                    <p className="font-semibold">⚠️ Previously Dispatched Campaign ({campaignToDelete.stats.sent} sent):</p>
+                    <p className="text-[11px] leading-relaxed">
+                      This campaign has already sent emails. Deleting it will permanently remove the campaign and its recipient logs. All CRM leads and contact records will remain 100% intact.
                     </p>
                   </div>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground italic">
-                    Historical leads and CRM contacts will remain completely intact.
+                  <p className="text-[11px] text-muted-foreground italic pt-1">
+                    Associated leads and CRM records will remain completely intact.
                   </p>
                 )}
               </div>
@@ -642,33 +648,20 @@ export default function BlastList() {
                 size="sm"
                 onClick={() => setCampaignToDelete(null)}
                 className="h-8 text-xs"
+                disabled={deleting}
               >
                 Cancel
               </Button>
-              {(campaignToDelete.stats?.sent || 0) > 0 ? (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    const cId = campaignToDelete.id || campaignToDelete._id;
-                    setCampaignToDelete(null);
-                    handleCampaignAction(cId, 'archive');
-                  }}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 text-xs gap-1.5"
-                >
-                  <Archive className="w-3.5 h-3.5" /> Archive Campaign
-                </Button>
-              ) : (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={deleting}
-                  onClick={confirmDelete}
-                  className="bg-danger hover:bg-danger/90 text-danger-foreground h-8 text-xs gap-1.5"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {deleting ? 'Deleting...' : 'Delete Campaign'}
-                </Button>
-              )}
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleting}
+                onClick={confirmDelete}
+                className="bg-danger hover:bg-danger/90 text-danger-foreground h-8 text-xs gap-1.5 font-medium"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {deleting ? 'Deleting...' : 'Delete Campaign'}
+              </Button>
             </div>
           </div>
         </ModalFrame>
@@ -694,7 +687,7 @@ export default function BlastList() {
                 </span>
               </div>
               <Badge variant="outline" className="text-xs border-primary/30 text-primary">
-                Claude 3.5
+                Claude Sonnet 5.5 / Opus 5.5
               </Badge>
             </div>
 
