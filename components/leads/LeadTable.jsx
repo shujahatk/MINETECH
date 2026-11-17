@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import LeadRow from '@/components/leads/LeadRow';
+import CampaignSearchField from '@/components/leads/CampaignSearchField';
 import { EMPTY_FILTERS, useLeadFilterOptions, useLeads } from '@/components/leads/useLeads';
 import { localDateString, rowPatchFromDetail, STATUS_OPTIONS, statusLabel } from '@/lib/leads/format';
 
@@ -516,7 +517,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
         <option value="">All campaigns</option>
         {options.campaigns.map((c) => (
           <option key={c.id} value={c.id}>
-            {c.name}
+            {c.name} ({c.leadCount ?? c.totalLeads ?? 0})
           </option>
         ))}
       </FilterSelect>
@@ -658,7 +659,32 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
     </div>
   ) : null;
 
-  const emptyAction = hasFilters ? (
+  const activeCampaignObj = options.campaigns.find((c) => c.id === filters.campaign);
+
+  const emptyTitle = filters.campaign
+    ? `No leads found in campaign "${activeCampaignObj?.name || 'Selected Campaign'}"`
+    : hasFilters
+    ? (isBoard ? 'No opportunities match your filters' : 'No leads match your filters')
+    : (isBoard ? 'No opportunities yet' : 'No leads yet');
+
+  const emptyDescription = filters.campaign
+    ? 'This campaign does not have any recipient leads assigned in the database yet.'
+    : hasFilters
+    ? 'Try removing a filter or searching for something else.'
+    : (isBoard ? 'Import a CSV or add your first lead.' : 'Import a CSV or add your first lead to get started.');
+
+  const emptyAction = filters.campaign ? (
+    <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" onClick={() => setFilter('campaign', '')}>
+        Reset to all leads
+      </Button>
+      {hasFilters && activeFilterCount > 1 && (
+        <Button size="sm" variant="ghost" onClick={clearFilters}>
+          Clear all filters
+        </Button>
+      )}
+    </div>
+  ) : hasFilters ? (
     <Button size="sm" variant="outline" onClick={clearFilters}>
       Clear filters
     </Button>
@@ -727,6 +753,15 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
         </div>
       )}
 
+      {/* Search by Campaign Field */}
+      <CampaignSearchField
+        campaigns={options.campaigns}
+        selectedCampaignId={filters.campaign}
+        totalMatchingLeads={total}
+        onSelectCampaign={(campId) => setFilter('campaign', campId)}
+        loading={refreshing}
+      />
+
       {/* Classification & Campaigns Navigation Tabs */}
       <div className="flex items-center gap-1.5 border-b border-border pb-1 overflow-x-auto">
         {[
@@ -784,9 +819,9 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
             <div className="rounded-xl border border-border bg-card">
               <EmptyState
                 icon={hasFilters ? SearchX : Users}
-                title={hasFilters ? 'No opportunities match your filters' : 'No opportunities yet'}
-                description={hasFilters ? 'Try removing a filter or searching for something else.' : 'Import a CSV or add your first lead.'}
-                action={hasFilters ? <Button size="sm" variant="outline" onClick={clearFilters}>Clear filters</Button> : null}
+                title={emptyTitle}
+                description={emptyDescription}
+                action={emptyAction}
               />
             </div>
           ) : (
@@ -850,12 +885,8 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
             {showEmpty && (
               <EmptyState
                 icon={hasFilters ? SearchX : Users}
-                title={hasFilters ? 'No leads match your filters' : 'No leads yet'}
-                description={
-                  hasFilters
-                    ? 'Try removing a filter or searching for something else.'
-                    : 'Import a CSV or add your first lead to get started.'
-                }
+                title={emptyTitle}
+                description={emptyDescription}
                 action={emptyAction}
               />
             )}
