@@ -16,6 +16,17 @@ const nextConfig = {
   compress: true,
   experimental: {
     serverComponentsExternalPackages: ['mongoose', 'twilio', 'bcryptjs', 'mongodb', 'pdf-parse', 'mammoth', '@napi-rs/canvas'],
+    outputFileTracingIncludes: {
+      '/api/campaigns/intelligent/templates': [
+        './node_modules/pdf-parse/dist/pdf-parse/cjs/pdf.worker.mjs',
+        './node_modules/pdf-parse/dist/pdf-parse/cjs/**/*',
+        './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+      ],
+      '/api/**/*': [
+        './node_modules/pdf-parse/dist/pdf-parse/cjs/pdf.worker.mjs',
+        './node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs',
+      ],
+    },
   },
   async headers() {
     return [
