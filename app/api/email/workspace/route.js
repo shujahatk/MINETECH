@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveCompanyContacts } from '@/lib/services/personalizedCompanyMatcher';
-import { unwrapPdfLineArtifacts, formatBodyHtml } from '@/lib/services/personalizedEmailExtractor';
+import {
+  unwrapPdfLineArtifacts,
+  formatBodyHtml,
+  normalizeEmailParagraphs,
+  hasLineWrapArtifacts
+} from '@/lib/services/personalizedEmailExtractor';
 
 export const dynamic = 'force-dynamic';
 
@@ -93,18 +98,11 @@ export async function GET(request) {
     const rawDrafts = batchRecord.stats.drafts || [];
     const drafts = rawDrafts.map((d) => {
       let updated = { ...d };
+      const currentText = updated.edited_body_plain || updated.extracted_body_plain || '';
+      const hasArtifacts = hasLineWrapArtifacts(currentText);
+      updated.has_formatting_issues = hasArtifacts;
 
-      // 1. Correct artificial line-wrapping artifacts from PDF extraction
-      if (updated.edited_body_plain) {
-        const unwrapped = unwrapPdfLineArtifacts(updated.edited_body_plain);
-        if (unwrapped !== updated.edited_body_plain) {
-          updated.edited_body_plain = unwrapped;
-          updated.edited_body_html = formatBodyHtml(unwrapped);
-          needsBatchSave = true;
-        }
-      }
-
-      // 2. Critical Rule: Matching does not mean approved. Normalize previous auto-approved drafts that were never reviewed by user.
+      // Critical Rule: Matching does not mean approved. Normalize previous auto-approved drafts that were never reviewed by user.
       if (updated.approval_status === 'approved' && !updated.user_approved) {
         updated.approval_status = 'needs_review';
         updated.user_approved = false;
@@ -406,6 +404,90 @@ export async function PATCH(request) {
       });
     }
 
+    // 6. Preview Formatting Fix (Non-destructive Before/After comparison)
+    else if (action === 'preview_formatting_fix') {
+      const targetDraft = drafts.find((d) => d.id === draftId);
+      if (!targetDraft) {
+        return NextResponse.json(
+          { success: false, message: `Draft with ID ${draftId} not found.` },
+          { status: 404 }
+        );
+      }
+
+      const currentPlain = targetDraft.edited_body_plain || targetDraft.extracted_body_plain || '';
+      const fixedPlain = normalizeEmailParagraphs(currentPlain);
+      const changed = fixedPlain !== currentPlain.trim();
+      const origWords = currentPlain.trim().split(/\s+/).filter(Boolean);
+      const fixedWords = fixedPlain.trim().split(/\s+/).filter(Boolean);
+
+      return NextResponse.json({
+        success: true,
+        draftId,
+        companyName: targetDraft.company_name || targetDraft.extracted_company || '',
+        contactName: targetDraft.contact_name || targetDraft.extracted_contact || '',
+        before_plain: currentPlain,
+        after_plain: fixedPlain,
+        before_html: targetDraft.edited_body_html || formatBodyHtml(currentPlain),
+        after_html: formatBodyHtml(fixedPlain),
+        changed,
+        origWordCount: origWords.length,
+        fixedWordCount: fixedWords.length,
+        wordCountMatch: origWords.length === fixedWords.length,
+        isManuallyEdited: Boolean(targetDraft.manually_edited),
+        approvalStatus: targetDraft.approval_status || 'needs_review',
+        userApproved: Boolean(targetDraft.user_approved),
+      });
+    }
+
+    // 7. Apply Formatting Fix (Reconstruct paragraphs verbatim, invalidating approval if content changes)
+    else if (action === 'apply_formatting_fix') {
+      const targetIds = draftIds && draftIds !== 'all' && Array.isArray(draftIds) && draftIds.length > 0
+        ? new Set(draftIds)
+        : null;
+      const includeManuallyEdited = Boolean(body.includeManuallyEdited);
+
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      drafts = drafts.map((d) => {
+        if (targetIds && !targetIds.has(d.id)) {
+          return d;
+        }
+
+        if (d.manually_edited && !includeManuallyEdited) {
+          skippedCount++;
+          return d;
+        }
+
+        const currentPlain = d.edited_body_plain || d.extracted_body_plain || '';
+        const fixedPlain = normalizeEmailParagraphs(currentPlain);
+
+        if (fixedPlain !== currentPlain.trim()) {
+          updatedCount++;
+          const fixedHtml = formatBodyHtml(fixedPlain);
+          const wasApproved = d.approval_status === 'approved' || Boolean(d.user_approved);
+
+          return {
+            ...d,
+            edited_body_plain: fixedPlain,
+            edited_body_html: fixedHtml,
+            has_formatting_issues: false,
+            formatting_fixed: true,
+            formatting_fixed_at: nowIso,
+            approval_status: wasApproved ? 'needs_review' : (d.approval_status || 'needs_review'),
+            user_approved: wasApproved ? false : Boolean(d.user_approved),
+            content_modified_after_approval: wasApproved ? true : Boolean(d.content_modified_after_approval),
+            updated_at: nowIso,
+          };
+        }
+
+        return {
+          ...d,
+          has_formatting_issues: false,
+        };
+      });
+    }
+
     // Save updated batch stats back to Supabase
     const updatedStats = {
       ...targetBatch.stats,
@@ -499,6 +581,16 @@ function calculateMetrics(drafts = []) {
       d.selected_contacts.some((c) => c.email)
   ).length;
 
+  let formattingIssuesCount = 0;
+  const affectedDraftIds = [];
+  drafts.forEach((d) => {
+    const text = d.edited_body_plain || d.extracted_body_plain || '';
+    if (hasLineWrapArtifacts(text)) {
+      formattingIssuesCount++;
+      affectedDraftIds.push(d.id);
+    }
+  });
+
   return {
     total,
     matched,
@@ -506,5 +598,7 @@ function calculateMetrics(drafts = []) {
     unmatched,
     approved,
     ready,
+    formattingIssuesCount,
+    affectedDraftIds,
   };
 }

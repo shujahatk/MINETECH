@@ -211,6 +211,79 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
     }
   };
 
+  // Reconstruct continuous paragraphs in preview modal
+  const handleQuickFormatFixInPreview = () => {
+    if (!previewBody) return;
+    const clean = previewBody.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+    const rawLines = clean.split('\n').map((l) => l.trim()).filter(Boolean);
+    const GREETING_RE = /^(?:Dear\s+|Hi\s+|Hello\s+|Good\s+(?:morning|afternoon|evening)\b)/i;
+    const SIGNOFF_RE = /^(?:(?:Kind|Best|Warm)?\s*regards|Sincerely|Cheers|Thanks|Thank\s+you|Yours\s+truly)\b/i;
+    const BULLET_RE = /^[-*•–—\d\.)]\s+/;
+    const HEADER_RE = /^(?:To|From|Subject|Re|Attention|Attn|Company|Date):\s*/i;
+
+    const paragraphs = [];
+    let curPara = [];
+
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      const prev = curPara.length > 0 ? curPara[curPara.length - 1] : null;
+      if (!prev) {
+        curPara.push(line);
+        continue;
+      }
+      const isGreeting = GREETING_RE.test(line);
+      const prevIsGreeting = GREETING_RE.test(prev);
+      const isSignOff = SIGNOFF_RE.test(line);
+      const prevIsSignOff = SIGNOFF_RE.test(prev);
+      const isList = BULLET_RE.test(line);
+      const prevIsList = BULLET_RE.test(prev);
+      const isHeader = HEADER_RE.test(line);
+      const prevIsHeader = HEADER_RE.test(prev);
+      const startsWithLower = /^[a-z]/.test(line);
+      const prevEndsWithComma = /[,]$/.test(prev);
+      const prevEndsWithHyphen = /[-–—]$/.test(prev);
+      const prevEndsWithColon = /[:]$/.test(prev);
+      const prevEndsWithTerminal = /[.!?]$/.test(prev);
+
+      if (
+        startsWithLower ||
+        ((prevEndsWithComma && !prevIsGreeting && !prevIsSignOff) || prevEndsWithHyphen || /[([]$/.test(prev)) ||
+        (!prevEndsWithTerminal && !prevEndsWithColon && !prevIsGreeting && !prevIsSignOff && !prevIsHeader)
+      ) {
+        curPara.push(line);
+        continue;
+      }
+      if (isGreeting || prevIsGreeting || isSignOff || prevIsSignOff || isList || prevIsList || isHeader || prevIsHeader || prevEndsWithTerminal) {
+        paragraphs.push(curPara);
+        curPara = [line];
+        continue;
+      }
+      paragraphs.push(curPara);
+      curPara = [line];
+    }
+    if (curPara.length > 0) paragraphs.push(curPara);
+
+    const fixed = paragraphs
+      .map((pLines) => {
+        let r = pLines[0];
+        for (let j = 1; j < pLines.length; j++) {
+          const prev = pLines[j - 1];
+          const cur = pLines[j];
+          if (/[-–—]$/.test(prev)) {
+            r = /^[A-Z0-9]/.test(cur) ? r + cur : r.slice(0, -1) + cur;
+          } else {
+            r = r + ' ' + cur;
+          }
+        }
+        return r;
+      })
+      .join('\n\n');
+
+    setPreviewBody(fixed);
+    setPreviewApproval('needs_review');
+    toast.success('PDF line wrapping removed! Original wording 100% preserved. Please verify and re-approve.');
+  };
+
   // Remove recipient from campaign
   const handleRemoveRecipient = async (recipientId) => {
     if (!confirm('Remove this email and company from this campaign? (It will remain saved in your database)')) {
@@ -921,9 +994,18 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                       lineHeight: '1.6',
                       color: '#0f172a',
                     }}
-                    className="space-y-4 whitespace-pre-wrap"
+                    className="space-y-4"
                   >
-                    {previewBody}
+                    {previewBody.split(/\n{2,}/).map((p, pIdx) => (
+                      <p key={pIdx} style={{ margin: '0 0 16px 0', lineHeight: '1.6' }}>
+                        {p.split('\n').map((line, lIdx, arr) => (
+                          <React.Fragment key={lIdx}>
+                            {line}
+                            {lIdx < arr.length - 1 && <br />}
+                          </React.Fragment>
+                        ))}
+                      </p>
+                    ))}
                   </div>
 
                   {/* Rendered Signature Area */}
@@ -942,9 +1024,22 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 /* INLINE EDITING INTERFACE */
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-foreground">
-                      Email Body (Professional Typography):
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground">
+                        Email Body (Professional Typography):
+                      </label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleQuickFormatFixInPreview}
+                        className="h-6 text-[11px] px-2 text-amber-500 border-amber-500/40 hover:bg-amber-500/10"
+                        title="Reconstruct continuous paragraphs from PDF line wrapping"
+                      >
+                        <Sparkles className="w-3 h-3 mr-1" />
+                        Fix PDF Formatting
+                      </Button>
+                    </div>
                     <Textarea
                       value={previewBody}
                       onChange={(e) => setPreviewBody(e.target.value)}

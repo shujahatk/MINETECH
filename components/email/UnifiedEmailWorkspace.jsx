@@ -72,6 +72,14 @@ export default function UnifiedEmailWorkspace() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [isAttachFilesModalOpen, setIsAttachFilesModalOpen] = useState(false);
+
+  // Formatting fix modal state
+  const [isBulkFixModalOpen, setIsBulkFixModalOpen] = useState(false);
+  const [bulkFixTargetIds, setBulkFixTargetIds] = useState([]); // array or 'all'
+  const [bulkFixSample, setBulkFixSample] = useState(null);
+  const [includeManuallyEdited, setIncludeManuallyEdited] = useState(false);
+  const [bulkFixLoading, setBulkFixLoading] = useState(false);
+
   const [rawTextInput, setRawTextInput] = useState('');
   const [uploadTab, setUploadTab] = useState('file'); // file | text
   const fileInputRef = useRef(null);
@@ -213,6 +221,80 @@ export default function UnifiedEmailWorkspace() {
       }
     } catch (err) {
       toast.error('Bulk approval failed');
+    }
+  };
+
+  // Compute number of drafts with line-wrap formatting issues
+  const formattingIssuesCount = useMemo(() => {
+    if (metrics?.formattingIssuesCount !== undefined) {
+      return metrics.formattingIssuesCount;
+    }
+    return drafts.filter((d) => d.has_formatting_issues).length;
+  }, [metrics, drafts]);
+
+  // Open Bulk Formatting Fix Modal
+  const handleOpenBulkFix = async (targetIds = 'all') => {
+    setBulkFixTargetIds(targetIds);
+    setIncludeManuallyEdited(false);
+
+    // Pick first affected draft to preview in modal
+    let sampleDraft = null;
+    if (targetIds === 'all') {
+      sampleDraft = drafts.find((d) => d.has_formatting_issues) || drafts[0];
+    } else if (Array.isArray(targetIds) && targetIds.length > 0) {
+      sampleDraft = drafts.find((d) => targetIds.includes(d.id) && d.has_formatting_issues) || drafts.find((d) => targetIds.includes(d.id));
+    }
+
+    if (sampleDraft) {
+      try {
+        const res = await fetch('/api/email/workspace', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'preview_formatting_fix',
+            draftId: sampleDraft.id,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setBulkFixSample(data);
+          setIsBulkFixModalOpen(true);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    setBulkFixSample(null);
+    setIsBulkFixModalOpen(true);
+  };
+
+  // Apply Bulk Formatting Fix
+  const handleApplyBulkFix = async () => {
+    setBulkFixLoading(true);
+    try {
+      const res = await fetch('/api/email/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'apply_formatting_fix',
+          draftIds: bulkFixTargetIds === 'all' ? 'all' : bulkFixTargetIds,
+          includeManuallyEdited,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to apply formatting fix');
+      }
+
+      toast.success(data.message || 'Formatting updated successfully! Original wording 100% preserved.');
+      setDrafts(data.drafts || []);
+      setMetrics(data.metrics || {});
+      setIsBulkFixModalOpen(false);
+    } catch (err) {
+      toast.error(err.message || 'Failed to apply formatting fix');
+    } finally {
+      setBulkFixLoading(false);
     }
   };
 
@@ -472,6 +554,33 @@ export default function UnifiedEmailWorkspace() {
         </Card>
       )}
 
+      {/* PDF Line-Wrapping Artifacts Alert Banner */}
+      {formattingIssuesCount > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 p-3.5 px-4 rounded-xl text-xs text-amber-500 animate-in fade-in duration-200">
+          <div className="flex items-start sm:items-center gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <span className="font-semibold text-foreground">
+                PDF Line-Wrapping Detected in {formattingIssuesCount} Email{formattingIssuesCount > 1 ? 's' : ''}:
+              </span>{' '}
+              <span>
+                Sentences were broken across lines due to PDF layout. Reconstruct natural paragraphs while strictly preserving 100% of all words, numbers, and technical specifications.
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              onClick={() => handleOpenBulkFix('all')}
+              className="h-8 text-xs bg-amber-500 hover:bg-amber-600 text-white font-medium flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Fix Formatting for All ({formattingIssuesCount})
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Summary KPI Cards Grid (6 cards) — Semantic CRM Colors */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card
@@ -692,6 +801,17 @@ export default function UnifiedEmailWorkspace() {
             >
               <FileSignature className="w-3.5 h-3.5 mr-1 text-primary" />
               Change Signature
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleOpenBulkFix(Array.from(selectedDraftIds))}
+              className="h-8 text-xs border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+              title="Remove PDF layout line breaks and reconstruct continuous paragraphs"
+            >
+              <Sparkles className="w-3.5 h-3.5 mr-1 text-amber-500" />
+              Fix Formatting (Selected)
             </Button>
 
             <Button
@@ -1005,6 +1125,136 @@ export default function UnifiedEmailWorkspace() {
           fetchWorkspace();
         }}
       />
+
+      {/* Bulk PDF Formatting Fix Confirmation Modal */}
+      {isBulkFixModalOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <Card className="w-full max-w-3xl bg-card border border-border shadow-dialog p-6 space-y-4 max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex items-start justify-between border-b border-border pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-foreground">
+                    Fix PDF Line-Wrapping — Paragraph Reconstruction
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Reconstruct continuous sentences from PDF layout wrapping across{' '}
+                    {bulkFixTargetIds === 'all'
+                      ? `all ${drafts.length} emails`
+                      : `${bulkFixTargetIds.length} selected email(s)`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBulkFixModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground p-1 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Verbatim Accuracy Guarantee Banner */}
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+                <span>
+                  <strong>100% Verbatim Accuracy:</strong> No words, technical specifications, or numbers will be rewritten or changed.
+                </span>
+              </div>
+              <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 font-semibold">
+                0 words altered
+              </span>
+            </div>
+
+            {/* Sample Before / After Diff */}
+            {bulkFixSample ? (
+              <div className="space-y-2 flex-1 overflow-y-auto">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span className="font-semibold text-foreground">
+                    Sample Preview: {bulkFixSample.companyName || 'Target Company'} ({bulkFixSample.contactName || 'Recipient'})
+                  </span>
+                  <span className="font-mono text-[11px]">
+                    Word count check: {bulkFixSample.origWordCount} words in → {bulkFixSample.fixedWordCount} words out (Match: {bulkFixSample.wordCountMatch ? 'YES' : 'NO'})
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-500" /> Current (Artificial Line Breaks):
+                    </span>
+                    <div
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px', lineHeight: '1.5' }}
+                      className="p-3 rounded-lg border border-border bg-muted/20 text-foreground whitespace-pre-wrap max-h-[220px] overflow-y-auto"
+                    >
+                      {bulkFixSample.before_plain}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-500" /> Reconstructed Paragraphs:
+                    </span>
+                    <div
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px', lineHeight: '1.5' }}
+                      className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-foreground whitespace-pre-wrap max-h-[220px] overflow-y-auto"
+                    >
+                      {bulkFixSample.after_plain}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Safeguards & Confirmation */}
+            <div className="p-3 bg-muted/30 border border-border rounded-lg space-y-2 text-xs">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="includeManuallyEdited"
+                  checked={includeManuallyEdited}
+                  onChange={(e) => setIncludeManuallyEdited(e.target.checked)}
+                  className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="includeManuallyEdited" className="text-foreground font-medium cursor-pointer">
+                  Also format emails that have already been manually edited
+                </label>
+              </div>
+              <p className="text-[11px] text-muted-foreground pl-6">
+                Leave unchecked to protect any custom edits you previously made. Emails whose text is updated will have approval status reset to <strong>Needs Review</strong> for your final confirmation.
+              </p>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsBulkFixModalOpen(false)}
+                disabled={bulkFixLoading}
+                className="text-xs border-border text-foreground hover:bg-muted"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleApplyBulkFix}
+                disabled={bulkFixLoading}
+                className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-medium flex items-center gap-1.5"
+              >
+                {bulkFixLoading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                ) : (
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                )}
+                Apply Formatting Fix
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

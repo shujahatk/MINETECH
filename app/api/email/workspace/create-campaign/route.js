@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import { supabaseAdmin } from '@/lib/supabase';
 import { createCampaign, launchCampaign } from '@/lib/services/campaignService';
+import { normalizeEmailParagraphs, formatBodyHtml } from '@/lib/services/personalizedEmailExtractor';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +104,10 @@ export async function POST(request) {
       const finalCc = Array.from(new Set([...(draft.cc_emails || []), ...additionalCcEmails]));
       const finalBcc = Array.from(new Set(draft.bcc_emails || []));
 
+      const rawBody = draft.edited_body_plain || draft.extracted_body_plain || '';
+      const cleanPlain = normalizeEmailParagraphs(rawBody);
+      const cleanHtml = formatBodyHtml(cleanPlain);
+
       personalizedRecipients.push({
         leadId: draft.matched_lead.id,
         companyName: draft.extracted_company || draft.matched_lead.company_name,
@@ -112,8 +117,8 @@ export async function POST(request) {
         cc: finalCc,
         bcc: finalBcc,
         customSubject: draft.edited_subject || draft.extracted_subject,
-        customBodyHtml: draft.edited_body_html || draft.extracted_body_html,
-        customBodyPlain: draft.edited_body_plain || draft.extracted_body_plain,
+        customBodyHtml: cleanHtml,
+        customBodyPlain: cleanPlain,
         attachments: draft.assigned_attachments || [],
         signatureHtml: draft.assigned_signature_html || null,
         draftId: draft.id,
