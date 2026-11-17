@@ -131,6 +131,7 @@ export async function POST(request) {
       tracking,
       compliance,
       status: initialStatus,
+      personalizedRecipients: body.personalizedRecipients || body.recipients || null,
     });
 
     if (autoLaunch) {

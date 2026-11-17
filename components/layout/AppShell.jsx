@@ -35,34 +35,28 @@ const ComposeModal = dynamic(() => import('@/components/email/ComposeModal'), { 
 // Their pages, API routes and webhooks still exist (see lib/config/features.js to re-enable).
 const sections = [
   {
-    title: 'Workspace',
+    title: 'Outreach Core',
     items: [
       ['Dashboard', '/dashboard', LayoutDashboard],
-      ['Workstation', '/workstation', Target],
-      ['Leads', '/leads', Users],
-      ['Pipeline', '/pipeline', GitFork],
+      ['Leads & CRM', '/leads', Users],
+      ['Email Workspace', '/email/workspace', Sparkles],
       ['Campaigns', '/email/blasts', Radio],
       ['Inbox', '/email/inbox', Inbox],
     ],
   },
   {
-    title: 'Email',
+    title: 'Library & Automation',
     items: [
-      ['AI Matcher', '/email/matching', Sparkles],
-      ['Templates', '/email/templates', FileText],
-      ['Sequences', '/email/sequences', Activity],
-    ],
-  },
-  {
-    title: 'Intelligence',
-    items: [
+      ['Documents & Templates', '/email/templates', FileText],
       ['AI Drafting', '/ai/draft', Sparkles],
-      ['Analytics', '/analytics', BarChart3],
+      ['Sequences', '/email/sequences', Activity],
+      ['Pipeline', '/pipeline', GitFork],
     ],
   },
   {
     title: 'System',
     items: [
+      ['Analytics', '/analytics', BarChart3],
       ['Settings', '/settings', Settings],
       ['System health', '/command-center', Command],
     ],

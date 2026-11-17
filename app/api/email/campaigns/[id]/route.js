@@ -109,6 +109,7 @@ export async function POST(request, { params }) {
 
     let result;
     switch (action) {
+      case 'send':
       case 'launch':
         result = await launchCampaign(id);
         break;
