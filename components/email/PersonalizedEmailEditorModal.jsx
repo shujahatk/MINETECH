@@ -25,7 +25,14 @@ import {
   RefreshCw,
   HelpCircle,
   FileSignature,
-  Upload
+  Upload,
+  Scissors,
+  AlignLeft,
+  List,
+  Bold,
+  Italic,
+  ShieldCheck,
+  Calendar
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,6 +41,50 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import RematchCompanyModal from './RematchCompanyModal';
+
+// Client-side helper for unwrapping artificial PDF soft line breaks
+function unwrapSoftLineBreaks(text = '') {
+  if (!text) return '';
+  const blocks = text.split(/\n{2,}/);
+
+  const cleanedBlocks = blocks.map((block) => {
+    const rawLines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (rawLines.length === 0) return '';
+
+    const mergedLines = [];
+    let currentLine = rawLines[0];
+
+    for (let i = 1; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      const prevLine = rawLines[i - 1];
+
+      const isBulletOrNum = /^[-*•–—\d\.)]\s+/i.test(line);
+      const prevEndsWithColon = /[:]$/.test(prevLine);
+      const isGreeting = /^(?:Dear|Hi|Hello|Good\s+(?:morning|afternoon|evening))\b/i.test(line);
+      const isSignOff = /^(?:Best\s+regards|Kind\s+regards|Warm\s+regards|Regards|Sincerely|Thanks|Thank\s+you|Cheers)\b/i.test(line);
+      const prevIsGreeting = /^(?:Dear|Hi|Hello|Good\s+(?:morning|afternoon|evening))\b/i.test(prevLine);
+      const prevIsSignOff = /^(?:Best\s+regards|Kind\s+regards|Warm\s+regards|Regards|Sincerely|Thanks|Thank\s+you|Cheers)\b/i.test(prevLine);
+
+      if (isBulletOrNum || prevEndsWithColon || isGreeting || isSignOff || prevIsGreeting || prevIsSignOff) {
+        mergedLines.push(currentLine);
+        currentLine = line;
+      } else {
+        if (/[-–—]$/.test(currentLine)) {
+          currentLine = currentLine.slice(0, -1) + line;
+        } else {
+          currentLine = currentLine + ' ' + line;
+        }
+      }
+    }
+    mergedLines.push(currentLine);
+    return mergedLines.join('\n');
+  });
+
+  return cleanedBlocks.filter(Boolean).join('\n\n');
+}
+
+// Regex to detect duplicate sign-off / closing in email body
+const CLOSING_PATTERN = /(?:\n|^)\s*(?:(?:Kind|Best|Warm)\s+regards|Regards|Sincerely|Thanks\s*(?:and\s*regards)?|Cheers|Yours\s+faithfully|Respectfully)[\s,]*\n+(?:(?:Abdullah\s+Rauf|Rauf|MineTech(?:\s+Resources)?|Sales\s+Team)[^\n]*\n*)*\s*$/i;
 
 export default function PersonalizedEmailEditorModal({
   isOpen,
@@ -44,7 +95,7 @@ export default function PersonalizedEmailEditorModal({
   onSaveDraft,
   onNavigate,
 }) {
-  const [activeTab, setActiveTab] = useState('editor'); // editor | compare
+  const [activeTab, setActiveTab] = useState('editor'); // editor | preview | compare
   const [isRematchOpen, setIsRematchOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -61,7 +112,6 @@ export default function PersonalizedEmailEditorModal({
   // Signature & Document states
   const [signatures, setSignatures] = useState([]);
   const [selectedSignatureId, setSelectedSignatureId] = useState('');
-  const [showSignaturePreview, setShowSignaturePreview] = useState(false);
   const [isCustomSigOpen, setIsCustomSigOpen] = useState(false);
 
   // Custom signature builder fields
@@ -79,6 +129,7 @@ export default function PersonalizedEmailEditorModal({
   const [applyAttachmentsToAll, setApplyAttachmentsToAll] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const localFileInputRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const [documents, setDocuments] = useState([]);
   const [attachedDocIds, setAttachedDocIds] = useState([]);
@@ -86,11 +137,18 @@ export default function PersonalizedEmailEditorModal({
 
   // Generate custom HTML signature string
   const generateCustomSigHtml = () => {
-    return `<p style="margin-top: 24px; color: #475569; font-size: 13px; line-height: 1.6; border-top: 1px solid #e2e8f0; padding-top: 16px;">
-  <strong style="color: #0f172a;">${customSigName}</strong>${customSigTitle ? ` - ${customSigTitle}` : ''}${customSigPhone ? ` | Mo. ${customSigPhone}` : ''}${customSigEmail ? ` | <a href="mailto:${customSigEmail}" style="color: #d97706; text-decoration: none;">${customSigEmail}</a>` : ''}<br/>
-  <strong style="color: #0f172a;">${customSigCompany}</strong> | <a href="https://${customSigWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color: #d97706; text-decoration: none;">${customSigWebsite}</a><br/>
-  ${customSigExtra ? `<span style="font-size: 11px; color: #64748b; margin-top: 6px; display: inline-block;">${customSigExtra.replace(/\n/g, '<br/>')}</span>` : ''}
-</p>`;
+    return `<div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #cbd5e1; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6; color: #475569;">
+  <p style="margin: 0 0 4px 0; color: #0f172a; font-weight: bold; font-size: 14px;">
+    ${customSigName}${customSigTitle ? ` <span style="font-weight: normal; color: #64748b;">— ${customSigTitle}</span>` : ''}
+  </p>
+  <p style="margin: 0 0 4px 0;">
+    <strong style="color: #0f172a;">${customSigCompany}</strong>
+    ${customSigPhone ? ` | Mo. <span style="color: #0f172a;">${customSigPhone}</span>` : ''}
+    ${customSigEmail ? ` | <a href="mailto:${customSigEmail}" style="color: #d97706; text-decoration: none;">${customSigEmail}</a>` : ''}
+    ${customSigWebsite ? ` | <a href="https://${customSigWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color: #d97706; text-decoration: none;">${customSigWebsite}</a>` : ''}
+  </p>
+  ${customSigExtra ? `<p style="margin: 6px 0 0 0; font-size: 11px; color: #64748b; line-height: 1.5;">${customSigExtra.replace(/\n/g, '<br/>')}</p>` : ''}
+</div>`;
   };
 
   // Initial load
@@ -156,6 +214,45 @@ export default function PersonalizedEmailEditorModal({
     if (approvalStatus === 'approved') {
       setIsModifiedAfterApproval(true);
     }
+  };
+
+  // Duplicate closing detection
+  const hasDuplicateClosing = useMemo(() => {
+    return CLOSING_PATTERN.test(bodyText);
+  }, [bodyText]);
+
+  const handleStripClosingFromBody = () => {
+    const cleaned = bodyText.replace(CLOSING_PATTERN, '').trim();
+    setBodyText(cleaned);
+    if (approvalStatus === 'approved') {
+      setIsModifiedAfterApproval(true);
+    }
+    toast.success('Removed duplicate closing from email body. Your selected signature will provide the official sign-off.');
+  };
+
+  const handleUnwrapLineBreaks = () => {
+    const unwrapped = unwrapSoftLineBreaks(bodyText);
+    setBodyText(unwrapped);
+    if (approvalStatus === 'approved') {
+      setIsModifiedAfterApproval(true);
+    }
+    toast.success('Cleaned up artificial PDF line breaks.');
+  };
+
+  const handleInsertToolbar = (prefix, suffix = '') => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = bodyText.substring(start, end);
+    const replacement = prefix + selected + suffix;
+    const updated = bodyText.substring(0, start) + replacement + bodyText.substring(end);
+    setBodyText(updated);
+    if (approvalStatus === 'approved') setIsModifiedAfterApproval(true);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + prefix.length, end + prefix.length);
+    }, 0);
   };
 
   const toggleContactSelection = (contact) => {
@@ -229,20 +326,36 @@ export default function PersonalizedEmailEditorModal({
     toast.info('Restored original extracted email text.');
   };
 
-  const handleSave = async (shouldApprove = false, advanceNext = false) => {
+  // Resolve current active signature HTML
+  const resolvedSignatureHtml = useMemo(() => {
+    if (selectedSignatureId === 'custom' || isCustomSigOpen) {
+      return generateCustomSigHtml();
+    }
+    const found = signatures.find((s) => s.id === selectedSignatureId);
+    return found?.bodyHtml || draft?.assigned_signature_html || '';
+  }, [selectedSignatureId, isCustomSigOpen, signatures, draft, customSigName, customSigTitle, customSigCompany, customSigPhone, customSigEmail, customSigWebsite, customSigExtra]);
+
+  // Formatted HTML body for realistic rendering
+  const formattedHtmlBody = useMemo(() => {
+    if (!bodyText) return '';
+    const paragraphs = bodyText.split(/\n{2,}/);
+    return paragraphs
+      .map((p) => {
+        const withBreaks = p.replace(/\n/g, '<br/>');
+        return `<p style="margin: 0 0 16px 0; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">${withBreaks}</p>`;
+      })
+      .join('');
+  }, [bodyText]);
+
+  const handleSave = async (shouldApprove = false, advanceNext = false, explicitUnapprove = false) => {
     if (!draft) return;
     setLoading(true);
 
     try {
-      let finalSigHtml = '';
+      let finalSigHtml = resolvedSignatureHtml;
       let finalSigId = selectedSignatureId;
-
       if (selectedSignatureId === 'custom' || isCustomSigOpen) {
-        finalSigHtml = generateCustomSigHtml();
         finalSigId = `sig-custom-${Date.now()}`;
-      } else {
-        const found = signatures.find((s) => s.id === selectedSignatureId);
-        finalSigHtml = found?.bodyHtml || draft.assigned_signature_html || '';
       }
 
       const activeAttachments = documents.filter((d) => attachedDocIds.includes(d.id));
@@ -262,18 +375,21 @@ export default function PersonalizedEmailEditorModal({
         .map((s) => s.trim())
         .filter((s) => s.length > 0 && s.includes('@'));
 
-      // If text changed and user didn't explicitly click "Approve", reset approval
-      let newApproval = shouldApprove ? 'approved' : approvalStatus;
-      if (isModifiedAfterApproval && !shouldApprove) {
+      let newApproval = approvalStatus;
+      if (explicitUnapprove) {
+        newApproval = 'needs_review';
+      } else if (shouldApprove) {
+        newApproval = 'approved';
+      } else if (isModifiedAfterApproval) {
         newApproval = 'needs_review';
       }
 
       const updates = {
         edited_subject: subject,
         edited_body_plain: bodyText,
-        edited_body_html: `<div style="font-family: sans-serif; font-size: 14px; line-height: 1.6; color: #1e293b;">${bodyText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br/>')}</div>`,
+        edited_body_html: formattedHtmlBody,
         approval_status: newApproval,
-        content_modified_after_approval: shouldApprove ? false : isModifiedAfterApproval,
+        content_modified_after_approval: shouldApprove ? false : (explicitUnapprove ? false : isModifiedAfterApproval),
         selected_contacts: updatedContacts,
         cc_emails: parsedCc,
         bcc_emails: parsedBcc,
@@ -299,14 +415,22 @@ export default function PersonalizedEmailEditorModal({
         throw new Error(data.message || 'Failed to save changes');
       }
 
-      toast.success(shouldApprove ? 'Email approved and saved!' : 'Draft updated successfully.');
+      if (explicitUnapprove) {
+        toast.info('Approval removed. Marked as Needs Review.');
+        setApprovalStatus('needs_review');
+        setIsModifiedAfterApproval(false);
+      } else if (shouldApprove) {
+        toast.success('Email approved and saved!');
+        setApprovalStatus('approved');
+        setIsModifiedAfterApproval(false);
+      } else {
+        toast.success('Draft updated successfully.');
+      }
+
       onSaveDraft?.(data.drafts);
 
       if (advanceNext && currentIndex < allDrafts.length - 1) {
         onNavigate?.(currentIndex + 1);
-      } else if (!advanceNext && shouldApprove) {
-        setApprovalStatus('approved');
-        setIsModifiedAfterApproval(false);
       }
     } catch (err) {
       toast.error(err.message || 'Error saving email draft');
@@ -320,12 +444,13 @@ export default function PersonalizedEmailEditorModal({
   const currentSignature = signatures.find((s) => s.id === selectedSignatureId);
   const matchedLead = draft.matched_lead;
   const allContacts = draft.all_company_contacts || [];
+  const activeAttachedDocs = documents.filter((d) => attachedDocIds.includes(d.id));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <Card className="w-full max-w-5xl bg-slate-900 border-slate-700 text-slate-100 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <Card className="w-full max-w-5xl bg-slate-900 border-slate-700 text-slate-100 shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
         {/* Top Header */}
-        <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-950/60">
+        <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-950/70">
           <div className="flex items-center gap-3">
             <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
               Email #{currentIndex + 1} of {allDrafts.length}
@@ -387,7 +512,7 @@ export default function PersonalizedEmailEditorModal({
               <div>
                 <p className="font-semibold text-amber-200">Content Modified After Approval</p>
                 <p className="text-amber-300/90 mt-0.5">
-                  You have made changes to the subject or email body. The approval status will reset to <strong>Needs Review</strong> upon saving until you re-approve it.
+                  You have made changes to the text, recipient, signature, or attachments. The approval status resets to <strong>Needs Review</strong> until you re-approve it.
                 </p>
               </div>
             </div>
@@ -436,7 +561,7 @@ export default function PersonalizedEmailEditorModal({
                   Select Recipient Contact(s) ({selectedContacts.length} selected):
                 </span>
                 <span className="text-[11px] text-slate-500">
-                  Click contact to select. Star or select To for primary recipient.
+                  Click contact to select. The contact tagged TO receives direct dispatch.
                 </span>
               </div>
 
@@ -548,68 +673,278 @@ export default function PersonalizedEmailEditorModal({
               />
             </div>
 
-            {/* Editor Tabs: Edit vs Compare */}
+            {/* Editor Tabs: Edit vs Realistic Preview vs Raw PDF Compare */}
             <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
-              <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
+              <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800 gap-2">
                 <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
                   <button
                     type="button"
                     onClick={() => setActiveTab('editor')}
-                    className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
                       activeTab === 'editor'
                         ? 'bg-amber-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    <Edit3 className="w-3.5 h-3.5 inline mr-1.5" />
+                    <Edit3 className="w-3.5 h-3.5" />
                     Edit Email
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('preview')}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
+                      activeTab === 'preview'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    Realistic Outgoing Email Preview
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setActiveTab('compare')}
-                    className={`px-3 py-1 text-xs rounded-md font-medium transition-colors ${
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
                       activeTab === 'compare'
                         ? 'bg-amber-600 text-white shadow-sm'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    <Eye className="w-3.5 h-3.5 inline mr-1.5" />
-                    Compare with Original Verbatim Text
+                    <FileText className="w-3.5 h-3.5" />
+                    Compare with Raw PDF
                   </button>
                 </div>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleRevertToOriginal}
-                  className="h-7 text-xs text-slate-400 hover:text-amber-300 hover:bg-slate-800"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 mr-1" />
-                  Revert to Original
-                </Button>
+                {activeTab === 'editor' && (
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleUnwrapLineBreaks}
+                      title="Fix soft line wraps from PDF extraction"
+                      className="h-7 text-[11px] text-amber-300 hover:bg-amber-500/10 border border-amber-500/30"
+                    >
+                      <AlignLeft className="w-3 h-3 mr-1" />
+                      Fix PDF Line Wraps
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRevertToOriginal}
+                      className="h-7 text-[11px] text-slate-400 hover:text-amber-300 hover:bg-slate-800"
+                    >
+                      <RotateCcw className="w-3 h-3 mr-1" />
+                      Revert Text
+                    </Button>
+                  </div>
+                )}
               </div>
 
-              {activeTab === 'editor' ? (
-                <div className="p-4">
+              {/* Duplicate Closing Notification Banner */}
+              {hasDuplicateClosing && activeTab === 'editor' && (
+                <div className="p-3 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-300">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <span>
+                      <strong>Duplicate closing detected:</strong> Body contains closing sign-off text (e.g. &ldquo;Kind regards...&rdquo;). Your selected signature will append another sign-off.
+                    </span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleStripClosingFromBody}
+                    className="h-6 text-[11px] border-amber-500/40 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 shrink-0 ml-3"
+                  >
+                    <Scissors className="w-3 h-3 mr-1" />
+                    Trim Closing from Body
+                  </Button>
+                </div>
+              )}
+
+              {/* TAB 1: Editor */}
+              {activeTab === 'editor' && (
+                <div className="p-4 space-y-4">
+                  {/* Lightweight Formatting Toolbar */}
+                  <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 text-xs text-slate-400">
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToolbar('**', '**')}
+                      className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                      title="Bold"
+                    >
+                      <Bold className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToolbar('*', '*')}
+                      className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                      title="Italic"
+                    >
+                      <Italic className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertToolbar('• ')}
+                      className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                      title="Bullet Point"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                    <div className="h-4 w-px bg-slate-800 mx-1" />
+                    <span className="text-[11px] text-slate-500 px-1">
+                      Professional Business Typography: Arial / Helvetica 14px
+                    </span>
+                  </div>
+
+                  {/* Body Textarea with Arial / sans-serif styling (NO font-mono) */}
                   <Textarea
+                    ref={textareaRef}
                     value={bodyText}
                     onChange={handleBodyChange}
                     rows={12}
-                    className="w-full bg-slate-900 border-slate-800 text-slate-200 text-sm leading-relaxed p-4 focus:border-amber-500 resize-y font-mono font-normal"
+                    style={{
+                      fontFamily: 'Arial, Helvetica, sans-serif',
+                      fontSize: '14px',
+                      lineHeight: '1.6',
+                    }}
+                    className="w-full bg-slate-950 border-slate-800 text-slate-100 p-4 focus:border-amber-500 resize-y rounded-lg font-sans"
                     placeholder="Write or edit the personalized outreach email body..."
                   />
-                  <div className="flex items-center justify-between text-[11px] text-slate-500 mt-2">
-                    <span>Paragraphs will render as clean, formatted B2B email text.</span>
-                    <span>{bodyText.length} characters</span>
+
+                  {/* Character count & helpful note */}
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>Clean paragraphs render automatically with standard email spacing.</span>
+                    <span>{bodyText.length} characters • {bodyText.split(/\s+/).filter(Boolean).length} words</span>
+                  </div>
+
+                  {/* In-Editor Visible Signature Rendering */}
+                  <div className="mt-4 p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                    <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800/80 pb-2">
+                      <span className="font-semibold text-slate-300 flex items-center gap-1.5">
+                        <FileSignature className="w-3.5 h-3.5 text-amber-400" />
+                        Signature Rendered at End of Email:
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        {currentSignature?.name || (isCustomSigOpen ? 'Custom Signature' : 'Preset')}
+                      </span>
+                    </div>
+
+                    <div
+                      className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 text-xs text-slate-300"
+                      dangerouslySetInnerHTML={{ __html: resolvedSignatureHtml || '<p class="text-slate-500 italic">No signature assigned</p>' }}
+                    />
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* TAB 2: Realistic Outgoing Email Preview */}
+              {activeTab === 'preview' && (
+                <div className="p-6 bg-slate-950/80 min-h-[460px] flex flex-col justify-start">
+                  <div className="max-w-3xl w-full mx-auto bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in">
+                    {/* Realistic Email Client Header */}
+                    <div className="p-5 border-b border-slate-200 bg-slate-50 space-y-2 text-xs text-slate-700">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-900">From:</span>
+                          <span className="text-slate-800 font-medium">Rauf &lt;rauf@mine-tech.be&gt;</span>
+                        </div>
+                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          TLS Encrypted
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-900">To:</span>
+                        <span className="text-slate-900 font-semibold">
+                          {primaryContactEmail || 'No primary recipient selected'}
+                        </span>
+                        {selectedContacts.length > 1 && (
+                          <span className="text-slate-500 text-[11px]">
+                            (+{selectedContacts.length - 1} other{selectedContacts.length > 2 ? 's' : ''})
+                          </span>
+                        )}
+                      </div>
+
+                      {ccInput && (
+                        <div className="flex items-center gap-2 text-slate-600">
+                          <span className="font-bold text-slate-900">Cc:</span>
+                          <span>{ccInput}</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-baseline gap-2 pt-1 border-t border-slate-200">
+                        <span className="font-bold text-slate-900">Subject:</span>
+                        <span className="text-sm font-bold text-slate-950">
+                          {subject || '(No subject provided)'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Realistic Outgoing Email Body Paper */}
+                    <div
+                      className="p-8 space-y-4"
+                      style={{
+                        fontFamily: 'Arial, Helvetica, sans-serif',
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                        color: '#1e293b',
+                      }}
+                    >
+                      {/* Body HTML */}
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: formattedHtmlBody || '<p style="color: #94a3b8; font-style: italic;">(Email body is empty)</p>',
+                        }}
+                      />
+
+                      {/* Rendered Signature Seamlessly */}
+                      {resolvedSignatureHtml && (
+                        <div
+                          className="pt-2"
+                          dangerouslySetInnerHTML={{ __html: resolvedSignatureHtml }}
+                        />
+                      )}
+
+                      {/* Attached Documents */}
+                      {activeAttachedDocs.length > 0 && (
+                        <div className="pt-6 mt-6 border-t border-slate-200">
+                          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-2">
+                            Attachments ({activeAttachedDocs.length}):
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {activeAttachedDocs.map((doc) => (
+                              <div
+                                key={doc.id}
+                                className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 text-xs flex items-center gap-2 font-medium"
+                              >
+                                <Paperclip className="w-3.5 h-3.5 text-amber-600" />
+                                <span>{doc.name}</span>
+                                <span className="text-[11px] text-slate-500 font-normal">({doc.fileSize})</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: Compare with Raw PDF Text */}
+              {activeTab === 'compare' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 p-4 gap-4">
                   <div>
                     <span className="text-xs font-semibold text-slate-400 block mb-2">
                       Original Text Extracted from PDF (Verbatim):
                     </span>
-                    <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 font-mono whitespace-pre-wrap max-h-80 overflow-y-auto leading-relaxed">
+                    <div
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px', lineHeight: '1.6' }}
+                      className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 whitespace-pre-wrap max-h-80 overflow-y-auto"
+                    >
                       {draft.extracted_body_plain || 'No original text available'}
                     </div>
                   </div>
@@ -618,7 +953,10 @@ export default function PersonalizedEmailEditorModal({
                     <span className="text-xs font-semibold text-amber-300 block mb-2">
                       Current Edited Text:
                     </span>
-                    <div className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-200 font-mono whitespace-pre-wrap max-h-80 overflow-y-auto leading-relaxed">
+                    <div
+                      style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px', lineHeight: '1.6' }}
+                      className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 whitespace-pre-wrap max-h-80 overflow-y-auto"
+                    >
                       {bodyText || 'No edited content'}
                     </div>
                   </div>
@@ -627,30 +965,21 @@ export default function PersonalizedEmailEditorModal({
             </div>
           </div>
 
-          {/* Signature Selection Section */}
+          {/* Signature Configuration Section */}
           <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <FileSignature className="w-3.5 h-3.5 text-amber-400" />
-                Email Signature:
+                Choose / Configure Signature:
               </span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsCustomSigOpen(!isCustomSigOpen)}
-                  className="text-xs text-amber-400 hover:underline flex items-center gap-1"
-                >
-                  <Edit3 className="w-3 h-3" />
-                  {isCustomSigOpen ? 'Use Preset Signature' : 'Edit / Build Custom Signature'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSignaturePreview(!showSignaturePreview)}
-                  className="text-xs text-slate-400 hover:text-amber-300"
-                >
-                  {showSignaturePreview ? 'Hide Preview' : 'Show Preview'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomSigOpen(!isCustomSigOpen)}
+                className="text-xs text-amber-400 hover:underline flex items-center gap-1"
+              >
+                <Edit3 className="w-3 h-3" />
+                {isCustomSigOpen ? 'Use Preset Signature' : 'Edit / Build Custom Signature'}
+              </button>
             </div>
 
             {!isCustomSigOpen ? (
@@ -747,20 +1076,6 @@ export default function PersonalizedEmailEditorModal({
                     placeholder="BTW No., Registration, Warehouse address..."
                   />
                 </div>
-              </div>
-            )}
-
-            {/* Live Signature Preview */}
-            {(showSignaturePreview || isCustomSigOpen) && (
-              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 animate-in fade-in">
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Signature Preview:</span>
-                <div
-                  dangerouslySetInnerHTML={{
-                    __html: isCustomSigOpen
-                      ? generateCustomSigHtml()
-                      : (currentSignature?.bodyHtml || draft.assigned_signature_html || '<p>No signature selected</p>'),
-                  }}
-                />
               </div>
             )}
 
@@ -908,7 +1223,7 @@ export default function PersonalizedEmailEditorModal({
             {approvalStatus === 'approved' && !isModifiedAfterApproval ? (
               <span className="text-xs px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
-                Approved
+                Approved by You
               </span>
             ) : (
               <span className="text-xs px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center gap-1.5">
@@ -927,6 +1242,17 @@ export default function PersonalizedEmailEditorModal({
               Cancel
             </Button>
 
+            {approvalStatus === 'approved' && (
+              <Button
+                variant="outline"
+                onClick={() => handleSave(false, false, true)}
+                disabled={loading}
+                className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10 text-xs"
+              >
+                Remove Approval
+              </Button>
+            )}
+
             <Button
               variant="secondary"
               onClick={() => handleSave(false, false)}
@@ -940,9 +1266,9 @@ export default function PersonalizedEmailEditorModal({
             <Button
               onClick={() => handleSave(true, false)}
               disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow flex items-center gap-1"
             >
-              <Check className="w-3.5 h-3.5 mr-1" />
+              <Check className="w-3.5 h-3.5 mr-0.5" />
               Approve Email
             </Button>
 
@@ -950,10 +1276,10 @@ export default function PersonalizedEmailEditorModal({
               <Button
                 onClick={() => handleSave(true, true)}
                 disabled={loading}
-                className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow"
+                className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow flex items-center gap-1"
               >
                 Approve & Next
-                <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
               </Button>
             )}
           </div>

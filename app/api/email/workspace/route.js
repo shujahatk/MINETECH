@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import { supabaseAdmin } from '@/lib/supabase';
 import { resolveCompanyContacts } from '@/lib/services/personalizedCompanyMatcher';
+import { unwrapPdfLineArtifacts, formatBodyHtml } from '@/lib/services/personalizedEmailExtractor';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,7 +89,44 @@ export async function GET(request) {
       });
     }
 
-    const drafts = batchRecord.stats.drafts || [];
+    let needsBatchSave = false;
+    const rawDrafts = batchRecord.stats.drafts || [];
+    const drafts = rawDrafts.map((d) => {
+      let updated = { ...d };
+
+      // 1. Correct artificial line-wrapping artifacts from PDF extraction
+      if (updated.edited_body_plain) {
+        const unwrapped = unwrapPdfLineArtifacts(updated.edited_body_plain);
+        if (unwrapped !== updated.edited_body_plain) {
+          updated.edited_body_plain = unwrapped;
+          updated.edited_body_html = formatBodyHtml(unwrapped);
+          needsBatchSave = true;
+        }
+      }
+
+      // 2. Critical Rule: Matching does not mean approved. Normalize previous auto-approved drafts that were never reviewed by user.
+      if (updated.approval_status === 'approved' && !updated.user_approved) {
+        updated.approval_status = 'needs_review';
+        updated.user_approved = false;
+        needsBatchSave = true;
+      }
+
+      return updated;
+    });
+
+    if (needsBatchSave) {
+      await supabaseAdmin
+        .from('email_campaigns')
+        .update({
+          stats: {
+            ...batchRecord.stats,
+            drafts,
+            updated_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', batchRecord.id);
+    }
+
     const metrics = calculateMetrics(drafts);
 
     return NextResponse.json({
@@ -167,18 +205,46 @@ export async function PATCH(request) {
       }
 
       const existingDraft = drafts[draftIndex];
-      const mergedDraft = { ...existingDraft, ...updates, updated_at: nowIso };
 
       // CRITICAL REQUIREMENT:
-      // If the user edits the email body or subject after approval,
-      // the approval status must automatically reset to 'needs_review'
-      const bodyChanged = updates.edited_body_html !== undefined && updates.edited_body_html !== existingDraft.edited_body_html;
-      const subjectChanged = updates.edited_subject !== undefined && updates.edited_subject !== existingDraft.edited_subject;
+      // If the user edits the email body, subject, signature, or attachments after approval,
+      // the approval status must automatically reset to 'needs_review' requiring renewed approval.
+      const isApproving = updates.approval_status === 'approved';
+      const isUnapproving = updates.approval_status === 'needs_review';
 
-      if ((bodyChanged || subjectChanged) && existingDraft.approval_status === 'approved' && updates.approval_status !== 'approved') {
-        mergedDraft.approval_status = 'needs_review';
-        mergedDraft.content_modified_after_approval = true;
+      const contentChanged =
+        (updates.edited_body_plain !== undefined && updates.edited_body_plain !== existingDraft.edited_body_plain) ||
+        (updates.edited_subject !== undefined && updates.edited_subject !== existingDraft.edited_subject) ||
+        (updates.assigned_signature_id !== undefined && updates.assigned_signature_id !== existingDraft.assigned_signature_id) ||
+        (updates.assigned_attachments !== undefined && JSON.stringify(updates.assigned_attachments) !== JSON.stringify(existingDraft.assigned_attachments));
+
+      let finalApproval = existingDraft.approval_status || 'needs_review';
+      let userApproved = Boolean(existingDraft.user_approved);
+      let contentModified = Boolean(existingDraft.content_modified_after_approval);
+
+      if (isApproving) {
+        finalApproval = 'approved';
+        userApproved = true;
+        contentModified = false;
+      } else if (isUnapproving) {
+        finalApproval = 'needs_review';
+        userApproved = false;
+        contentModified = false;
+      } else if (contentChanged && existingDraft.approval_status === 'approved') {
+        finalApproval = 'needs_review';
+        userApproved = false;
+        contentModified = true;
       }
+
+      const mergedDraft = {
+        ...existingDraft,
+        ...updates,
+        approval_status: finalApproval,
+        user_approved: userApproved,
+        user_approved_at: isApproving ? nowIso : (userApproved ? existingDraft.user_approved_at : null),
+        content_modified_after_approval: contentModified,
+        updated_at: nowIso,
+      };
 
       drafts[draftIndex] = mergedDraft;
 
@@ -272,7 +338,8 @@ export async function PATCH(request) {
         confidence_score: 100,
         match_score: 100,
         match_reason: 'Manually verified and linked to CRM record by user',
-        approval_status: resolvedContacts.length > 0 ? 'approved' : 'needs_review',
+        approval_status: targetDraft.user_approved ? 'approved' : 'needs_review',
+        user_approved: Boolean(targetDraft.user_approved),
         updated_at: nowIso,
       };
     }
@@ -285,6 +352,8 @@ export async function PATCH(request) {
           return {
             ...d,
             approval_status: 'approved',
+            user_approved: true,
+            user_approved_at: nowIso,
             content_modified_after_approval: false,
             updated_at: nowIso,
           };
@@ -415,12 +484,15 @@ export async function DELETE(request) {
 function calculateMetrics(drafts = []) {
   const total = drafts.length;
   const matched = drafts.filter((d) => d.match_status === 'matched').length;
-  const needs_review = drafts.filter((d) => d.match_status === 'needs_review').length;
   const unmatched = drafts.filter((d) => d.match_status === 'unmatched').length;
-  const approved = drafts.filter((d) => d.approval_status === 'approved').length;
+  const approved = drafts.filter((d) => d.approval_status === 'approved' && Boolean(d.user_approved)).length;
+  const needs_review = drafts.filter(
+    (d) => d.match_status !== 'matched' || d.approval_status !== 'approved' || !d.user_approved
+  ).length;
   const ready = drafts.filter(
     (d) =>
       d.approval_status === 'approved' &&
+      Boolean(d.user_approved) &&
       d.match_status === 'matched' &&
       Array.isArray(d.selected_contacts) &&
       d.selected_contacts.length > 0 &&

@@ -117,6 +117,7 @@ export async function POST(request) {
         attachments: draft.assigned_attachments || [],
         signatureHtml: draft.assigned_signature_html || null,
         draftId: draft.id,
+        approvalStatus: draft.approval_status || 'needs_review',
       });
     }
 
@@ -131,7 +132,7 @@ export async function POST(request) {
       );
     }
 
-    // 3. Create the campaign
+    // 3. Create the campaign strictly as DRAFT
     const campaignName = name?.trim() || `Personalized Outreach — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     
     const campaignResult = await createCampaign({
@@ -141,7 +142,7 @@ export async function POST(request) {
       bodyText: 'Personalized B2B Outreach Batch',
       campaignType: 'personalized_batch',
       scheduledAt,
-      status: autoLaunch ? 'ACTIVE' : (scheduledAt ? 'SCHEDULED' : 'DRAFT'),
+      status: 'DRAFT',
       personalizedRecipients,
     });
 
@@ -178,22 +179,14 @@ export async function POST(request) {
       })
       .eq('id', targetBatch.id);
 
-    // 5. If autoLaunch requested, immediately dispatch campaign
-    let launchResult = null;
-    if (autoLaunch) {
-      launchResult = await launchCampaign(campaignResult.id);
-    }
-
     return NextResponse.json({
       success: true,
-      message: autoLaunch
-        ? `Campaign "${campaignName}" created and launched for ${personalizedRecipients.length} companies.`
-        : `Campaign "${campaignName}" created with ${personalizedRecipients.length} personalized emails.`,
+      message: `Draft campaign "${campaignName}" created with ${personalizedRecipients.length} personalized emails. Open Campaign Review to inspect before sending.`,
       campaign: campaignResult,
       campaignId: campaignResult.id,
+      campaignName,
       recipientsCount: personalizedRecipients.length,
-      launched: Boolean(autoLaunch),
-      launchDetails: launchResult,
+      launched: false,
     });
   } catch (err) {
     console.error('[API /api/email/workspace/create-campaign Error]:', err);

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Upload,
   FileText,
@@ -28,7 +29,9 @@ import {
   ShieldCheck,
   ArrowRight,
   Info,
-  FileSignature
+  FileSignature,
+  Eye,
+  Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,9 +45,11 @@ import CustomSignatureModal from './CustomSignatureModal';
 import AttachFilesModal from './AttachFilesModal';
 
 export default function UnifiedEmailWorkspace() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [activeBatch, setActiveBatch] = useState(null);
+  const [createdCampaignId, setCreatedCampaignId] = useState(null);
   const [drafts, setDrafts] = useState([]);
   const [metrics, setMetrics] = useState({
     total: 0,
@@ -317,7 +322,7 @@ export default function UnifiedEmailWorkspace() {
             </span>
           </div>
           <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-            Upload single multi-email PDF/Word documents. Claude extracts each email verbatim, matches against your CRM companies and contacts, attaches product brochures, and dispatches bulk campaigns where <strong>every company receives its own tailored email</strong>.
+            Upload single multi-email PDF/Word documents. MineTech AI extracts each email verbatim, matches against your CRM companies and contacts, attaches product brochures, and stages structured bulk campaigns where <strong>every company receives its own tailored email</strong>.
           </p>
         </div>
 
@@ -365,14 +370,25 @@ export default function UnifiedEmailWorkspace() {
             Upload PDF / Document
           </Button>
 
+          {(createdCampaignId || activeBatch?.id) && (
+            <Button
+              size="sm"
+              onClick={() => router.push(`/email/blasts/${createdCampaignId || activeBatch?.id}`)}
+              className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold text-xs h-9"
+            >
+              <Eye className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+              View Campaign
+            </Button>
+          )}
+
           <Button
             size="sm"
             disabled={selectedDraftIds.size === 0}
             onClick={() => setIsCampaignModalOpen(true)}
             className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs h-9 shadow-lg shadow-amber-600/20"
           >
-            <Send className="w-3.5 h-3.5 mr-1.5" />
-            Create & Send Campaign ({selectedDraftIds.size})
+            <Layers className="w-3.5 h-3.5 mr-1.5" />
+            Create Campaign ({selectedDraftIds.size})
           </Button>
         </div>
       </div>
@@ -438,7 +454,7 @@ export default function UnifiedEmailWorkspace() {
                     Extracting emails & matching against CRM companies...
                   </p>
                   <p className="text-xs text-slate-400 mt-1">
-                    Verbatim extraction with Claude Sonnet 5.5
+                    Verbatim extraction with MineTech AI
                   </p>
                 </div>
               ) : (
@@ -712,8 +728,8 @@ export default function UnifiedEmailWorkspace() {
               onClick={() => setIsCampaignModalOpen(true)}
               className="h-8 text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold shadow"
             >
-              <Send className="w-3.5 h-3.5 mr-1" />
-              Launch Campaign ({selectedDraftIds.size})
+              <Layers className="w-3.5 h-3.5 mr-1" />
+              Create Campaign Draft ({selectedDraftIds.size})
             </Button>
           </div>
         </div>
@@ -965,13 +981,14 @@ export default function UnifiedEmailWorkspace() {
         />
       )}
 
-      {/* Campaign Creation / 1-Click Send Modal */}
+      {/* Campaign Creation Modal */}
       <CreatePersonalizedCampaignModal
         isOpen={isCampaignModalOpen}
         onClose={() => setIsCampaignModalOpen(false)}
         selectedDrafts={selectedDraftsList}
         batchId={activeBatch?.id}
-        onCampaignCreated={() => {
+        onCampaignCreated={(campId) => {
+          setCreatedCampaignId(campId);
           fetchWorkspace();
         }}
       />

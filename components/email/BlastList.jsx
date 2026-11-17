@@ -4,6 +4,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { PageHeader } from '@/components/ui/page-header';
 
 import React, { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 import {
   Sparkles,
   Play,
@@ -27,6 +28,7 @@ import {
   Clock,
   ShieldCheck,
   Flame,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card } from '@/components/ui/card';
@@ -487,6 +489,18 @@ export default function BlastList() {
                   </span>
 
                   <div className="flex items-center gap-1.5">
+                    {/* View Campaign Review Screen Button */}
+                    <Link href={`/email/blasts/${campId}`}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 gap-1 px-2.5 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/10 font-medium"
+                        title="Open Campaign Review Screen"
+                      >
+                        <Eye className="h-3 w-3 text-amber-400" /> View Campaign
+                      </Button>
+                    </Link>
+
                     {/* Edit Button */}
                     <Button
                       variant="outline"

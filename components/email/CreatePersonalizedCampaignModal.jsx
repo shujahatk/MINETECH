@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
-  Send,
   Building,
   Mail,
   Paperclip,
@@ -10,10 +10,9 @@ import {
   AlertTriangle,
   X,
   Loader2,
-  Calendar,
-  Layers,
   Sparkles,
-  Info
+  Eye,
+  ArrowRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,16 +26,17 @@ export default function CreatePersonalizedCampaignModal({
   batchId,
   onCampaignCreated,
 }) {
+  const router = useRouter();
   const [name, setName] = useState(
     `Personalized Outreach — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
   );
-  const [autoLaunch, setAutoLaunch] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [createdCampaignId, setCreatedCampaignId] = useState(null);
 
   if (!isOpen) return null;
 
   const totalCompanies = selectedDrafts.length;
-  const approvedCount = selectedDrafts.filter((d) => d.approval_status === 'approved').length;
+  const approvedCount = selectedDrafts.filter((d) => d.approval_status === 'approved' && d.user_approved).length;
   const unapprovedCount = totalCompanies - approvedCount;
   const unmatchedCount = selectedDrafts.filter((d) => d.match_status === 'unmatched').length;
 
@@ -65,28 +65,30 @@ export default function CreatePersonalizedCampaignModal({
           name: name.trim(),
           batchId,
           draftIds: selectedDrafts.map((d) => d.id),
-          autoLaunch,
-          allowUnapproved: true, // allow if user explicitly confirmed
+          autoLaunch: false, // Strictly DRAFT! Never send automatically.
+          allowUnapproved: true, // allow staging; review screen will require final approval
         }),
       });
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || 'Failed to create campaign');
+        throw new Error(data.message || 'Failed to create campaign draft');
       }
 
-      toast.success(
-        autoLaunch
-          ? `Campaign launched! ${data.recipientsCount} personalized emails dispatched to sending queue.`
-          : `Campaign "${data.campaign?.name}" created as draft.`
-      );
-
+      toast.success(`Draft campaign "${data.campaign?.name || name}" created!`);
+      setCreatedCampaignId(data.campaignId);
       onCampaignCreated?.(data.campaignId);
-      onClose();
     } catch (err) {
-      toast.error(err.message || 'Error launching campaign');
+      toast.error(err.message || 'Error creating campaign');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleOpenReview = () => {
+    if (createdCampaignId) {
+      router.push(`/email/blasts/${createdCampaignId}`);
+      onClose();
     }
   };
 
@@ -101,10 +103,10 @@ export default function CreatePersonalizedCampaignModal({
             </div>
             <div>
               <h3 className="text-base font-semibold text-white">
-                Create & Send Personalized Campaign
+                Create Campaign Draft
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Every company receives its own individualized email & attachments
+                Creates a draft campaign for review. No emails will be sent until final confirmation.
               </p>
             </div>
           </div>
@@ -118,135 +120,161 @@ export default function CreatePersonalizedCampaignModal({
 
         {/* Content */}
         <div className="p-6 space-y-5">
-          {/* Campaign Name Input */}
-          <div>
-            <label className="text-xs font-semibold text-slate-300 block mb-1.5">
-              Campaign Name:
-            </label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Q4 Bleaching Earth Outreach — LATAM"
-              className="bg-slate-950 border-slate-700 text-white font-medium focus:border-amber-500"
-            />
-          </div>
+          {createdCampaignId ? (
+            /* Success State */
+            <div className="p-6 rounded-xl bg-slate-950/70 border border-emerald-500/30 text-center space-y-4">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h4 className="text-base font-bold text-white">Draft Campaign Created Successfully</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                  Your personalized emails, matched CRM contacts, signatures, and attachments have been assembled into draft campaign <strong className="text-slate-200">&ldquo;{name}&rdquo;</strong>.
+                </p>
+              </div>
 
-          {/* Stats Summary Grid */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
-              <Building className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-              <span className="text-xl font-bold text-white">{totalCompanies}</span>
-              <p className="text-[11px] text-slate-400 mt-0.5">Companies</p>
+              <div className="p-3 bg-slate-900/90 rounded-lg border border-slate-800 text-xs text-slate-300 flex items-center justify-center gap-4">
+                <span><strong>{totalCompanies}</strong> Companies</span>
+                <span>•</span>
+                <span><strong>{totalContacts}</strong> Outgoing Emails</span>
+                <span>•</span>
+                <span className="text-amber-400"><strong>Status:</strong> Draft (Unsent)</span>
+              </div>
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
+                <Button
+                  onClick={handleOpenReview}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs py-2.5 px-5 flex items-center justify-center gap-2 shadow-lg shadow-amber-900/20"
+                >
+                  <Eye className="w-4 h-4" />
+                  View Campaign (Review & Send)
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={onClose}
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+                >
+                  Stay in Workspace
+                </Button>
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Campaign Name Input */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+                  Campaign Name:
+                </label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Q4 Bleaching Earth Outreach — LATAM"
+                  className="bg-slate-950 border-slate-700 text-white font-medium focus:border-amber-500"
+                />
+              </div>
 
-            <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
-              <Mail className="w-4 h-4 text-blue-400 mx-auto mb-1" />
-              <span className="text-xl font-bold text-white">{totalContacts}</span>
-              <p className="text-[11px] text-slate-400 mt-0.5">Target Contacts</p>
-            </div>
+              {/* Stats Summary Grid */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
+                  <Building className="w-4 h-4 text-amber-400 mx-auto mb-1" />
+                  <span className="text-xl font-bold text-white">{totalCompanies}</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Companies</p>
+                </div>
 
-            <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
-              <Paperclip className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
-              <span className="text-xl font-bold text-white">{totalAttachments}</span>
-              <p className="text-[11px] text-slate-400 mt-0.5">Attachments</p>
-            </div>
-          </div>
+                <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
+                  <Mail className="w-4 h-4 text-blue-400 mx-auto mb-1" />
+                  <span className="text-xl font-bold text-white">{totalContacts}</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Target Contacts</p>
+                </div>
 
-          {/* Readiness Checklist */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2.5 text-xs">
-            <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block">
-              Pre-flight Campaign Checklist:
-            </span>
+                <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 text-center">
+                  <Paperclip className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                  <span className="text-xl font-bold text-white">{totalAttachments}</span>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Attachments</p>
+                </div>
+              </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-slate-300 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                Approved Emails:
-              </span>
-              <span className="font-semibold text-emerald-400">
-                {approvedCount} of {totalCompanies}
-              </span>
-            </div>
+              {/* Readiness Checklist */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2.5 text-xs">
+                <span className="text-[11px] uppercase tracking-wider font-bold text-slate-400 block">
+                  Campaign Composition:
+                </span>
 
-            {unapprovedCount > 0 && (
-              <div className="p-2 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-300 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    Approved Emails:
+                  </span>
+                  <span className="font-semibold text-emerald-400">
+                    {approvedCount} of {totalCompanies}
+                  </span>
+                </div>
+
+                {unapprovedCount > 0 && (
+                  <div className="p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                    <span>
+                      <strong>{unapprovedCount} email{unapprovedCount > 1 ? 's are' : ' is'} pending review.</strong> They will be included in the draft, and you can inspect, edit, or approve them individually in the Campaign Review screen.
+                    </span>
+                  </div>
+                )}
+
+                {unmatchedCount > 0 && (
+                  <div className="p-2.5 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                    <span>
+                      <strong>{unmatchedCount} companies</strong> have not been matched to a CRM record. You must match or deselect them before creating the campaign.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Safety notice */}
+              <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs flex items-center gap-2.5">
+                <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse shrink-0" />
                 <span>
-                  <strong>{unapprovedCount} emails</strong> are still marked as Needs Review. They will still be sent if you proceed.
+                  <strong>Safety Guaranteed:</strong> This action only organizes your emails into a Draft Campaign. No emails will ever be dispatched without your explicit confirmation on the Campaign Review Screen.
                 </span>
               </div>
-            )}
-
-            {unmatchedCount > 0 && (
-              <div className="p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[11px] flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
-                <span>
-                  <strong>{unmatchedCount} companies</strong> have not been matched to a CRM record. You must match or deselect them before launching.
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Send Options Toggle */}
-          <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/40 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <span className="text-xs font-semibold text-slate-200">
-                Send Campaign Immediately
-              </span>
-              <p className="text-[11px] text-slate-400">
-                Dispatches all personalized emails into the delivery queue right now.
-              </p>
-            </div>
-            <input
-              type="checkbox"
-              checked={autoLaunch}
-              onChange={(e) => setAutoLaunch(e.target.checked)}
-              className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
-            />
-          </div>
+            </>
+          )}
         </div>
 
         {/* Footer */}
-        <div className="p-4 px-6 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
-          <p className="text-xs text-slate-400">
-            Unselected drafts remain in your workspace.
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={onClose}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateCampaign}
-              disabled={!canProceed || submitting}
-              className={`text-xs font-semibold shadow flex items-center gap-1.5 ${
-                autoLaunch
-                  ? 'bg-amber-600 hover:bg-amber-500 text-white'
-                  : 'bg-slate-700 hover:bg-slate-600 text-white'
-              }`}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                  {autoLaunch ? 'Dispatching...' : 'Creating...'}
-                </>
-              ) : autoLaunch ? (
-                <>
-                  <Send className="w-3.5 h-3.5" />
-                  Send Campaign Now (1-Click Bulk Send)
-                </>
-              ) : (
-                <>
-                  <Layers className="w-3.5 h-3.5" />
-                  Save as Draft Campaign
-                </>
-              )}
-            </Button>
+        {!createdCampaignId && (
+          <div className="p-4 px-6 border-t border-slate-800 bg-slate-950/60 flex items-center justify-between">
+            <p className="text-xs text-slate-400">
+              Unselected drafts remain safe in your workspace.
+            </p>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={onClose}
+                className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateCampaign}
+                disabled={!canProceed || submitting}
+                className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow flex items-center gap-1.5"
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                    Creating Draft...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Create Campaign Draft
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </Card>
     </div>
   );
