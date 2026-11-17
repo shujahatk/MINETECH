@@ -276,7 +276,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
     }
   };
 
-  // Generate Email with Claude AI
+  // Generate Email with MineTech AI
   const handleClaudeGenerate = async () => {
     setAiLoading(true);
     try {
@@ -298,7 +298,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
         const json = await res.json();
         if (json.data?.subject) setSubject(json.data.subject);
         if (json.data?.body) setBody(json.data.body);
-        toast.success(`Generated email draft with ${selectedModel === 'claude-opus-5-5' ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5'}`);
+        toast.success(`Generated email draft with ${selectedModel === 'claude-opus-5-5' ? 'MineTech AI High (Opus 5.5)' : 'MineTech AI (Sonnet 5.5)'}`);
         setActiveTab('content');
       } else {
         const err = await res.json();
@@ -350,7 +350,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
       if (res.ok && json.success) {
         if (action === 'develop_strategy') {
           setStrategyResult(json.data);
-          toast.success(`Campaign strategy formulated by ${json.actualModel || selectedModel}`);
+          toast.success('Campaign strategy formulated by MineTech AI');
         } else if (action === 'analyze_audience') {
           setAudienceResult(json.data);
           toast.success(`Audience analysis complete with Buyer/Seller breakdown`);
@@ -613,7 +613,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
   const tabs = [
     { id: 'recipients', label: '1. Audience', icon: Users },
     { id: 'sender', label: '2. Sender', icon: Mail },
-    { id: 'personalization', label: '3. Campaign Brain (Claude)', icon: Brain },
+    { id: 'personalization', label: '3. Campaign Brain (MineTech AI)', icon: Brain },
     { id: 'content', label: '4. Subject & Body', icon: FileText },
     { id: 'preview', label: '5. Preview & Test', icon: Eye },
     { id: 'settings', label: '6. Settings', icon: Sliders },
@@ -890,7 +890,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
             </div>
           )}
 
-          {/* TAB 3: CLAUDE AI & PROMPT TEMPLATES */}
+          {/* TAB 3: MINETECH AI & PROMPT TEMPLATES */}
           {activeTab === 'personalization' && (
             <div className="space-y-5">
               <div>
@@ -913,7 +913,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                       <span>Standard / AI-Assisted Blast</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Use Claude Sonnet 5.5 / Opus 5.5 to craft high-converting copy, then interpolate variables per lead at dispatch.
+                      Use MineTech AI (Sonnet 5.5 / Opus 5.5) to craft high-converting copy, then interpolate variables per lead at dispatch.
                     </p>
                   </button>
 
@@ -934,7 +934,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                       <span>Per-Prospect Bespoke AI Generation</span>
                     </div>
                     <p className="text-[11px] text-muted-foreground">
-                      Claude synthesizes unique, 1-to-1 tailored copy per recipient via the background worker queue.
+                      MineTech AI synthesizes unique, 1-to-1 tailored copy per recipient via the background worker queue.
                     </p>
                   </button>
                 </div>
@@ -972,7 +972,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                 </div>
               </div>
 
-              {/* Claude Campaign Brain Model Configuration */}
+              {/* MineTech AI Campaign Brain Model Configuration */}
               <div className="p-4 rounded-xl bg-card border border-border shadow-subtle space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -980,8 +980,8 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                       <Brain className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-semibold text-foreground">Campaign Claude AI Model</h4>
-                      <p className="text-[11px] text-muted-foreground">Select the official Anthropic intelligence engine for this campaign</p>
+                      <h4 className="text-xs font-semibold text-foreground">Campaign MineTech AI Model</h4>
+                      <p className="text-[11px] text-muted-foreground">Select the MineTech AI intelligence engine for this campaign</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 p-1 rounded-lg bg-muted/40 border border-border">
@@ -1014,17 +1014,17 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                   <span>
                     Active Engine:{' '}
                     <strong className="text-foreground">
-                      {selectedModel === 'claude-opus-5-5' ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5'}
+                      {selectedModel === 'claude-opus-5-5' ? 'MineTech AI High (Opus 5.5)' : 'MineTech AI (Sonnet 5.5)'}
                     </strong>{' '}
                     — {selectedModel === 'claude-opus-5-5' ? 'Deep reasoning for complex multi-channel strategy and sequence planning' : 'High-speed intelligence for audience analysis, copy creation & segmentation'}
                   </span>
                   <Badge variant="outline" className="border-primary/30 text-primary font-mono text-[9px]">
-                    {selectedModel}
+                    {selectedModel === 'claude-opus-5-5' ? 'Opus 5.5' : 'Sonnet 5.5'}
                   </Badge>
                 </div>
               </div>
 
-              {/* Claude Campaign Brain Intelligence Hub */}
+              {/* MineTech AI Campaign Brain Intelligence Hub */}
               <div className="p-4 rounded-xl bg-card border border-border shadow-subtle space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
                   <div className="flex items-center gap-2">
@@ -1032,7 +1032,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                       <Sparkles className="w-4 h-4" />
                     </div>
                     <div>
-                      <h4 className="text-xs font-semibold text-foreground">Claude Campaign Brain Intelligence</h4>
+                      <h4 className="text-xs font-semibold text-foreground">MineTech AI Campaign Brain Intelligence</h4>
                       <p className="text-[11px] text-muted-foreground">Strategic audience analysis, Buyer/Seller segmentation, messaging critique & sequencing</p>
                     </div>
                   </div>
@@ -1082,7 +1082,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                         className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                       >
                         <Compass className="w-3.5 h-3.5" />
-                        {brainLoading ? 'Formulating...' : 'Develop Strategy with Claude'}
+                        {brainLoading ? 'Formulating...' : 'Develop Strategy with MineTech AI'}
                       </Button>
                     </div>
 
@@ -1153,7 +1153,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                         className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                       >
                         <Users className="w-3.5 h-3.5" />
-                        {brainLoading ? 'Analyzing...' : 'Analyze Audience with Claude'}
+                        {brainLoading ? 'Analyzing...' : 'Analyze Audience with MineTech AI'}
                       </Button>
                     </div>
 
@@ -1210,7 +1210,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                         className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                       >
                         <Wand2 className="w-3.5 h-3.5" />
-                        {brainLoading ? 'Generating...' : 'Generate with Claude'}
+                        {brainLoading ? 'Generating...' : 'Generate with MineTech AI'}
                       </Button>
                     </div>
 
@@ -1274,7 +1274,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-muted-foreground">
-                        Have Claude evaluate your current Subject and Body for spam triggers, clarity, and conversion friction.
+                        Have MineTech AI evaluate your current Subject and Body for spam triggers, clarity, and conversion friction.
                       </p>
                       <Button
                         type="button"
@@ -1349,7 +1349,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                         className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                       >
                         <Layers className="w-3.5 h-3.5" />
-                        {brainLoading ? 'Generating...' : 'Recommend Sequence with Claude'}
+                        {brainLoading ? 'Generating...' : 'Recommend Sequence with MineTech AI'}
                       </Button>
                     </div>
 
@@ -1392,7 +1392,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                         className="h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5"
                       >
                         <TrendingUp className="w-3.5 h-3.5" />
-                        {brainLoading ? 'Analyzing...' : 'Audit Performance with Claude'}
+                        {brainLoading ? 'Analyzing...' : 'Audit Performance with MineTech AI'}
                       </Button>
                     </div>
 
@@ -1423,14 +1423,14 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                 {brainTool === 'chat' && (
                   <div className="space-y-3">
                     <p className="text-xs text-muted-foreground">
-                      Chat collaboratively with Claude about this campaign. Claude remembers your instructions and campaign context.
+                      Chat collaboratively with MineTech AI about this campaign. MineTech AI remembers your instructions and campaign context.
                     </p>
 
                     <div className="h-56 overflow-y-auto rounded-lg bg-muted/20 border border-border p-3 space-y-2.5">
                       {brainChatMessages.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-center text-xs text-muted-foreground space-y-1">
                           <MessageSquare className="w-6 h-6 text-primary/40" />
-                          <p>Ask Claude anything about this campaign strategy, audience, or copy.</p>
+                          <p>Ask MineTech AI anything about this campaign strategy, audience, or copy.</p>
                           <p className="text-[10px]">e.g. &ldquo;Make this email more technical for ceramic engineers&rdquo; or &ldquo;How should we segment buyers vs sellers?&rdquo;</p>
                         </div>
                       ) : (
@@ -1440,7 +1440,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                             className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
                           >
                             <span className="text-[9px] uppercase font-bold text-muted-foreground mb-0.5">
-                              {m.role === 'user' ? 'You' : `Claude (${m.model || selectedModel})`}
+                              {m.role === 'user' ? 'You' : `MineTech AI (${(m.model || selectedModel).includes('opus') ? 'Opus 5.5' : 'Sonnet 5.5'})`}
                             </span>
                             <div
                               className={`p-2.5 rounded-xl max-w-[85%] text-xs leading-relaxed whitespace-pre-wrap ${
@@ -1457,7 +1457,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                       {brainLoading && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground p-2">
                           <Sparkles className="w-3.5 h-3.5 text-primary animate-spin" />
-                          <span>Claude is thinking...</span>
+                          <span>MineTech AI is thinking...</span>
                         </div>
                       )}
                     </div>
@@ -1472,7 +1472,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                             sendBrainChatMessage();
                           }
                         }}
-                        placeholder="Type instructions or questions for Claude..."
+                        placeholder="Type instructions or questions for MineTech AI..."
                         className="h-8 text-xs bg-card border-border"
                         disabled={brainLoading}
                       />
@@ -1498,7 +1498,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                     Custom Campaign Instructions & Objectives
                   </span>
                   <Badge variant="outline" className="border-primary/30 bg-primary/10 text-primary text-[10px] font-mono">
-                    {selectedModel === 'claude-opus-5-5' ? 'Claude Opus 5.5' : 'Claude Sonnet 5.5'}
+                    {selectedModel === 'claude-opus-5-5' ? 'MineTech AI High (Opus 5.5)' : 'MineTech AI (Sonnet 5.5)'}
                   </Badge>
                 </div>
 
@@ -1554,7 +1554,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
                     className="bg-primary hover:bg-primary/90 text-primary-foreground h-8 gap-2"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>{aiLoading ? 'Generating with Claude...' : `Generate Email with ${selectedModel === 'claude-opus-5-5' ? 'Opus 5.5' : 'Sonnet 5.5'}`}</span>
+                    <span>{aiLoading ? 'Generating with MineTech AI...' : `Generate Email with MineTech AI (${selectedModel === 'claude-opus-5-5' ? 'Opus 5.5' : 'Sonnet 5.5'})`}</span>
                   </Button>
                 </div>
               </div>
@@ -1563,7 +1563,7 @@ export default function BlastWizard({ onClose, onCreated, onUpdated, campaign = 
               <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-xs text-muted-foreground flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
                 <span>
-                  <strong className="text-foreground">User Approval Control:</strong> Claude acts as your Campaign Brain to recommend strategy and draft messaging. Emails are never dispatched automatically without your explicit review and launch.
+                  <strong className="text-foreground">User Approval Control:</strong> MineTech AI acts as your Campaign Brain to recommend strategy and draft messaging. Emails are never dispatched automatically without your explicit review and launch.
                 </span>
               </div>
             </div>

@@ -38,7 +38,7 @@ export const AVAILABLE_MODELS = [
   {
     id: 'claude-sonnet-4-6',
     name: 'MineTech AI',
-    subname: 'Claude Sonnet',
+    subname: 'Sonnet',
     tag: 'Default',
     desc: 'General everyday tasks, strong writing, analysis and coding',
     supportsThinking: true,
@@ -46,7 +46,7 @@ export const AVAILABLE_MODELS = [
   {
     id: 'claude-opus-4-6',
     name: 'MineTech AI High',
-    subname: 'Claude Opus',
+    subname: 'Opus',
     tag: 'Advanced Reasoning',
     desc: 'Complex multi-step instructions, deep logic, and architectural analysis',
     supportsThinking: true,
@@ -608,7 +608,7 @@ export default function ClaudeChatWorkspace() {
         <div className="p-3 border-t border-border bg-muted/20 text-[11px] text-muted-foreground flex items-center justify-between">
           <span className="flex items-center gap-1.5 font-medium">
             <Sparkles className="h-3.5 w-3.5 text-primary" />
-            MineTech Claude Assistant
+            MineTech AI Assistant
           </span>
           <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded border border-border">v2.0</span>
         </div>
@@ -624,7 +624,7 @@ export default function ClaudeChatWorkspace() {
             </div>
             <div>
               <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                Claude AI Drafting & Intelligence
+                MineTech AI Drafting & Intelligence
                 <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
                   Unrestricted
                 </Badge>
@@ -663,7 +663,7 @@ export default function ClaudeChatWorkspace() {
               size="sm"
               onClick={() => setEnableThinking(!enableThinking)}
               className={`h-8 gap-1.5 text-xs ${enableThinking ? 'bg-primary text-primary-foreground' : ''}`}
-              title="Enable Claude extended thinking (deep multi-step reasoning)"
+              title="Enable MineTech AI extended thinking (deep multi-step reasoning)"
             >
               <BrainCircuit className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Thinking</span>
@@ -678,9 +678,9 @@ export default function ClaudeChatWorkspace() {
               <div className="h-12 w-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mb-4 shadow-sm">
                 <Sparkles className="h-6 w-6" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground mb-1">How can Claude help you today?</h2>
+              <h2 className="text-lg font-semibold text-foreground mb-1">How can MineTech AI help you today?</h2>
               <p className="text-xs text-muted-foreground mb-8 max-w-md">
-                Full-capability Claude intelligence. Enter any query for business strategy, deep coding, general
+                Full-capability MineTech AI intelligence. Enter any query for business strategy, deep coding, general
                 explanations, document drafting, or ask to write an email.
               </p>
 
@@ -814,7 +814,7 @@ export default function ClaudeChatWorkspace() {
                       {!isUser && (
                         <div className="mt-2.5 pt-2 border-t border-border/50 flex items-center justify-between text-[11px] text-muted-foreground">
                           <span className="text-[10px] font-mono opacity-80">
-                            {msg.model || selectedModel}
+                            {(msg.model || selectedModel).includes('opus') ? 'MineTech AI High (Opus)' : 'MineTech AI (Sonnet)'}
                           </span>
                           <div className="flex items-center gap-2">
                             <button
@@ -862,7 +862,7 @@ export default function ClaudeChatWorkspace() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                     </span>
-                    <span>Claude is thinking and responding...</span>
+                    <span>MineTech AI is thinking and responding...</span>
                   </div>
                 </div>
               )}
@@ -886,7 +886,7 @@ export default function ClaudeChatWorkspace() {
                     handleSendMessage();
                   }
                 }}
-                placeholder="Ask Claude anything, or ask to write an email... (Shift+Enter for new line)"
+                placeholder="Ask MineTech AI anything, or ask to write an email... (Shift+Enter for new line)"
                 rows={2}
                 disabled={isLoading}
                 className="w-full resize-none bg-transparent px-3.5 py-3 text-xs sm:text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
@@ -927,7 +927,7 @@ export default function ClaudeChatWorkspace() {
               </div>
             </div>
             <p className="text-center text-[10px] text-muted-foreground mt-2">
-              MineTech Claude Assistant • Conversational intelligence and optional email generation.
+              MineTech AI Assistant • Conversational intelligence and optional email generation.
             </p>
           </div>
         </div>

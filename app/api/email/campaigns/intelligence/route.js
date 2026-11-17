@@ -96,7 +96,7 @@ export async function POST(request) {
       case 'chat': {
         const chatMessages = Array.isArray(messages) && messages.length > 0
           ? messages
-          : [{ role: 'user', content: userPrompt || 'Hello Claude, how can we improve this campaign?' }];
+          : [{ role: 'user', content: userPrompt || 'Hello MineTech AI, how can we improve this campaign?' }];
 
         result = await chatWithCampaignBrain({
           messages: chatMessages,

@@ -148,7 +148,7 @@ export default function CommandCenterPage() {
           title="AI engine"
           subtitle="MineTech AI"
           badge={getStatusBadge(s.claude?.status, s.claude?.connected)}
-          rows={[['Model', s.claude?.model || '—']]}
+          rows={[['Model', s.claude?.model ? s.claude.model.replace(/^claude-/i, 'MineTech AI ').replace(/-\d{8}$/, '') : 'MineTech AI (Sonnet 5.5)']]}
         />
       </div>
 

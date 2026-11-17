@@ -346,8 +346,8 @@ export default function IntelligentCampaignHub() {
         body: formData
       });
 
-      const json = await res.json();
-      if (json.success) {
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
         toast.success(json.message);
         setIsUploadModalOpen(false);
         setUploadText('');
@@ -359,10 +359,10 @@ export default function IntelligentCampaignHub() {
           setTemplates(tplJson.data || []);
         }
       } else {
-        toast.error(json.error || 'Template upload failed');
+        toast.error(json?.error || json?.message || `Template upload failed (HTTP ${res.status})`);
       }
     } catch (err) {
-      toast.error('Error uploading templates');
+      toast.error(err?.message || 'Error uploading templates');
     } finally {
       setActionLoading(false);
     }
@@ -432,7 +432,7 @@ export default function IntelligentCampaignHub() {
               <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
                 Intelligent Campaign Orchestrator
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 font-medium">
-                  Claude Sonnet 5.5 / Opus 5.5
+                  MineTech AI (Sonnet 5.5 / Opus 5.5)
                 </span>
               </h1>
               <p className="text-sm text-slate-400 mt-0.5">
@@ -646,7 +646,7 @@ export default function IntelligentCampaignHub() {
               <Sparkles className="w-12 h-12 text-amber-400 mx-auto mb-3 opacity-60" />
               <h3 className="text-lg font-semibold text-white">No Matching Run Yet</h3>
               <p className="text-sm text-slate-400 max-w-md mx-auto mt-1 mb-4">
-                Click &quot;Run Intelligent Matcher&quot; to analyze your uploaded contacts against prewritten templates using Claude AI.
+                Click &quot;Run Intelligent Matcher&quot; to analyze your uploaded contacts against prewritten templates using MineTech AI.
               </p>
               <Button onClick={() => runMatching(false)} className="bg-amber-600 hover:bg-amber-500 text-white">
                 Start Intelligent Matching

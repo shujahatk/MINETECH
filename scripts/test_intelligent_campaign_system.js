@@ -30,10 +30,13 @@ import {
   extractCorporateDomain
 } from '../lib/services/companyIntelligenceEngine.js';
 import {
+  parseFileToText,
   splitMultiDraftText,
   extractSubjectAndBody,
   heuristicClassifyTemplate,
   classifyTemplateWithClaude,
+  createAndClassifyTemplate,
+  unpackTemplateMetadata,
   interpolateTemplate
 } from '../lib/services/templateIntelligenceService.js';
 import {
@@ -602,6 +605,121 @@ We are writing from MineTech Resources regarding our kaolin supply for ceramic a
     const { data: tmpls, error: tErr } = await supabaseAdmin.from('email_templates').select('id, name').limit(5);
     assert(!tErr, `Supabase error: ${tErr?.message}`);
     console.log(`  ✓ Successfully queried Supabase email_templates (${tmpls.length} templates returned)`);
+  });
+
+  // --- SECTION 10: TEMPLATE UPLOAD, PARSING, DEDUPLICATION & ORCHESTRATOR INTEGRATION ---
+  console.log('\n--- 10. TEMPLATE UPLOAD, PARSING, DEDUPLICATION & ORCHESTRATOR INTEGRATION ---');
+  await itAsync('Parses TXT, CSV, and PDF buffers and rejects invalid/empty/corrupted uploads', async () => {
+    // 1. TXT parsing
+    const txtBuf = Buffer.from('Subject: Activated Bleaching Clay Supply\n\nDear {{company_name}},\nWe supply high-activity bleaching clay.', 'utf-8');
+    const parsedTxt = await parseFileToText(txtBuf, 'templates.txt', 'text/plain');
+    assert(parsedTxt.includes('Activated Bleaching Clay Supply'), 'Failed to parse TXT file');
+
+    // 2. CSV tabular parsing
+    const csvBuf = Buffer.from('Name,Subject,Body\nBentonite Buyer,Bentonite Supply Offer,"Dear {{company_name}}, we offer foundry bentonite."', 'utf-8');
+    const parsedCsv = await parseFileToText(csvBuf, 'templates.csv', 'text/csv');
+    assert(parsedCsv.isTabular && parsedCsv.rows.length === 1, 'Failed to parse tabular CSV file');
+
+    // 3. PDF parsing (including DOMMatrix serverless polyfill verification)
+    const minimalPdf = Buffer.from(
+      '%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >>\nendobj\n4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n5 0 obj\n<< /Length 68 >>\nstream\nBT\n/F1 12 Tf\n72 720 Td\n(Subject: Bleaching Clay Offer) Tj\nET\nendstream\nendobj\nxref\n0 6\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \n0000000229 00000 n \n0000000297 00000 n \ntrailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n415\n%%EOF',
+      'utf8'
+    );
+    const parsedPdf = await parseFileToText(minimalPdf, 'offer.pdf', 'application/pdf');
+    assert(parsedPdf.includes('Subject: Bleaching Clay Offer'), 'Failed to parse PDF file');
+    assert(!parsedPdf.includes('-- 1 of 1 --'), 'Page marker was not stripped from PDF text');
+
+    // 4. Reject empty file
+    let emptyErr = null;
+    try {
+      await parseFileToText(Buffer.alloc(0), 'empty.txt');
+    } catch (e) {
+      emptyErr = e;
+    }
+    assert(emptyErr && /empty/i.test(emptyErr.message), 'Should reject empty file upload');
+
+    // 5. Reject unsupported file extension
+    let extErr = null;
+    try {
+      await parseFileToText(Buffer.from('binary'), 'malware.exe');
+    } catch (e) {
+      extErr = e;
+    }
+    assert(extErr && /Unsupported file format/i.test(extErr.message), 'Should reject unsupported file extension');
+
+    // 6. Reject binary null-byte payload masquerading as TXT
+    let binErr = null;
+    try {
+      await parseFileToText(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00]), 'fake.txt');
+    } catch (e) {
+      binErr = e;
+    }
+    assert(binErr && /binary or corrupted/i.test(binErr.message), 'Should reject binary null-byte file');
+  });
+
+  await itAsync('Persists uploaded template in Supabase, deduplicates re-uploads, handles FK safety, and integrates with Orchestrator', async () => {
+    const uniqueSub = `Kaolin Ceramic Supply Verification ${Date.now()}`;
+    const bodyCopy = 'Dear {{company_name}},\n\nMineTech Resources supplies high-whiteness kaolin and ball clay for ceramic tableware production.';
+
+    // 1. Upload with a non-existent UUID userId to verify FK fallback safety
+    const created1 = await createAndClassifyTemplate({
+      name: 'Kaolin — Ceramic Buyers Verification',
+      subject: uniqueSub,
+      body: bodyCopy,
+      userId: '00000000-0000-0000-0000-000000000000'
+    });
+
+    assert(created1.id, 'Template was not persisted in Supabase');
+    assert.strictEqual(created1.subject, uniqueSub);
+    assert(created1.product_category, 'Template missing classified product_category');
+
+    try {
+      // 2. Re-upload identical template (verify deduplication — same ID updated, no duplicate created)
+      const created2 = await createAndClassifyTemplate({
+        name: 'Kaolin — Ceramic Buyers Verification (Updated Name)',
+        subject: uniqueSub,
+        body: bodyCopy,
+        userId: 'legacy_non_uuid_id'
+      });
+
+      assert.strictEqual(created2.id, created1.id, 'Duplicate upload should update existing template ID instead of creating duplicate row');
+
+      // 3. Retrieve from Supabase and verify unpackTemplateMetadata + Orchestrator matching
+      const { data: fetchedRow, error: fErr } = await supabaseAdmin
+        .from('email_templates')
+        .select('*')
+        .eq('id', created1.id)
+        .single();
+
+      assert(!fErr && fetchedRow, 'Could not retrieve uploaded template from Supabase');
+      const unpacked = unpackTemplateMetadata(fetchedRow);
+      assert.strictEqual(unpacked.id, created1.id);
+
+      const matchRes = await runIntelligentMatching({
+        leads: [
+          {
+            id: 'lead-verify-kaolin',
+            company: 'Euro Porcelain Ceramics GmbH',
+            email: 'procurement@europorcelain.de',
+            classification: 'Buyer',
+            custom_fields: {
+              company_intelligence: {
+                buyer_seller_status: 'Buyer',
+                relationship_types: ['prospective_buyer'],
+                relevant_products: ['Kaolin'],
+                confidence: 'high'
+              }
+            }
+          }
+        ],
+        templates: [fetchedRow]
+      });
+
+      assert.strictEqual(matchRes.matches[0].template_id, created1.id, 'Orchestrator failed to match uploaded template');
+    } finally {
+      // Clean up temporary test template so production database stays clean
+      await supabaseAdmin.from('email_templates').delete().eq('id', created1.id);
+    }
   });
 
   console.log('\n========================================================================');

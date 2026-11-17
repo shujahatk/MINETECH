@@ -96,11 +96,11 @@ export async function POST(request) {
       },
     });
   } catch (err) {
-    console.error('[Claude General Chat API] Error:', err);
+    console.error('[MineTech AI General Chat API] Error:', err);
     return NextResponse.json(
       {
         success: false,
-        error: err.message || 'Failed to complete Claude request.',
+        error: err.message || 'Failed to complete MineTech AI request.',
       },
       { status: 500 }
     );

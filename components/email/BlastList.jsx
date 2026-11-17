@@ -252,7 +252,7 @@ export default function BlastList() {
         icon={Zap}
         title="Campaigns"
         meta={!loading ? String(campaigns.length) : undefined}
-        description="Plan outbound email sequences, review Claude AI personalization, and monitor live deliverability."
+        description="Plan outbound email sequences, review MineTech AI personalization, and monitor live deliverability."
         className="mb-0"
         actions={
           <Button
@@ -687,7 +687,7 @@ export default function BlastList() {
                 </span>
               </div>
               <Badge variant="outline" className="text-xs border-primary/30 text-primary">
-                Claude Sonnet 5.5 / Opus 5.5
+                MineTech AI (Sonnet 5.5 / Opus 5.5)
               </Badge>
             </div>
 

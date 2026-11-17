@@ -15,7 +15,7 @@ const nextConfig = {
   swcMinify: true,
   compress: true,
   experimental: {
-    serverComponentsExternalPackages: ['mongoose', 'twilio', 'bcryptjs', 'mongodb'],
+    serverComponentsExternalPackages: ['mongoose', 'twilio', 'bcryptjs', 'mongodb', 'pdf-parse', 'mammoth', '@napi-rs/canvas'],
   },
   async headers() {
     return [

@@ -58,6 +58,7 @@ export async function POST(request) {
       subject,
       body: bodyToUse,
       bodyHtml: bodyHtml || `<p>${bodyToUse.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`,
+      category: category || null,
       userId: auth.user?.id || null
     });
 

@@ -53,52 +53,82 @@ export async function POST(request) {
       const file = formData.get('file');
       const pastedText = formData.get('pastedText') || formData.get('text');
 
-      if (file) {
-        const buffer = Buffer.from(await file.arrayBuffer());
-        const fileName = file.name || 'uploaded_templates.txt';
-        const parsed = await parseFileToText(buffer, fileName, file.type);
-
-        if (parsed?.isTabular && Array.isArray(parsed.rows)) {
-          // Tabular rows (CSV/Excel) with Subject/Body columns
-          draftsToProcess = parsed.rows.map((r, i) => {
-            const subject = r.Subject || r.subject || r.Title || r.title || `Imported Draft ${i + 1}`;
-            const body = r.Body || r.body || r.Content || r.content || r.Text || r.text || '';
-            const name = r.Name || r.name || subject;
-            return {
-              name,
-              subject,
-              body,
-              body_plain: body,
-              body_html: `<p>${body.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`
-            };
-          }).filter((d) => d.body.trim().length > 0);
-        } else {
-          // Plain text from TXT, DOCX, PDF, or raw sheet
-          const rawText = typeof parsed === 'string' ? parsed : String(parsed);
-          draftsToProcess = splitMultiDraftText(rawText);
+      if (file && typeof file === 'object' && typeof file.arrayBuffer === 'function') {
+        if (file.size === 0 && (!pastedText || !String(pastedText).trim())) {
+          return NextResponse.json(
+            { success: false, error: 'The uploaded file is empty. Please select a non-empty template file.' },
+            { status: 400 }
+          );
         }
-      } else if (pastedText && typeof pastedText === 'string') {
-        draftsToProcess = splitMultiDraftText(pastedText);
+
+        if (file.size > 0) {
+          let parsed;
+          try {
+            const buffer = Buffer.from(await file.arrayBuffer());
+            const fileName = file.name || 'uploaded_templates.txt';
+            parsed = await parseFileToText(buffer, fileName, file.type);
+          } catch (parseErr) {
+            return NextResponse.json(
+              { success: false, error: parseErr.message || 'Could not parse the uploaded file.' },
+              { status: 400 }
+            );
+          }
+
+          if (parsed?.isTabular && Array.isArray(parsed.rows)) {
+            // Tabular rows (CSV/Excel) with Subject/Body columns
+            draftsToProcess.push(
+              ...parsed.rows.map((r, i) => {
+                const subject = String(r.Subject || r.subject || r.Title || r.title || `Imported Draft ${i + 1}`).trim();
+                const body = String(r.Body || r.body || r.Content || r.content || r.Text || r.text || '').trim();
+                const name = String(r.Name || r.name || subject).trim();
+                return {
+                  name,
+                  subject,
+                  body,
+                  body_plain: body,
+                  body_html: `<p>${body.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`
+                };
+              }).filter((d) => d.body.trim().length > 0)
+            );
+          } else {
+            // Plain text from TXT, DOCX, PDF, or raw sheet
+            const rawText = (typeof parsed === 'string' ? parsed : String(parsed || '')).trim();
+            if (rawText) {
+              draftsToProcess.push(...splitMultiDraftText(rawText).filter((d) => (d.body || '').trim().length > 0));
+            }
+          }
+        }
+      }
+
+      if (pastedText && typeof pastedText === 'string' && pastedText.trim()) {
+        draftsToProcess.push(...splitMultiDraftText(pastedText.trim()).filter((d) => (d.body || '').trim().length > 0));
       }
     } else {
       // JSON body
-      const bodyJson = await request.json();
+      const bodyJson = await request.json().catch(() => ({}));
       if (bodyJson.text || bodyJson.pastedText) {
-        draftsToProcess = splitMultiDraftText(bodyJson.text || bodyJson.pastedText);
-      } else if (bodyJson.subject && bodyJson.body) {
-        draftsToProcess = [{
-          name: bodyJson.name || bodyJson.subject,
-          subject: bodyJson.subject,
-          body: bodyJson.body,
-          body_plain: bodyJson.body,
-          body_html: bodyJson.bodyHtml || `<p>${bodyJson.body.replace(/\n/g, '<br/>')}</p>`
-        }];
+        const raw = String(bodyJson.text || bodyJson.pastedText || '').trim();
+        if (raw) {
+          draftsToProcess = splitMultiDraftText(raw).filter((d) => (d.body || '').trim().length > 0);
+        }
+      } else if (bodyJson.subject && (bodyJson.body || bodyJson.bodyPlain || bodyJson.bodyText)) {
+        const cleanBody = String(bodyJson.body || bodyJson.bodyPlain || bodyJson.bodyText).trim();
+        if (cleanBody) {
+          draftsToProcess = [{
+            name: String(bodyJson.name || bodyJson.subject).trim(),
+            subject: String(bodyJson.subject).trim(),
+            body: cleanBody,
+            body_plain: cleanBody,
+            body_html: bodyJson.bodyHtml || `<p>${cleanBody.replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`,
+            category: bodyJson.category || null
+          }];
+        }
       }
     }
 
     if (draftsToProcess.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No valid email drafts or content detected' },
+        { success: false, error: 'No valid email drafts or readable content detected in the upload.' },
         { status: 400 }
       );
     }
@@ -111,6 +141,7 @@ export async function POST(request) {
         subject: draft.subject,
         body: draft.body,
         bodyHtml: draft.body_html,
+        category: draft.category || null,
         userId
       });
       savedTemplates.push(saved);
@@ -118,7 +149,7 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: `Successfully uploaded and AI-classified ${savedTemplates.length} prewritten templates.`,
+      message: `Successfully uploaded and classified ${savedTemplates.length} prewritten template${savedTemplates.length === 1 ? '' : 's'} with MineTech AI.`,
       data: savedTemplates
     });
   } catch (err) {

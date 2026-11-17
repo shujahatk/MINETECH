@@ -42,6 +42,8 @@ export default function TemplateManager() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState(null);
+  const [selectedPreviewTemplate, setSelectedPreviewTemplate] = useState(null);
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
@@ -110,11 +112,22 @@ export default function TemplateManager() {
     }
   };
 
+  const openEditModal = (tpl) => {
+    setEditingTemplateId(tpl._id || tpl.id);
+    setName(tpl.name || '');
+    setSubject(tpl.subject || '');
+    setBody(tpl.body_plain || tpl.bodyPlain || tpl.body || '');
+    setCategory(tpl.product_category || tpl.category || 'Bleaching Clay');
+    setIsModalOpen(true);
+  };
+
   const handleSave = async (e) => {
     if (e) e.preventDefault();
     try {
-      const res = await fetch('/api/email/templates', {
-        method: 'POST',
+      const endpoint = editingTemplateId ? `/api/email/templates/${editingTemplateId}` : '/api/email/templates';
+      const method = editingTemplateId ? 'PUT' : 'POST';
+      const res = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
@@ -124,19 +137,20 @@ export default function TemplateManager() {
           category,
         }),
       });
-      if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success !== false) {
         setIsModalOpen(false);
+        setEditingTemplateId(null);
         setName('');
         setSubject('');
         setBody('');
         fetchTemplates();
-        toast.success('Template saved & AI classified!');
+        toast.success(editingTemplateId ? 'Template updated!' : 'Template saved & classified with MineTech AI!');
       } else {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err.error || 'Could not save the template');
+        toast.error(json?.error || json?.message || `Could not save the template (HTTP ${res.status})`);
       }
     } catch (err) {
-      toast.error('Could not save the template');
+      toast.error(err?.message || 'Could not save the template');
     }
   };
 
@@ -158,18 +172,18 @@ export default function TemplateManager() {
         body: formData,
       });
 
-      const json = await res.json();
-      if (json.success) {
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
         toast.success(json.message);
         setIsUploadModalOpen(false);
         setUploadText('');
         setSelectedFile(null);
         fetchTemplates();
       } else {
-        toast.error(json.error || 'Failed to upload templates');
+        toast.error(json?.error || json?.message || `Failed to upload templates (HTTP ${res.status})`);
       }
     } catch (err) {
-      toast.error('Error uploading templates');
+      toast.error(err?.message || 'Error uploading templates');
     } finally {
       setActionLoading(false);
     }
@@ -211,7 +225,7 @@ export default function TemplateManager() {
         icon={FileText}
         title="Email Templates Library"
         meta={!loading ? String(templates.length) : undefined}
-        description="Prewritten B2B email copy classified with Claude AI for Buyer/Supplier outreach."
+        description="Prewritten B2B email copy classified with MineTech AI for Buyer/Supplier outreach."
         className="mb-0"
         actions={
           <div className="flex items-center gap-2">
@@ -229,7 +243,18 @@ export default function TemplateManager() {
             >
               <Upload className="h-3.5 w-3.5 text-amber-400" /> Upload Batch (TXT/DOCX/PDF/CSV)
             </Button>
-            <Button size="sm" onClick={() => setIsModalOpen(true)} className="gap-1.5" disabled={isModalOpen}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingTemplateId(null);
+                setName('');
+                setSubject('');
+                setBody('');
+                setIsModalOpen(true);
+              }}
+              className="gap-1.5"
+              disabled={isModalOpen}
+            >
               <Plus className="h-3.5 w-3.5" /> New template
             </Button>
           </div>
@@ -246,7 +271,7 @@ export default function TemplateManager() {
                 Upload Prewritten Email Templates
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Upload files (TXT, Word DOCX, PDF, CSV, Excel XLSX) or paste multi-draft copy. Claude AI will separate and classify them.
+                Upload files (TXT, Word DOCX, PDF, CSV, Excel XLSX) or paste multi-draft copy. MineTech AI will separate and classify them.
               </p>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setIsUploadModalOpen(false)}>
@@ -287,20 +312,22 @@ export default function TemplateManager() {
                 Cancel
               </Button>
               <Button type="submit" size="sm" disabled={actionLoading} className="bg-amber-600 hover:bg-amber-500 text-white font-medium">
-                {actionLoading ? 'Analyzing with Claude...' : 'Classify & Import to Library'}
+                {actionLoading ? 'Analyzing with MineTech AI...' : 'Classify & Import to Library'}
               </Button>
             </div>
           </form>
         </Card>
       )}
 
-      {/* CREATE NEW TEMPLATE MODAL */}
+      {/* CREATE / EDIT TEMPLATE MODAL */}
       {isModalOpen && (
         <Card className="anim-fade-up space-y-5 p-5">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
             <div>
-              <h3 className="text-sm font-semibold tracking-tight text-foreground">Template studio</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">Write prewritten copy and Claude AI will classify target roles and products.</p>
+              <h3 className="text-sm font-semibold tracking-tight text-foreground">
+                {editingTemplateId ? 'Edit Template' : 'Template studio'}
+              </h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">Write prewritten copy and MineTech AI will classify target roles and products.</p>
             </div>
             <Button type="button" variant="outline" size="sm" onClick={handleGenerateAIHook} disabled={isGeneratingAI} className="h-8 gap-1.5 text-primary">
               <Sparkles className={`h-3.5 w-3.5 ${isGeneratingAI ? 'animate-spin' : ''}`} />
@@ -382,14 +409,61 @@ export default function TemplateManager() {
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-border pt-4">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setIsModalOpen(false)} className="text-muted-foreground hover:text-foreground">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setIsModalOpen(false);
+                  setEditingTemplateId(null);
+                }}
+                className="text-muted-foreground hover:text-foreground"
+              >
                 Cancel
               </Button>
               <Button type="submit" size="sm" className="px-4">
-                Save & Classify Template
+                {editingTemplateId ? 'Update Template' : 'Save & Classify Template'}
               </Button>
             </div>
           </form>
+        </Card>
+      )}
+
+      {/* PREVIEW TEMPLATE MODAL */}
+      {selectedPreviewTemplate && (
+        <Card className="anim-fade-up p-5 space-y-4 border-primary/30 bg-card">
+          <div className="flex items-center justify-between border-b border-border pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-foreground">{selectedPreviewTemplate.name}</h3>
+                <span className="tone-brand inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-semibold text-amber-500 border-amber-500/20 bg-amber-500/10">
+                  {selectedPreviewTemplate.product_category || selectedPreviewTemplate.category || 'Minerals'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground font-mono mt-1">
+                Subject: {renderSimulatedPreview(selectedPreviewTemplate.subject)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  openEditModal(selectedPreviewTemplate);
+                  setSelectedPreviewTemplate(null);
+                }}
+                className="gap-1.5 text-xs"
+              >
+                <Edit2 className="h-3 w-3" /> Edit
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedPreviewTemplate(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-xl border border-border bg-muted/20 p-4 text-xs leading-relaxed whitespace-pre-wrap text-foreground">
+            {renderSimulatedPreview(selectedPreviewTemplate.body_plain || selectedPreviewTemplate.bodyPlain || selectedPreviewTemplate.body)}
+          </div>
         </Card>
       )}
 
@@ -408,7 +482,7 @@ export default function TemplateManager() {
           <EmptyState
             icon={FileText}
             title="No prewritten templates yet"
-            description="Upload prepared email drafts or create templates. Claude AI will classify them for automatic campaign matching."
+            description="Upload prepared email drafts or create templates. MineTech AI will classify them for automatic campaign matching."
             action={
               <div className="flex gap-2">
                 <Button size="sm" onClick={() => setIsUploadModalOpen(true)} className="gap-1.5 bg-amber-600 hover:bg-amber-500 text-white">
@@ -439,15 +513,35 @@ export default function TemplateManager() {
                       {t.recipient_type?.includes('supplier') ? 'Supplier' : 'Buyer'}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(t._id || t.id)}
-                    title="Delete template"
-                    aria-label={`Delete template ${t.name}`}
-                    className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPreviewTemplate(t)}
+                      title="Preview template"
+                      aria-label={`Preview template ${t.name}`}
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(t)}
+                      title="Edit template"
+                      aria-label={`Edit template ${t.name}`}
+                      className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(t._id || t.id)}
+                      title="Delete template"
+                      aria-label={`Delete template ${t.name}`}
+                      className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <h3 className="text-sm font-semibold tracking-tight text-foreground">{t.name}</h3>
                 <p className="truncate text-xs font-medium text-muted-foreground font-mono">
@@ -459,7 +553,12 @@ export default function TemplateManager() {
                 />
                 <div className="pt-2 border-t border-border flex items-center justify-between text-[11px] text-muted-foreground">
                   <span>Sequence: <strong className="text-foreground">{t.sequence_stage || 'Intro'}</strong></span>
-                  <span className="text-emerald-500 font-medium">Canonical Copy</span>
+                  <Link
+                    href="/email/matching"
+                    className="text-emerald-500 hover:underline font-medium inline-flex items-center gap-1"
+                  >
+                    Use in Campaign <ArrowRight className="h-3 w-3" />
+                  </Link>
                 </div>
               </div>
             </Card>
