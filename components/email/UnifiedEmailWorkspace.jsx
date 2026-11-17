@@ -216,38 +216,6 @@ export default function UnifiedEmailWorkspace() {
     }
   };
 
-  const handleBulkAttachBrochure = async () => {
-    const targetIds = Array.from(selectedDraftIds);
-    if (targetIds.length === 0) return;
-
-    try {
-      const brochureDoc = {
-        id: 'doc-brochure-minetech',
-        name: 'MineTech Corporate Brochure & Company Profile',
-        fileName: 'MineTech_Corporate_Brochure_2026.pdf',
-        fileSize: '2.4 MB',
-      };
-
-      const res = await fetch('/api/email/workspace', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'bulk_attachments',
-          draftIds: targetIds,
-          attachments: [brochureDoc],
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Attached MineTech brochure to ${targetIds.length} emails!`);
-        setDrafts(data.drafts);
-      }
-    } catch (err) {
-      toast.error('Bulk attachment failed');
-    }
-  };
-
   // Selection toggle
   const toggleSelectAll = () => {
     if (selectedDraftIds.size === filteredDrafts.length) {
@@ -307,22 +275,22 @@ export default function UnifiedEmailWorkspace() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Banner & Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-900 to-amber-950/30 p-6 rounded-2xl border border-slate-800 shadow-xl">
+      {/* Top Banner & Header — Native MineTech Design System */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-card p-6 rounded-2xl border border-border shadow-card">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary">
               <Sparkles className="w-5 h-5" />
             </div>
-            <h1 className="text-xl font-bold text-white tracking-tight">
+            <h1 className="text-xl font-bold text-foreground tracking-tight">
               Personalized Email Workspace
             </h1>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25 font-medium">
               MineTech AI
             </span>
           </div>
-          <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
-            Upload single multi-email PDF/Word documents. MineTech AI extracts each email verbatim, matches against your CRM companies and contacts, attaches product brochures, and stages structured bulk campaigns where <strong>every company receives its own tailored email</strong>.
+          <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+            Upload multi-email PDF/Word documents. MineTech AI extracts each email verbatim, matches against your CRM companies and contacts, attaches product brochures, and stages structured bulk campaigns where <strong>every company receives its own tailored email</strong>.
           </p>
         </div>
 
@@ -333,9 +301,9 @@ export default function UnifiedEmailWorkspace() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsSignatureModalOpen(true)}
-                className="border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs h-9"
+                className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
               >
-                <FileSignature className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+                <FileSignature className="w-3.5 h-3.5 mr-1.5 text-primary" />
                 Signature Settings
               </Button>
 
@@ -343,9 +311,9 @@ export default function UnifiedEmailWorkspace() {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsAttachFilesModalOpen(true)}
-                className="border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs h-9"
+                className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
               >
-                <Paperclip className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+                <Paperclip className="w-3.5 h-3.5 mr-1.5 text-primary" />
                 Attach Files
               </Button>
 
@@ -353,7 +321,7 @@ export default function UnifiedEmailWorkspace() {
                 variant="outline"
                 size="sm"
                 onClick={handleClearWorkspace}
-                className="border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-slate-800 text-xs h-9"
+                className="border-border text-muted-foreground hover:text-rose-400 hover:bg-muted/40 text-xs h-9"
               >
                 <Trash2 className="w-3.5 h-3.5 mr-1.5" />
                 Reset Workspace
@@ -364,9 +332,9 @@ export default function UnifiedEmailWorkspace() {
           <Button
             size="sm"
             onClick={() => setIsUploadOpen(true)}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-700 text-xs h-9"
+            className="bg-muted text-foreground border border-border hover:bg-muted/70 text-xs h-9"
           >
-            <Upload className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+            <Upload className="w-3.5 h-3.5 mr-1.5 text-primary" />
             Upload PDF / Document
           </Button>
 
@@ -374,9 +342,9 @@ export default function UnifiedEmailWorkspace() {
             <Button
               size="sm"
               onClick={() => router.push(`/email/blasts/${createdCampaignId || activeBatch?.id}`)}
-              className="bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/40 font-semibold text-xs h-9"
+              className="bg-card hover:bg-muted/40 text-primary border border-primary/40 font-semibold text-xs h-9"
             >
-              <Eye className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+              <Eye className="w-3.5 h-3.5 mr-1.5 text-primary" />
               View Campaign
             </Button>
           )}
@@ -385,7 +353,7 @@ export default function UnifiedEmailWorkspace() {
             size="sm"
             disabled={selectedDraftIds.size === 0}
             onClick={() => setIsCampaignModalOpen(true)}
-            className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs h-9 shadow-lg shadow-amber-600/20"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-9 shadow-xs"
           >
             <Layers className="w-3.5 h-3.5 mr-1.5" />
             Create Campaign ({selectedDraftIds.size})
@@ -395,15 +363,15 @@ export default function UnifiedEmailWorkspace() {
 
       {/* Upload Drawer / Modal */}
       {isUploadOpen && (
-        <Card className="p-6 bg-slate-900 border-amber-500/30 shadow-2xl animate-in slide-in-from-top-4 duration-300 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <Card className="p-6 bg-card border-border shadow-dialog animate-in slide-in-from-top-4 duration-300 space-y-4">
+          <div className="flex items-center justify-between border-b border-border pb-3">
             <div className="flex items-center gap-2">
-              <Upload className="w-4 h-4 text-amber-400" />
-              <h3 className="text-sm font-semibold text-white">Import Personalized Emails</h3>
+              <Upload className="w-4 h-4 text-primary" />
+              <h3 className="text-sm font-semibold text-foreground">Import Personalized Emails</h3>
             </div>
             <button
               onClick={() => setIsUploadOpen(false)}
-              className="text-slate-400 hover:text-white p-1 rounded"
+              className="text-muted-foreground hover:text-foreground p-1 rounded"
             >
               <X className="w-4 h-4" />
             </button>
@@ -415,8 +383,8 @@ export default function UnifiedEmailWorkspace() {
               onClick={() => setUploadTab('file')}
               className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
                 uploadTab === 'file'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'bg-muted/40 text-muted-foreground hover:text-foreground'
               }`}
             >
               File Upload (PDF, Word, TXT)
@@ -426,8 +394,8 @@ export default function UnifiedEmailWorkspace() {
               onClick={() => setUploadTab('text')}
               className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
                 uploadTab === 'text'
-                  ? 'bg-amber-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
+                  ? 'bg-primary text-primary-foreground font-semibold'
+                  : 'bg-muted/40 text-muted-foreground hover:text-foreground'
               }`}
             >
               Paste Email Text Directly
@@ -437,7 +405,7 @@ export default function UnifiedEmailWorkspace() {
           {uploadTab === 'file' ? (
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-700 hover:border-amber-500/80 rounded-xl p-8 text-center cursor-pointer transition-all bg-slate-950/40 hover:bg-slate-950/70 group"
+              className="border-2 border-dashed border-border hover:border-primary/80 rounded-xl p-8 text-center cursor-pointer transition-all bg-muted/20 hover:bg-muted/40 group"
             >
               <input
                 ref={fileInputRef}
@@ -449,23 +417,23 @@ export default function UnifiedEmailWorkspace() {
               />
               {uploading ? (
                 <div className="flex flex-col items-center justify-center py-4">
-                  <Loader2 className="w-8 h-8 animate-spin text-amber-400 mb-2" />
-                  <p className="text-sm font-semibold text-slate-200">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+                  <p className="text-sm font-semibold text-foreground">
                     Extracting emails & matching against CRM companies...
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Verbatim extraction with MineTech AI
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center">
-                  <div className="p-3 rounded-full bg-slate-800 group-hover:bg-amber-500/10 text-slate-400 group-hover:text-amber-400 transition-colors mb-3">
+                  <div className="p-3 rounded-full bg-muted/60 group-hover:bg-primary/10 text-muted-foreground group-hover:text-primary transition-colors mb-3">
                     <FileText className="w-6 h-6" />
                   </div>
-                  <p className="text-sm font-semibold text-slate-200">
+                  <p className="text-sm font-semibold text-foreground">
                     Click to browse or drag & drop your PDF / Word document here
                   </p>
-                  <p className="text-xs text-slate-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Supports documents with 10, 36, or 100+ personalized emails in a single file
                   </p>
                 </div>
@@ -478,14 +446,14 @@ export default function UnifiedEmailWorkspace() {
                 onChange={(e) => setRawTextInput(e.target.value)}
                 placeholder="Paste your multi-email document text here...&#10;&#10;Company: Floreser Peru&#10;Subject: Sourcing High-Grade Kaolin&#10;Body: Dear Team, ...&#10;&#10;---&#10;&#10;Company: Esdel Phartec&#10;Subject: Industrial Bleaching Clay Partnership&#10;Body: Hi David, ..."
                 rows={8}
-                className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-200 font-mono focus:border-amber-500 focus:outline-none"
+                className="w-full bg-background border border-border rounded-lg p-3 text-xs text-foreground focus:outline-none"
               />
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsUploadOpen(false)}
-                  className="border-slate-700 text-slate-300 text-xs"
+                  className="border-border text-foreground text-xs"
                 >
                   Cancel
                 </Button>
@@ -493,7 +461,7 @@ export default function UnifiedEmailWorkspace() {
                   size="sm"
                   disabled={uploading || !rawTextInput.trim()}
                   onClick={handleTextSubmit}
-                  className="bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium text-xs"
                 >
                   {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
                   Extract & Match Emails
@@ -504,122 +472,125 @@ export default function UnifiedEmailWorkspace() {
         </Card>
       )}
 
-      {/* Summary KPI Cards Grid (6 cards) */}
+      {/* Summary KPI Cards Grid (6 cards) — Semantic CRM Colors */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card
           onClick={() => setStatusTab('all')}
-          className={`p-4 bg-slate-900 border cursor-pointer transition-all ${
+          className={`p-4 bg-card border cursor-pointer transition-all ${
             statusTab === 'all'
-              ? 'border-amber-500 shadow-md bg-amber-500/5'
-              : 'border-slate-800 hover:border-slate-700'
+              ? 'border-primary/50 shadow-xs bg-primary/5'
+              : 'border-border hover:border-border/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Total Extracted
             </span>
-            <FileText className="w-4 h-4 text-slate-400" />
+            <FileText className="w-4 h-4 text-muted-foreground" />
           </div>
-          <div className="text-2xl font-bold text-white mt-2">{metrics.total || 0}</div>
-          <p className="text-[10px] text-slate-500 mt-1">Emails in workspace</p>
+          <div className="text-2xl font-bold text-foreground mt-2">{metrics.total || 0}</div>
+          <p className="text-[10px] text-muted-foreground mt-1">Emails in workspace</p>
         </Card>
 
+        {/* CRM Matched: Strict Green */}
         <Card
           onClick={() => setStatusTab('all')}
-          className="p-4 bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer"
+          className="p-4 bg-card border border-border hover:border-border/80 cursor-pointer"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
               CRM Matched
             </span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-emerald-400 mt-2">{metrics.matched || 0}</div>
-          <p className="text-[10px] text-slate-500 mt-1">Linked to company</p>
+          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-2">{metrics.matched || 0}</div>
+          <p className="text-[10px] text-muted-foreground mt-1">Linked to company</p>
         </Card>
 
+        {/* Needs Review: Strict Yellow/Amber */}
         <Card
           onClick={() => setStatusTab('needs_review')}
-          className={`p-4 bg-slate-900 border cursor-pointer transition-all ${
+          className={`p-4 bg-card border cursor-pointer transition-all ${
             statusTab === 'needs_review'
-              ? 'border-amber-500 shadow-md bg-amber-500/5'
-              : 'border-slate-800 hover:border-slate-700'
+              ? 'border-amber-500 shadow-xs bg-amber-500/10'
+              : 'border-border hover:border-border/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
               Needs Review
             </span>
-            <Clock className="w-4 h-4 text-amber-400" />
+            <Clock className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-2xl font-bold text-amber-400 mt-2">{metrics.needs_review || 0}</div>
-          <p className="text-[10px] text-slate-500 mt-1">Fuzzy or unverified</p>
+          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-2">{metrics.needs_review || 0}</div>
+          <p className="text-[10px] text-muted-foreground mt-1">Pending verification</p>
         </Card>
 
+        {/* Unmatched: Strict Red */}
         <Card
           onClick={() => setStatusTab('unmatched')}
-          className={`p-4 bg-slate-900 border cursor-pointer transition-all ${
+          className={`p-4 bg-card border cursor-pointer transition-all ${
             statusTab === 'unmatched'
-              ? 'border-rose-500 shadow-md bg-rose-500/5'
-              : 'border-slate-800 hover:border-slate-700'
+              ? 'border-rose-500 shadow-xs bg-rose-500/10'
+              : 'border-border hover:border-border/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-rose-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
               Unmatched
             </span>
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <AlertTriangle className="w-4 h-4 text-rose-500" />
           </div>
-          <div className="text-2xl font-bold text-rose-400 mt-2">{metrics.unmatched || 0}</div>
-          <p className="text-[10px] text-slate-500 mt-1">Manual link required</p>
+          <div className="text-2xl font-bold text-rose-600 dark:text-rose-400 mt-2">{metrics.unmatched || 0}</div>
+          <p className="text-[10px] text-muted-foreground mt-1">Manual link required</p>
         </Card>
 
         <Card
           onClick={() => setStatusTab('approved')}
-          className={`p-4 bg-slate-900 border cursor-pointer transition-all ${
+          className={`p-4 bg-card border cursor-pointer transition-all ${
             statusTab === 'approved'
-              ? 'border-emerald-500 shadow-md bg-emerald-500/5'
-              : 'border-slate-800 hover:border-slate-700'
+              ? 'border-emerald-500/60 shadow-xs bg-emerald-500/5'
+              : 'border-border hover:border-border/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
               Approved
             </span>
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <ShieldCheck className="w-4 h-4 text-emerald-500" />
           </div>
-          <div className="text-2xl font-bold text-emerald-400 mt-2">{metrics.approved || 0}</div>
-          <p className="text-[10px] text-slate-500 mt-1">Ready for dispatch</p>
+          <div className="text-2xl font-bold text-foreground mt-2">{metrics.approved || 0}</div>
+          <p className="text-[10px] text-muted-foreground mt-1">Approved by user</p>
         </Card>
 
         <Card
           onClick={() => setStatusTab('ready')}
-          className={`p-4 bg-slate-900 border cursor-pointer transition-all ${
+          className={`p-4 bg-card border cursor-pointer transition-all ${
             statusTab === 'ready'
-              ? 'border-amber-500 shadow-md bg-amber-500/10'
-              : 'border-slate-800 hover:border-slate-700'
+              ? 'border-primary shadow-xs bg-primary/10'
+              : 'border-border hover:border-border/80'
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-amber-300 uppercase tracking-wider">
+            <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
               Campaign Ready
             </span>
-            <Send className="w-4 h-4 text-amber-400" />
+            <Send className="w-4 h-4 text-primary" />
           </div>
-          <div className="text-2xl font-bold text-amber-300 mt-2">{metrics.ready || 0}</div>
-          <p className="text-[10px] text-slate-500 mt-1">Approved & contact set</p>
+          <div className="text-2xl font-bold text-primary mt-2">{metrics.ready || 0}</div>
+          <p className="text-[10px] text-muted-foreground mt-1">Approved & contact set</p>
         </Card>
       </div>
 
       {/* Filter Tabs & Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20 p-2.5 rounded-xl border border-border">
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setStatusTab('all')}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusTab === 'all'
-                ? 'bg-amber-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
             }`}
           >
             All Emails ({drafts.length})
@@ -628,8 +599,8 @@ export default function UnifiedEmailWorkspace() {
             onClick={() => setStatusTab('ready')}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusTab === 'ready'
-                ? 'bg-amber-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
             }`}
           >
             Ready to Send ({metrics.ready || 0})
@@ -638,8 +609,8 @@ export default function UnifiedEmailWorkspace() {
             onClick={() => setStatusTab('needs_review')}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusTab === 'needs_review'
-                ? 'bg-amber-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
             }`}
           >
             Needs Review ({metrics.needs_review || 0})
@@ -648,8 +619,8 @@ export default function UnifiedEmailWorkspace() {
             onClick={() => setStatusTab('unmatched')}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusTab === 'unmatched'
-                ? 'bg-amber-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
             }`}
           >
             Unmatched ({metrics.unmatched || 0})
@@ -658,8 +629,8 @@ export default function UnifiedEmailWorkspace() {
             onClick={() => setStatusTab('approved')}
             className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
               statusTab === 'approved'
-                ? 'bg-amber-600 text-white font-semibold'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 font-semibold'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
             }`}
           >
             Approved ({metrics.approved || 0})
@@ -667,26 +638,26 @@ export default function UnifiedEmailWorkspace() {
         </div>
 
         <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search company, contact, subject..."
-            className="pl-8 h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+            className="pl-8 h-8 text-xs bg-background border-border text-foreground"
           />
         </div>
       </div>
 
       {/* Bulk Action Bar (when rows are selected) */}
       {selectedDraftIds.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 p-3 px-4 rounded-xl animate-in fade-in duration-200">
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-primary/10 border border-primary/30 p-3 px-4 rounded-xl animate-in fade-in duration-200">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-amber-200">
+            <span className="text-xs font-semibold text-foreground">
               {selectedDraftIds.size} of {filteredDrafts.length} emails selected
             </span>
             <button
               onClick={toggleSelectAll}
-              className="text-xs text-amber-400 hover:underline"
+              className="text-xs text-primary hover:underline"
             >
               {selectedDraftIds.size === filteredDrafts.length ? 'Deselect all' : 'Select all'}
             </button>
@@ -697,9 +668,9 @@ export default function UnifiedEmailWorkspace() {
               variant="outline"
               size="sm"
               onClick={handleBulkApprove}
-              className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+              className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
             >
-              <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+              <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-500" />
               Bulk Approve Selected
             </Button>
 
@@ -707,9 +678,9 @@ export default function UnifiedEmailWorkspace() {
               variant="outline"
               size="sm"
               onClick={() => setIsAttachFilesModalOpen(true)}
-              className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+              className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
             >
-              <Paperclip className="w-3.5 h-3.5 mr-1 text-amber-400" />
+              <Paperclip className="w-3.5 h-3.5 mr-1 text-primary" />
               Attach Files
             </Button>
 
@@ -717,16 +688,16 @@ export default function UnifiedEmailWorkspace() {
               variant="outline"
               size="sm"
               onClick={() => setIsSignatureModalOpen(true)}
-              className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+              className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
             >
-              <FileSignature className="w-3.5 h-3.5 mr-1 text-amber-400" />
+              <FileSignature className="w-3.5 h-3.5 mr-1 text-primary" />
               Change Signature
             </Button>
 
             <Button
               size="sm"
               onClick={() => setIsCampaignModalOpen(true)}
-              className="h-8 text-xs bg-amber-600 hover:bg-amber-500 text-white font-semibold shadow"
+              className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-xs"
             >
               <Layers className="w-3.5 h-3.5 mr-1" />
               Create Campaign Draft ({selectedDraftIds.size})
@@ -736,18 +707,18 @@ export default function UnifiedEmailWorkspace() {
       )}
 
       {/* Main Outreach Table */}
-      <Card className="bg-slate-900 border-slate-800 shadow-xl overflow-hidden">
+      <Card className="bg-card border-border shadow-card overflow-hidden">
         {loading ? (
-          <div className="py-24 flex flex-col items-center justify-center text-slate-400">
-            <Loader2 className="w-8 h-8 animate-spin text-amber-500 mb-2" />
+          <div className="py-24 flex flex-col items-center justify-center text-muted-foreground">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
             <p className="text-sm font-medium">Loading email workspace...</p>
           </div>
         ) : filteredDrafts.length === 0 ? (
-          <div className="py-20 text-center text-slate-400 space-y-3">
-            <FileText className="w-10 h-10 text-slate-600 mx-auto" />
+          <div className="py-20 text-center text-muted-foreground space-y-3">
+            <FileText className="w-10 h-10 text-muted-foreground/60 mx-auto" />
             <div>
-              <p className="text-base font-semibold text-slate-200">No emails match the current view</p>
-              <p className="text-xs text-slate-400 mt-1">
+              <p className="text-base font-semibold text-foreground">No emails match the current view</p>
+              <p className="text-xs text-muted-foreground mt-1">
                 {drafts.length === 0
                   ? 'Upload a PDF or Word document with personalized emails to start.'
                   : 'Try clearing your search query or switching tabs.'}
@@ -756,7 +727,7 @@ export default function UnifiedEmailWorkspace() {
             {drafts.length === 0 && (
               <Button
                 onClick={() => setIsUploadOpen(true)}
-                className="bg-amber-600 hover:bg-amber-500 text-white text-xs mt-2"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs mt-2"
               >
                 <Upload className="w-3.5 h-3.5 mr-1.5" />
                 Upload Emails Document
@@ -767,13 +738,13 @@ export default function UnifiedEmailWorkspace() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[11px] font-semibold">
+                <tr className="border-b border-border bg-muted/40 text-muted-foreground uppercase tracking-wider text-[11px] font-semibold">
                   <th className="py-3 px-4 w-10">
                     <input
                       type="checkbox"
                       checked={selectedDraftIds.size > 0 && selectedDraftIds.size === filteredDrafts.length}
                       onChange={toggleSelectAll}
-                      className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                      className="w-4 h-4 accent-primary rounded cursor-pointer"
                     />
                   </th>
                   <th className="py-3 px-4">Company & CRM Match</th>
@@ -785,8 +756,8 @@ export default function UnifiedEmailWorkspace() {
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-300">
-                {filteredDrafts.map((draft, idx) => {
+              <tbody className="divide-y divide-border text-foreground">
+                {filteredDrafts.map((draft) => {
                   const isSelected = selectedDraftIds.has(draft.id);
                   const matchedLead = draft.matched_lead;
                   const allContacts = draft.all_company_contacts || [];
@@ -797,8 +768,8 @@ export default function UnifiedEmailWorkspace() {
                   return (
                     <tr
                       key={draft.id}
-                      className={`hover:bg-slate-800/50 transition-colors ${
-                        isSelected ? 'bg-amber-500/5' : ''
+                      className={`hover:bg-muted/30 transition-colors ${
+                        isSelected ? 'bg-primary/5' : ''
                       }`}
                     >
                       {/* Checkbox */}
@@ -807,7 +778,7 @@ export default function UnifiedEmailWorkspace() {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectOne(draft.id)}
-                          className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
                         />
                       </td>
 
@@ -815,21 +786,21 @@ export default function UnifiedEmailWorkspace() {
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-white">
+                            <span className="font-semibold text-foreground">
                               {draft.extracted_company || matchedLead?.company_name || 'Unspecified Company'}
                             </span>
                           </div>
 
                           {matchedLead ? (
-                            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                              <Building className="w-3 h-3 text-emerald-400" />
-                              <span className="text-emerald-300/90 font-medium">
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                              <Building className="w-3 h-3 text-emerald-500" />
+                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                                 CRM: {matchedLead.company_name}
                               </span>
                               {matchedLead.country && <span>({matchedLead.country})</span>}
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1 text-[11px] text-rose-400">
+                            <div className="flex items-center gap-1 text-[11px] text-rose-500">
                               <AlertTriangle className="w-3 h-3" />
                               <span>Not matched to CRM</span>
                             </div>
@@ -841,29 +812,29 @@ export default function UnifiedEmailWorkspace() {
                       <td className="py-3.5 px-4 max-w-xs">
                         {primaryContact ? (
                           <div className="space-y-0.5">
-                            <div className="flex items-center gap-1.5 font-medium text-slate-200">
-                              <User className="w-3 h-3 text-amber-400" />
+                            <div className="flex items-center gap-1.5 font-medium text-foreground">
+                              <User className="w-3 h-3 text-primary" />
                               <span>{primaryContact.name || 'Unnamed'}</span>
                               {selectedContacts.length > 1 && (
-                                <span className="text-[10px] px-1 rounded bg-slate-700 text-slate-300">
+                                <span className="text-[10px] px-1 rounded bg-muted text-muted-foreground">
                                   +{selectedContacts.length - 1} CC
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] text-slate-400">{primaryContact.email}</p>
+                            <p className="text-[11px] text-muted-foreground">{primaryContact.email}</p>
                           </div>
                         ) : (
-                          <span className="text-[11px] text-slate-500 italic">No contact set</span>
+                          <span className="text-[11px] text-muted-foreground italic">No contact set</span>
                         )}
                       </td>
 
                       {/* Email Preview */}
                       <td className="py-3.5 px-4 max-w-md">
                         <div className="space-y-1">
-                          <p className="font-medium text-slate-200 truncate">
+                          <p className="font-medium text-foreground truncate">
                             {draft.edited_subject || draft.extracted_subject || '(No subject line)'}
                           </p>
-                          <p className="text-[11px] text-slate-400 line-clamp-1">
+                          <p className="text-[11px] text-muted-foreground line-clamp-1">
                             {draft.edited_body_plain || draft.extracted_body_plain}
                           </p>
                         </div>
@@ -874,40 +845,43 @@ export default function UnifiedEmailWorkspace() {
                         <div className="space-y-1">
                           {attachmentsCount > 0 ? (
                             <span
-                              className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium flex items-center gap-1 w-fit cursor-default"
+                              className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-medium flex items-center gap-1 w-fit cursor-default"
                               title={draft.assigned_attachments?.map((a) => a.name || a.fileName).join(', ')}
                             >
                               <Paperclip className="w-3 h-3" />
                               {attachmentsCount} {attachmentsCount === 1 ? 'file' : 'files'}
                             </span>
                           ) : (
-                            <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                              <Paperclip className="w-3 h-3 text-slate-600" /> No files
+                            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                              <Paperclip className="w-3 h-3 text-muted-foreground/60" /> No files
                             </span>
                           )}
 
                           <span
-                            className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] flex items-center gap-1 w-fit cursor-default"
-                            title={draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Signature' : 'Official MineTech Signature'}
+                            className="px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border text-[10px] flex items-center gap-1 w-fit cursor-default"
+                            title={draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Signature' : 'Official Gmail Signature'}
                           >
-                            <FileSignature className="w-3 h-3 text-amber-400" />
-                            {draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Sig' : 'Official Sig'}
+                            <FileSignature className="w-3 h-3 text-primary" />
+                            {draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Sig' : 'Gmail Sig'}
                           </span>
                         </div>
                       </td>
 
-                      {/* Match Status */}
+                      {/* Match Status — Strict Colors (Green, Yellow, Red) */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {draft.match_status === 'matched' ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold">
-                            Matched
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                            <CheckCircle2 className="w-3 h-3" />
+                            CRM Matched
                           </span>
                         ) : draft.match_status === 'needs_review' ? (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold">
+                          <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                            <AlertTriangle className="w-3 h-3" />
                             Needs Review
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-semibold">
+                          <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                            <AlertTriangle className="w-3 h-3" />
                             Unmatched
                           </span>
                         )}
@@ -916,14 +890,14 @@ export default function UnifiedEmailWorkspace() {
                       {/* Approval Status */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {draft.approval_status === 'approved' ? (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
                             <CheckCircle2 className="w-3 h-3" />
                             Approved
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                          <span className="px-2 py-0.5 rounded-full bg-muted/60 text-muted-foreground border border-border text-[10px] font-semibold flex items-center gap-1 w-fit">
                             <Clock className="w-3 h-3" />
-                            Pending Review
+                            Needs Review
                           </span>
                         )}
                       </td>
@@ -938,9 +912,9 @@ export default function UnifiedEmailWorkspace() {
                               const originalIdx = drafts.findIndex((d) => d.id === draft.id);
                               setEditingDraftIndex(originalIdx);
                             }}
-                            className="h-7 text-xs border-slate-700 text-slate-200 hover:bg-slate-800 hover:text-white"
+                            className="h-7 text-xs border-border text-foreground hover:bg-muted/40"
                           >
-                            <Edit3 className="w-3 h-3 mr-1" />
+                            <Edit3 className="w-3 h-3 mr-1 text-primary" />
                             Review & Edit
                           </Button>
 
@@ -949,7 +923,7 @@ export default function UnifiedEmailWorkspace() {
                               variant="ghost"
                               size="sm"
                               onClick={() => setRematchDraft(draft)}
-                              className="h-7 text-xs text-amber-400 hover:bg-amber-500/10"
+                              className="h-7 text-xs text-primary hover:bg-primary/10"
                             >
                               Link CRM
                             </Button>

@@ -61,6 +61,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
   const [previewAttachments, setPreviewAttachments] = useState([]);
   const [previewApproval, setPreviewApproval] = useState('approved');
   const [savingRecipient, setSavingRecipient] = useState(false);
+  const [signatures, setSignatures] = useState([]);
+  const [defaultSigHtml, setDefaultSigHtml] = useState('');
 
   // Modals
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
@@ -108,6 +110,20 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
     }
   }, [campaignId]);
 
+  // Load signatures to ensure exact Gmail signature fallback
+  useEffect(() => {
+    fetch('/api/email/workspace/signatures')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.signatures) {
+          setSignatures(d.signatures);
+          const active = d.signatures.find((s) => s.id === 'sig-gmail-synced') || d.signatures.find((s) => s.isDefault) || d.signatures[0];
+          if (active?.bodyHtml) setDefaultSigHtml(active.bodyHtml);
+        }
+      })
+      .catch((e) => console.error('Failed to load workspace signatures:', e));
+  }, []);
+
   // Derived metrics
   const totalCount = recipients.length;
   const approvedCount = recipients.filter(
@@ -130,7 +146,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
     setPreviewTo(r.email || '');
     setPreviewCc((r.tokens?.cc || []).join(', '));
     setPreviewBcc((r.tokens?.bcc || []).join(', '));
-    setPreviewSigHtml(r.tokens?.signature_html || '');
+    setPreviewSigHtml(r.tokens?.signature_html || defaultSigHtml || '');
     setPreviewAttachments(r.tokens?.attachments || []);
     setPreviewApproval(r.tokens?.approval_status || (r.tokens?.user_approved ? 'approved' : 'needs_review'));
   };
@@ -338,8 +354,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
   if (loading) {
     return (
-      <div className="py-28 flex flex-col items-center justify-center text-slate-400 space-y-3">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+      <div className="py-28 flex flex-col items-center justify-center text-muted-foreground space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
         <p className="text-sm font-medium">Loading campaign preview & review screen...</p>
       </div>
     );
@@ -347,10 +363,10 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
   if (!campaign) {
     return (
-      <div className="py-24 text-center text-slate-400 space-y-3">
+      <div className="py-24 text-center text-muted-foreground space-y-3">
         <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
-        <h3 className="text-lg font-bold text-white">Campaign Not Found</h3>
-        <p className="text-xs text-slate-400">The requested campaign does not exist or was removed.</p>
+        <h3 className="text-lg font-bold text-foreground">Campaign Not Found</h3>
+        <p className="text-xs text-muted-foreground">The requested campaign does not exist or was removed.</p>
         <Button onClick={onBack || (() => router.push('/email/blasts'))} className="mt-2 text-xs">
           Return to Campaigns
         </Button>
@@ -363,44 +379,44 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* Top Header & Breadcrumbs */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-xl">
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-card border border-border p-6 rounded-2xl shadow-xs">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={onBack || (() => router.push('/email/blasts'))}
-              className="h-8 text-xs text-slate-400 hover:text-white hover:bg-slate-800 -ml-2"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-muted -ml-2"
             >
               <ArrowLeft className="w-4 h-4 mr-1.5" />
               Back
             </Button>
 
-            <span className="text-xs text-slate-500">•</span>
+            <span className="text-xs text-muted-foreground/60">•</span>
 
             {isRenaming ? (
               <div className="flex items-center gap-2">
                 <Input
                   value={campaignName}
                   onChange={(e) => setCampaignName(e.target.value)}
-                  className="h-8 text-sm font-semibold bg-slate-950 border-amber-500 text-white w-72"
+                  className="h-8 text-sm font-semibold bg-background border-primary text-foreground w-72"
                   autoFocus
                 />
-                <Button size="sm" onClick={handleRenameCampaign} className="h-8 text-xs bg-amber-600 hover:bg-amber-500 text-white">
+                <Button size="sm" onClick={handleRenameCampaign} className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
                   Save
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => setIsRenaming(false)} className="h-8 text-xs text-slate-400">
+                <Button size="sm" variant="ghost" onClick={() => setIsRenaming(false)} className="h-8 text-xs text-muted-foreground">
                   Cancel
                 </Button>
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-white tracking-tight">
+                <h1 className="text-xl font-bold text-foreground tracking-tight">
                   {campaignName}
                 </h1>
                 <button
                   onClick={() => setIsRenaming(true)}
-                  className="p-1 rounded text-slate-400 hover:text-amber-400 hover:bg-slate-800"
+                  className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-muted"
                   title="Rename Campaign"
                 >
                   <Edit3 className="w-3.5 h-3.5" />
@@ -408,12 +424,12 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
               </div>
             )}
 
-            <Badge className="bg-amber-500/10 text-amber-300 border-amber-500/30 uppercase text-[10px] font-semibold">
+            <Badge className="bg-primary/10 text-primary border-primary/30 uppercase text-[10px] font-semibold">
               {campaign.status || 'DRAFT'}
             </Badge>
           </div>
 
-          <p className="text-xs text-slate-400 max-w-2xl">
+          <p className="text-xs text-muted-foreground max-w-2xl">
             Dedicated Campaign Review: Inspect every individual outgoing email, verify exact recipients, typography, custom signatures, and file attachments before sending.
           </p>
         </div>
@@ -424,7 +440,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
             variant="outline"
             size="sm"
             onClick={fetchCampaignData}
-            className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-9"
+            className="border-border text-foreground hover:bg-muted text-xs h-9"
           >
             Refresh
           </Button>
@@ -433,7 +449,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
             size="sm"
             onClick={() => setIsConfirmSendOpen(true)}
             disabled={totalCount === 0 || campaign.status === 'RUNNING' || campaign.status === 'COMPLETED'}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-9 shadow-lg shadow-emerald-600/20 px-4"
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-9 shadow-xs px-4"
           >
             <Send className="w-3.5 h-3.5 mr-1.5" />
             Send Campaign ({approvedCount}/{totalCount})
@@ -443,76 +459,76 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
       {/* Campaign Metadata Cards (7 Stats) */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Sender Account
           </span>
-          <div className="text-xs font-semibold text-amber-300 mt-1 truncate" title={senderEmail}>
+          <div className="text-xs font-semibold text-primary mt-1 truncate" title={senderEmail}>
             {senderEmail}
           </div>
-          <span className="text-[10px] text-slate-500">{senderName}</span>
+          <span className="text-[10px] text-muted-foreground">{senderName}</span>
         </Card>
 
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Companies
           </span>
-          <div className="text-xl font-bold text-white mt-1">{totalCount}</div>
-          <span className="text-[10px] text-slate-500">Unique target accounts</span>
+          <div className="text-xl font-bold text-foreground mt-1">{totalCount}</div>
+          <span className="text-[10px] text-muted-foreground">Unique target accounts</span>
         </Card>
 
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Outgoing Emails
           </span>
-          <div className="text-xl font-bold text-white mt-1">{totalCount}</div>
-          <span className="text-[10px] text-slate-500">Total individual messages</span>
+          <div className="text-xl font-bold text-foreground mt-1">{totalCount}</div>
+          <span className="text-[10px] text-muted-foreground">Total individual messages</span>
         </Card>
 
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Approved
           </span>
-          <div className="text-xl font-bold text-emerald-400 mt-1">{approvedCount}</div>
-          <span className="text-[10px] text-emerald-500/80 font-medium">Ready for dispatch</span>
+          <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{approvedCount}</div>
+          <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-medium">Ready for dispatch</span>
         </Card>
 
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Needs Review
           </span>
-          <div className={`text-xl font-bold mt-1 ${unapprovedCount > 0 ? 'text-amber-400' : 'text-slate-400'}`}>
+          <div className={`text-xl font-bold mt-1 ${unapprovedCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
             {unapprovedCount}
           </div>
-          <span className="text-[10px] text-slate-500">Pending verification</span>
+          <span className="text-[10px] text-muted-foreground">Pending verification</span>
         </Card>
 
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Attachments
           </span>
-          <div className="text-xl font-bold text-amber-300 mt-1">{totalAttachments}</div>
-          <span className="text-[10px] text-slate-500">TDS & brochures linked</span>
+          <div className="text-xl font-bold text-primary mt-1">{totalAttachments}</div>
+          <span className="text-[10px] text-muted-foreground">TDS & brochures linked</span>
         </Card>
 
-        <Card className="p-3.5 bg-slate-900 border-slate-800">
-          <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold block">
+        <Card className="p-3.5 bg-card border-border shadow-xs">
+          <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
             Schedule
           </span>
-          <div className="text-xs font-semibold text-slate-200 mt-1 truncate">
+          <div className="text-xs font-semibold text-foreground mt-1 truncate">
             {campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleDateString() : 'Immediate'}
           </div>
-          <span className="text-[10px] text-slate-500">Standard queue</span>
+          <span className="text-[10px] text-muted-foreground">Standard queue</span>
         </Card>
       </div>
 
       {/* Bulk Action Controls Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 px-4 rounded-xl border border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 p-3 px-4 rounded-xl border border-border">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold text-slate-300">
+          <span className="text-xs font-semibold text-foreground">
             {selectedRecipientIds.size} of {recipients.length} emails selected
           </span>
-          <button onClick={toggleSelectAll} className="text-xs text-amber-400 hover:underline">
+          <button onClick={toggleSelectAll} className="text-xs text-primary hover:underline">
             {selectedRecipientIds.size === recipients.length ? 'Deselect all' : 'Select all'}
           </button>
         </div>
@@ -524,9 +540,9 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 variant="outline"
                 size="sm"
                 onClick={handleBulkApprove}
-                className="h-8 text-xs border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/20"
+                className="h-8 text-xs border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10"
               >
-                <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+                <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-500" />
                 Approve Selected ({selectedRecipientIds.size})
               </Button>
 
@@ -534,9 +550,9 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsSignatureModalOpen(true)}
-                className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+                className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10"
               >
-                <FileSignature className="w-3.5 h-3.5 mr-1 text-amber-400" />
+                <FileSignature className="w-3.5 h-3.5 mr-1 text-primary" />
                 Change Signature
               </Button>
 
@@ -544,9 +560,9 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 variant="outline"
                 size="sm"
                 onClick={() => setIsAttachFilesModalOpen(true)}
-                className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+                className="h-8 text-xs border-primary/40 text-primary hover:bg-primary/10"
               >
-                <Paperclip className="w-3.5 h-3.5 mr-1 text-amber-400" />
+                <Paperclip className="w-3.5 h-3.5 mr-1 text-primary" />
                 Attach Files
               </Button>
 
@@ -554,9 +570,9 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 variant="outline"
                 size="sm"
                 onClick={handleBulkRemove}
-                className="h-8 text-xs border-rose-500/40 text-rose-300 hover:bg-rose-500/20"
+                className="h-8 text-xs border-rose-500/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1 text-rose-400" />
+                <Trash2 className="w-3.5 h-3.5 mr-1 text-rose-500" />
                 Remove Selected
               </Button>
             </>
@@ -565,7 +581,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
           <Button
             size="sm"
             onClick={() => setIsConfirmSendOpen(true)}
-            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow px-3"
+            disabled={approvedCount === 0 || campaign.status === 'RUNNING' || campaign.status === 'COMPLETED'}
+            className="h-8 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold shadow-xs px-3"
           >
             <Send className="w-3.5 h-3.5 mr-1" />
             Send Approved ({approvedCount})
@@ -574,24 +591,24 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
       </div>
 
       {/* Main Campaign Email Table */}
-      <Card className="bg-slate-900 border-slate-800 shadow-xl overflow-hidden">
+      <Card className="bg-card border-border shadow-xs overflow-hidden">
         {recipients.length === 0 ? (
-          <div className="py-20 text-center text-slate-400 space-y-3">
-            <FileText className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-base font-semibold text-slate-200">No emails currently in this campaign</p>
-            <p className="text-xs text-slate-400">All emails were removed or this campaign is empty.</p>
+          <div className="py-20 text-center text-muted-foreground space-y-3">
+            <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+            <p className="text-base font-semibold text-foreground">No emails currently in this campaign</p>
+            <p className="text-xs text-muted-foreground">All emails were removed or this campaign is empty.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/80 text-slate-400 uppercase tracking-wider text-[11px] font-semibold">
+                <tr className="border-b border-border bg-muted/40 text-muted-foreground uppercase tracking-wider text-[11px] font-semibold">
                   <th className="py-3 px-4 w-10">
                     <input
                       type="checkbox"
                       checked={selectedRecipientIds.size > 0 && selectedRecipientIds.size === recipients.length}
                       onChange={toggleSelectAll}
-                      className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                      className="w-4 h-4 accent-primary rounded cursor-pointer"
                     />
                   </th>
                   <th className="py-3 px-4">Company</th>
@@ -602,7 +619,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   <th className="py-3 px-4 text-right">Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80 text-slate-300">
+              <tbody className="divide-y divide-border text-foreground">
                 {recipients.map((rec, idx) => {
                   const isSelected = selectedRecipientIds.has(rec.id);
                   const isApproved = rec.tokens?.approval_status === 'approved' || rec.tokens?.user_approved;
@@ -615,8 +632,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   return (
                     <tr
                       key={rec.id}
-                      className={`hover:bg-slate-800/50 transition-colors ${
-                        isSelected ? 'bg-amber-500/5' : ''
+                      className={`hover:bg-muted/30 transition-colors ${
+                        isSelected ? 'bg-primary/5' : ''
                       }`}
                     >
                       <td className="py-3.5 px-4">
@@ -624,52 +641,52 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectOne(rec.id)}
-                          className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
                         />
                       </td>
 
-                      <td className="py-3.5 px-4 max-w-xs font-semibold text-white">
+                      <td className="py-3.5 px-4 max-w-xs font-semibold text-foreground">
                         <div className="flex items-center gap-2">
-                          <Building className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <Building className="w-3.5 h-3.5 text-primary shrink-0" />
                           <span className="truncate">{companyName}</span>
                         </div>
                       </td>
 
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="space-y-0.5">
-                          <div className="font-medium text-slate-200 flex items-center gap-1.5">
-                            <User className="w-3 h-3 text-slate-400" />
+                          <div className="font-medium text-foreground flex items-center gap-1.5">
+                            <User className="w-3 h-3 text-muted-foreground" />
                             <span>{contactName || 'Primary Contact'}</span>
                           </div>
-                          <span className="text-[11px] text-slate-400 block truncate">{rec.email}</span>
+                          <span className="text-[11px] text-muted-foreground block truncate">{rec.email}</span>
                         </div>
                       </td>
 
                       <td className="py-3.5 px-4 max-w-sm">
-                        <span className="font-medium text-slate-200 block truncate">
+                        <span className="font-medium text-foreground block truncate">
                           {emailSubject}
                         </span>
                       </td>
 
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {attsCount > 0 ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium flex items-center gap-1 w-fit">
+                          <span className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-medium flex items-center gap-1 w-fit">
                             <Paperclip className="w-3 h-3" />
                             {attsCount} {attsCount === 1 ? 'file' : 'files'}
                           </span>
                         ) : (
-                          <span className="text-[11px] text-slate-500">—</span>
+                          <span className="text-[11px] text-muted-foreground">—</span>
                         )}
                       </td>
 
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         {isApproved ? (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
                             <CheckCircle2 className="w-3 h-3" />
                             Approved
                           </span>
                         ) : (
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-semibold flex items-center gap-1 w-fit">
                             <Clock className="w-3 h-3" />
                             Needs Review
                           </span>
@@ -682,7 +699,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                             variant="outline"
                             size="sm"
                             onClick={() => openPreviewAt(idx)}
-                            className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20 font-medium"
+                            className="h-7 text-xs border-primary/40 text-primary hover:bg-primary/10 font-medium"
                           >
                             <Eye className="w-3 h-3 mr-1" />
                             View Email
@@ -690,7 +707,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
                           <button
                             onClick={() => handleRemoveRecipient(rec.id)}
-                            className="p-1 rounded text-slate-500 hover:text-rose-400 transition-colors"
+                            className="p-1 rounded text-muted-foreground hover:text-rose-500 transition-colors"
                             title="Remove from campaign"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -708,24 +725,24 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
       {/* FULL REALISTIC EMAIL PREVIEW & EDITOR MODAL */}
       {previewIndex !== null && currentPreviewRecipient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-4xl bg-slate-900 border-slate-700 text-slate-100 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-4xl bg-card border-border text-foreground shadow-dialog flex flex-col max-h-[92vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-950/80">
+            <div className="flex items-center justify-between p-4 px-6 border-b border-border bg-muted/20">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+                <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary">
                   <Mail className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold text-white">
+                    <h3 className="text-base font-semibold text-foreground">
                       {currentPreviewRecipient.tokens?.company_name || 'Target Account'}
                     </h3>
-                    <span className="text-xs text-slate-400">
+                    <span className="text-xs text-muted-foreground">
                       (Email {previewIndex + 1} of {recipients.length})
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     Exact outgoing message preview formatted for Gmail, Apple Mail, and Outlook
                   </p>
                 </div>
@@ -737,7 +754,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   size="sm"
                   disabled={previewIndex <= 0}
                   onClick={() => openPreviewAt(previewIndex - 1)}
-                  className="h-8 w-8 p-0 border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="h-8 w-8 p-0 border-border text-foreground hover:bg-muted"
                   title="Previous Email"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -747,14 +764,14 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   size="sm"
                   disabled={previewIndex >= recipients.length - 1}
                   onClick={() => openPreviewAt(previewIndex + 1)}
-                  className="h-8 w-8 p-0 border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="h-8 w-8 p-0 border-border text-foreground hover:bg-muted"
                   title="Next Email"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Button>
                 <button
                   onClick={() => setPreviewIndex(null)}
-                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-2"
+                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors ml-2"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -762,15 +779,15 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
             </div>
 
             {/* Mode Switcher: Realistic Preview vs Edit Mode */}
-            <div className="flex items-center justify-between border-b border-slate-800 bg-slate-950/40 p-2.5 px-6">
+            <div className="flex items-center justify-between border-b border-border bg-muted/10 p-2.5 px-6">
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setIsEditingInPreview(false)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                     !isEditingInPreview
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Eye className="w-3.5 h-3.5 inline mr-1.5" />
@@ -781,8 +798,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   onClick={() => setIsEditingInPreview(true)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                     isEditingInPreview
-                      ? 'bg-amber-600 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Edit3 className="w-3.5 h-3.5 inline mr-1.5" />
@@ -792,11 +809,11 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
               <div className="flex items-center gap-2">
                 {previewApproval === 'approved' ? (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
                     <CheckCircle2 className="w-3.5 h-3.5" /> Approved
                   </span>
                 ) : (
-                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold flex items-center gap-1">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-semibold flex items-center gap-1">
                     <Clock className="w-3.5 h-3.5" /> Needs Review
                   </span>
                 )}
@@ -806,24 +823,24 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
             {/* Modal Body */}
             <div className="p-6 overflow-y-auto space-y-4 flex-1">
               {/* Email Envelope Header */}
-              <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4 space-y-2.5 text-xs">
+              <div className="rounded-xl border border-border bg-muted/20 p-4 space-y-2.5 text-xs">
                 <div className="flex items-center gap-3">
-                  <span className="w-16 font-semibold text-slate-400">From:</span>
-                  <span className="text-amber-300 font-medium">
+                  <span className="w-16 font-semibold text-muted-foreground">From:</span>
+                  <span className="text-primary font-medium">
                     {senderName} &lt;{senderEmail}&gt;
                   </span>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <span className="w-16 font-semibold text-slate-400">To:</span>
+                  <span className="w-16 font-semibold text-muted-foreground">To:</span>
                   {isEditingInPreview ? (
                     <Input
                       value={previewTo}
                       onChange={(e) => setPreviewTo(e.target.value)}
-                      className="h-7 text-xs bg-slate-900 border-slate-700 text-white flex-1"
+                      className="h-7 text-xs bg-background border-border text-foreground flex-1"
                     />
                   ) : (
-                    <span className="text-slate-200 font-medium">
+                    <span className="text-foreground font-medium">
                       {currentPreviewRecipient.tokens?.contact_name
                         ? `${currentPreviewRecipient.tokens?.contact_name} <${previewTo}>`
                         : previewTo}
@@ -833,48 +850,58 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
                 {(previewCc || isEditingInPreview) && (
                   <div className="flex items-center gap-3">
-                    <span className="w-16 font-semibold text-slate-400">CC:</span>
+                    <span className="w-16 font-semibold text-muted-foreground">CC:</span>
                     {isEditingInPreview ? (
                       <Input
                         value={previewCc}
                         onChange={(e) => setPreviewCc(e.target.value)}
                         placeholder="Comma-separated emails..."
-                        className="h-7 text-xs bg-slate-900 border-slate-700 text-white flex-1"
+                        className="h-7 text-xs bg-background border-border text-foreground flex-1"
                       />
                     ) : (
-                      <span className="text-slate-300">{previewCc || 'None'}</span>
+                      <span className="text-foreground">{previewCc || 'None'}</span>
                     )}
                   </div>
                 )}
 
                 <div className="flex items-center gap-3">
-                  <span className="w-16 font-semibold text-slate-400">Subject:</span>
+                  <span className="w-16 font-semibold text-muted-foreground">Subject:</span>
                   {isEditingInPreview ? (
                     <Input
                       value={previewSubject}
                       onChange={(e) => setPreviewSubject(e.target.value)}
-                      className="h-7 text-xs bg-slate-900 border-slate-700 text-white font-medium flex-1"
+                      className="h-7 text-xs bg-background border-border text-foreground font-medium flex-1"
                     />
                   ) : (
-                    <span className="text-white font-semibold">{previewSubject}</span>
+                    <span className="text-foreground font-semibold">{previewSubject}</span>
                   )}
                 </div>
 
                 {/* Attachments Pills */}
                 {previewAttachments.length > 0 && (
-                  <div className="flex items-center gap-3 pt-1 border-t border-slate-800/80">
-                    <span className="w-16 font-semibold text-slate-400 flex items-center gap-1">
-                      <Paperclip className="w-3 h-3 text-amber-400" /> Files:
+                  <div className="flex items-center gap-3 pt-1 border-t border-border">
+                    <span className="w-16 font-semibold text-muted-foreground flex items-center gap-1">
+                      <Paperclip className="w-3 h-3 text-primary" /> Files:
                     </span>
                     <div className="flex flex-wrap gap-1.5 flex-1">
                       {previewAttachments.map((att, i) => (
                         <span
                           key={i}
-                          className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-medium flex items-center gap-1.5"
+                          className="px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary text-[11px] font-medium flex items-center gap-1.5"
                         >
-                          <FileText className="w-3 h-3 text-amber-400" />
+                          <FileText className="w-3 h-3 text-primary" />
                           <span>{att.name || att.fileName}</span>
-                          {att.fileSize && <span className="text-[10px] text-slate-500">({att.fileSize})</span>}
+                          {att.fileSize && <span className="text-[10px] text-muted-foreground">({att.fileSize})</span>}
+                          {isEditingInPreview && (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachments((prev) => prev.filter((_, idx) => idx !== i))}
+                              className="text-muted-foreground hover:text-rose-500 ml-1 transition-colors"
+                              title="Detach file from this email (preserves original in Library)"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
                         </span>
                       ))}
                     </div>
@@ -884,8 +911,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
               {/* Realistic Email Content or Rich Editor */}
               {!isEditingInPreview ? (
-                /* REALISTIC B2B EMAIL RENDERING CONTAINER (Arial / Helvetica, 14px, #1e293b on clean white paper) */
-                <div className="rounded-xl border border-slate-300 bg-white text-slate-900 p-8 shadow-inner font-sans min-h-[320px]">
+                /* REALISTIC B2B EMAIL RENDERING CONTAINER (Arial / Helvetica, 14px, #0f172a on clean white paper) */
+                <div className="rounded-xl border border-border bg-white text-slate-900 p-8 shadow-inner font-sans min-h-[320px]">
                   {/* Clean Body Text with Professional Paragraph Spacing */}
                   <div
                     style={{
@@ -915,7 +942,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 /* INLINE EDITING INTERFACE */
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-300">
+                    <label className="text-xs font-semibold text-foreground">
                       Email Body (Professional Typography):
                     </label>
                     <Textarea
@@ -923,23 +950,80 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                       onChange={(e) => setPreviewBody(e.target.value)}
                       rows={12}
                       style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '14px', lineHeight: '1.6' }}
-                      className="w-full bg-slate-900 border-slate-700 text-slate-100 p-4 focus:border-amber-500 resize-y"
+                      className="w-full bg-background border-border text-foreground p-4 focus:border-primary resize-y font-sans text-sm"
                     />
                   </div>
 
+                  {/* Attachments row */}
+                  <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5 text-primary" />
+                        Attached Documents ({previewAttachments.length}):
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsAttachFilesModalOpen(true)}
+                        className="h-7 text-xs border-border text-foreground hover:bg-muted"
+                      >
+                        <Plus className="w-3.5 h-3.5 mr-1" />
+                        Attach From Library
+                      </Button>
+                    </div>
+
+                    {previewAttachments.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {previewAttachments.map((att, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 text-foreground text-xs flex items-center gap-2"
+                          >
+                            <FileText className="w-3.5 h-3.5 text-primary" />
+                            <span className="font-medium">{att.name || att.fileName}</span>
+                            {att.fileSize && <span className="text-[10px] text-muted-foreground">({att.fileSize})</span>}
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachments((prev) => prev.filter((_, i) => i !== idx))}
+                              className="text-muted-foreground hover:text-rose-500 ml-1 transition-colors"
+                              title="Detach file from this email (preserves original in Library)"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">No files attached to this recipient.</p>
+                    )}
+                  </div>
+
                   {/* Signature Selector */}
-                  <div className="p-3.5 rounded-lg bg-slate-950/60 border border-slate-800 space-y-2">
-                    <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                      <FileSignature className="w-3.5 h-3.5 text-amber-400" />
-                      Rendered Signature:
-                    </span>
+                  <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <FileSignature className="w-3.5 h-3.5 text-primary" />
+                        Gmail Signature:
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setIsSignatureModalOpen(true)}
+                        className="h-7 text-xs border-border text-foreground hover:bg-muted"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 mr-1" />
+                        Change / Sync Signature
+                      </Button>
+                    </div>
                     {previewSigHtml ? (
                       <div
-                        className="p-3 rounded bg-slate-900 border border-slate-800 text-xs text-slate-300"
+                        className="p-3 rounded bg-card border border-border text-xs text-foreground max-h-40 overflow-y-auto"
                         dangerouslySetInnerHTML={{ __html: previewSigHtml }}
                       />
                     ) : (
-                      <span className="text-xs text-slate-500 italic">No signature assigned</span>
+                      <span className="text-xs text-muted-foreground italic">No signature assigned</span>
                     )}
                   </div>
                 </div>
@@ -947,13 +1031,13 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="p-4 px-6 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
+            <div className="p-4 px-6 border-t border-border bg-muted/20 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleRemoveRecipient(currentPreviewRecipient.id)}
-                  className="h-8 text-xs border-rose-500/40 text-rose-300 hover:bg-rose-500/20"
+                  className="h-8 text-xs border-rose-500/40 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" />
                   Remove from Campaign
@@ -964,7 +1048,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                     variant="outline"
                     size="sm"
                     onClick={() => handleSaveRecipientChanges(false, false)}
-                    className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+                    className="h-8 text-xs border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
                   >
                     Remove Approval
                   </Button>
@@ -975,7 +1059,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 <Button
                   variant="outline"
                   onClick={() => setPreviewIndex(null)}
-                  className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-8"
+                  className="border-border text-foreground hover:bg-muted text-xs h-8"
                 >
                   Close
                 </Button>
@@ -985,7 +1069,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                     variant="secondary"
                     disabled={savingRecipient}
                     onClick={() => handleSaveRecipientChanges(null, false)}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs h-8"
+                    className="bg-muted hover:bg-muted/80 text-foreground border border-border text-xs h-8"
                   >
                     Save Draft
                   </Button>
@@ -994,7 +1078,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 <Button
                   onClick={() => handleSaveRecipientChanges(true, false)}
                   disabled={savingRecipient}
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-8 shadow"
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-8 shadow-xs"
                 >
                   <Check className="w-3.5 h-3.5 mr-1" />
                   Approve Email
@@ -1004,7 +1088,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   <Button
                     onClick={() => handleSaveRecipientChanges(true, true)}
                     disabled={savingRecipient}
-                    className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs h-8 shadow"
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs h-8 shadow-xs"
                   >
                     Approve & Next
                     <ChevronRight className="w-3.5 h-3.5 ml-1" />
@@ -1018,38 +1102,38 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
       {/* FINAL SAFETY SENDING CONFIRMATION DIALOG */}
       {isConfirmSendOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <Card className="w-full max-w-lg bg-slate-900 border-amber-500/40 text-slate-100 shadow-2xl p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <Card className="w-full max-w-lg bg-card border-border text-foreground shadow-dialog p-6 space-y-5">
             <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-500 shrink-0">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="text-base font-bold text-foreground">
                   Confirm Campaign Dispatch
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   You’re about to send <strong>{approvedCount}</strong> personalized emails to <strong>{approvedCount}</strong> selected recipients.
                 </p>
               </div>
             </div>
 
             {/* Safety Verification Checklist */}
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5 text-xs">
-              <span className="font-semibold text-slate-300 block uppercase tracking-wider text-[10px]">
+            <div className="p-4 rounded-xl bg-muted/20 border border-border space-y-2.5 text-xs">
+              <span className="font-semibold text-muted-foreground block uppercase tracking-wider text-[10px]">
                 Pre-Flight Dispatch Checklist:
               </span>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Approved Emails:</span>
-                <span className="font-semibold text-emerald-400">
+                <span className="text-muted-foreground">Approved Emails:</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                   {approvedCount} of {totalCount} verified
                 </span>
               </div>
 
               {unapprovedCount > 0 && (
-                <div className="flex items-start gap-2 p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
-                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <div className="flex items-start gap-2 p-2.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500 mt-0.5" />
                   <span>
                     Warning: <strong>{unapprovedCount}</strong> email(s) are still unapproved. Only approved messages will be sent.
                   </span>
@@ -1057,18 +1141,18 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
               )}
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Sender Account:</span>
-                <span className="font-medium text-slate-200">{senderEmail}</span>
+                <span className="text-muted-foreground">Sender Account:</span>
+                <span className="font-medium text-foreground">{senderEmail}</span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Total File Attachments:</span>
-                <span className="font-medium text-amber-300">{totalAttachments} files</span>
+                <span className="text-muted-foreground">Total File Attachments:</span>
+                <span className="font-medium text-primary">{totalAttachments} files</span>
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-slate-400">Duplicate Protection:</span>
-                <span className="text-emerald-400 font-medium">Active (1 email per recipient)</span>
+                <span className="text-muted-foreground">Duplicate Protection:</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">Active (1 email per recipient)</span>
               </div>
             </div>
 
@@ -1077,7 +1161,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
               <Button
                 variant="outline"
                 onClick={() => setIsConfirmSendOpen(false)}
-                className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+                className="border-border text-foreground hover:bg-muted text-xs"
               >
                 Cancel / Keep Reviewing
               </Button>
@@ -1085,7 +1169,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
               <Button
                 disabled={sending || approvedCount === 0}
                 onClick={handleLaunchCampaign}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-lg shadow-emerald-600/20 px-5"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-xs px-5"
               >
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Send className="w-3.5 h-3.5 mr-1.5" />}
                 Confirm & Send {approvedCount} Emails
@@ -1095,23 +1179,40 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
         </div>
       )}
 
-      {/* Signature & Attachment Bulk Modals */}
+      {/* Signature & Attachment Modals */}
       <CustomSignatureModal
         isOpen={isSignatureModalOpen}
         onClose={() => setIsSignatureModalOpen(false)}
+        campaignId={campaignId}
         totalDraftsCount={recipients.length}
         selectedDraftsCount={selectedRecipientIds.size}
         selectedDraftIds={Array.from(selectedRecipientIds)}
-        onSignatureApplied={() => fetchCampaignData()}
+        onSignatureApplied={(newSigHtml) => {
+          if (newSigHtml && previewIndex !== null) {
+            setPreviewSigHtml(newSigHtml);
+          }
+          fetchCampaignData();
+        }}
       />
 
       <AttachFilesModal
         isOpen={isAttachFilesModalOpen}
         onClose={() => setIsAttachFilesModalOpen(false)}
+        campaignId={campaignId}
+        currentDraftId={currentPreviewRecipient?.id}
         totalDraftsCount={recipients.length}
         selectedDraftsCount={selectedRecipientIds.size}
         selectedDraftIds={Array.from(selectedRecipientIds)}
-        onAttachmentsApplied={() => fetchCampaignData()}
+        onAttachmentsApplied={(data, newDocs) => {
+          if (newDocs && previewIndex !== null) {
+            setPreviewAttachments((prev) => {
+              const existingNames = new Set(prev.map((a) => a.name || a.fileName || a.id));
+              const added = newDocs.filter((d) => !existingNames.has(d.name || d.fileName || d.id));
+              return [...prev, ...added];
+            });
+          }
+          fetchCampaignData();
+        }}
       />
     </div>
   );

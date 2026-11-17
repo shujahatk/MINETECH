@@ -27,12 +27,13 @@ import {
   FileSignature,
   Upload,
   Scissors,
-  AlignLeft,
   List,
   Bold,
   Italic,
   ShieldCheck,
-  Calendar
+  Calendar,
+  Lock,
+  FolderOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,47 +42,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import RematchCompanyModal from './RematchCompanyModal';
-
-// Client-side helper for unwrapping artificial PDF soft line breaks
-function unwrapSoftLineBreaks(text = '') {
-  if (!text) return '';
-  const blocks = text.split(/\n{2,}/);
-
-  const cleanedBlocks = blocks.map((block) => {
-    const rawLines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (rawLines.length === 0) return '';
-
-    const mergedLines = [];
-    let currentLine = rawLines[0];
-
-    for (let i = 1; i < rawLines.length; i++) {
-      const line = rawLines[i];
-      const prevLine = rawLines[i - 1];
-
-      const isBulletOrNum = /^[-*•–—\d\.)]\s+/i.test(line);
-      const prevEndsWithColon = /[:]$/.test(prevLine);
-      const isGreeting = /^(?:Dear|Hi|Hello|Good\s+(?:morning|afternoon|evening))\b/i.test(line);
-      const isSignOff = /^(?:Best\s+regards|Kind\s+regards|Warm\s+regards|Regards|Sincerely|Thanks|Thank\s+you|Cheers)\b/i.test(line);
-      const prevIsGreeting = /^(?:Dear|Hi|Hello|Good\s+(?:morning|afternoon|evening))\b/i.test(prevLine);
-      const prevIsSignOff = /^(?:Best\s+regards|Kind\s+regards|Warm\s+regards|Regards|Sincerely|Thanks|Thank\s+you|Cheers)\b/i.test(prevLine);
-
-      if (isBulletOrNum || prevEndsWithColon || isGreeting || isSignOff || prevIsGreeting || prevIsSignOff) {
-        mergedLines.push(currentLine);
-        currentLine = line;
-      } else {
-        if (/[-–—]$/.test(currentLine)) {
-          currentLine = currentLine.slice(0, -1) + line;
-        } else {
-          currentLine = currentLine + ' ' + line;
-        }
-      }
-    }
-    mergedLines.push(currentLine);
-    return mergedLines.join('\n');
-  });
-
-  return cleanedBlocks.filter(Boolean).join('\n\n');
-}
+import AttachFilesModal from './AttachFilesModal';
 
 // Regex to detect duplicate sign-off / closing in email body
 const CLOSING_PATTERN = /(?:\n|^)\s*(?:(?:Kind|Best|Warm)\s+regards|Regards|Sincerely|Thanks\s*(?:and\s*regards)?|Cheers|Yours\s+faithfully|Respectfully)[\s,]*\n+(?:(?:Abdullah\s+Rauf|Rauf|MineTech(?:\s+Resources)?|Sales\s+Team)[^\n]*\n*)*\s*$/i;
@@ -97,6 +58,7 @@ export default function PersonalizedEmailEditorModal({
 }) {
   const [activeTab, setActiveTab] = useState('editor'); // editor | preview | compare
   const [isRematchOpen, setIsRematchOpen] = useState(false);
+  const [isAttachModalOpen, setIsAttachModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Form states
@@ -109,16 +71,16 @@ export default function PersonalizedEmailEditorModal({
   const [approvalStatus, setApprovalStatus] = useState('needs_review');
   const [isModifiedAfterApproval, setIsModifiedAfterApproval] = useState(false);
 
-  // Signature & Document states
+  // Signature states
   const [signatures, setSignatures] = useState([]);
-  const [selectedSignatureId, setSelectedSignatureId] = useState('');
+  const [selectedSignatureId, setSelectedSignatureId] = useState('sig-gmail-synced');
   const [isCustomSigOpen, setIsCustomSigOpen] = useState(false);
 
   // Custom signature builder fields
   const [customSigName, setCustomSigName] = useState('Abdullah Rauf');
   const [customSigTitle, setCustomSigTitle] = useState('Head of Sales');
   const [customSigCompany, setCustomSigCompany] = useState('Minetech Resources BV – Belgium');
-  const [customSigPhone, setCustomSigPhone] = useState('+32 486 287 751');
+  const [customSigPhone, setCustomPhone] = useState('+32 486 287 751');
   const [customSigEmail, setCustomSigEmail] = useState('rauf@mine-tech.be');
   const [customSigWebsite, setCustomSigWebsite] = useState('www.mine-tech.be');
   const [customSigExtra, setCustomSigExtra] = useState(
@@ -135,19 +97,17 @@ export default function PersonalizedEmailEditorModal({
   const [attachedDocIds, setAttachedDocIds] = useState([]);
   const [showDocLibrary, setShowDocLibrary] = useState(false);
 
-  // Generate custom HTML signature string
+  // Generate standard Gmail signature HTML
   const generateCustomSigHtml = () => {
-    return `<div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #cbd5e1; font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.6; color: #475569;">
-  <p style="margin: 0 0 4px 0; color: #0f172a; font-weight: bold; font-size: 14px;">
-    ${customSigName}${customSigTitle ? ` <span style="font-weight: normal; color: #64748b;">— ${customSigTitle}</span>` : ''}
-  </p>
-  <p style="margin: 0 0 4px 0;">
-    <strong style="color: #0f172a;">${customSigCompany}</strong>
-    ${customSigPhone ? ` | Mo. <span style="color: #0f172a;">${customSigPhone}</span>` : ''}
-    ${customSigEmail ? ` | <a href="mailto:${customSigEmail}" style="color: #d97706; text-decoration: none;">${customSigEmail}</a>` : ''}
-    ${customSigWebsite ? ` | <a href="https://${customSigWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color: #d97706; text-decoration: none;">${customSigWebsite}</a>` : ''}
-  </p>
-  ${customSigExtra ? `<p style="margin: 6px 0 0 0; font-size: 11px; color: #64748b; line-height: 1.5;">${customSigExtra.replace(/\n/g, '<br/>')}</p>` : ''}
+    return `<div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">
+  <div dir="ltr">
+    <p style="margin-top:16px; margin-bottom:0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:1.5; color:#1f2937;">
+      Regards,<br/>
+      <strong style="color:#0f172a;">${customSigName}</strong>${customSigTitle ? ` - ${customSigTitle}` : ''}${customSigPhone ? ` | Mo. ${customSigPhone}` : ''}${customSigEmail ? ` | <a href="mailto:${customSigEmail}" style="color:#0284c7; text-decoration:none;" target="_blank">${customSigEmail}</a>` : ''}<br/>
+      <strong style="color:#0f172a;">${customSigCompany}</strong> | <a href="https://${customSigWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color:#0284c7; text-decoration:none;">${customSigWebsite}</a>
+    </p>
+    ${customSigExtra ? `<p style="margin-top:8px; margin-bottom:0; font-family:Arial, Helvetica, sans-serif; font-size:11px; line-height:1.4; color:#6b7280;">${customSigExtra.replace(/\n/g, '<br/>')}</p>` : ''}
+  </div>
 </div>`;
   };
 
@@ -172,7 +132,7 @@ export default function PersonalizedEmailEditorModal({
       setBccInput((draft.bcc_emails || []).join(', '));
 
       // Signatures
-      setSelectedSignatureId(draft.assigned_signature_id || 'sig-minetech-head-of-sales');
+      setSelectedSignatureId(draft.assigned_signature_id || 'sig-gmail-synced');
 
       // Attachments
       const existingAttachmentIds = (draft.assigned_attachments || []).map((a) => a.id || a);
@@ -227,16 +187,7 @@ export default function PersonalizedEmailEditorModal({
     if (approvalStatus === 'approved') {
       setIsModifiedAfterApproval(true);
     }
-    toast.success('Removed duplicate closing from email body. Your selected signature will provide the official sign-off.');
-  };
-
-  const handleUnwrapLineBreaks = () => {
-    const unwrapped = unwrapSoftLineBreaks(bodyText);
-    setBodyText(unwrapped);
-    if (approvalStatus === 'approved') {
-      setIsModifiedAfterApproval(true);
-    }
-    toast.success('Cleaned up artificial PDF line breaks.');
+    toast.success('Removed closing from email body. Your Gmail signature will provide the official sign-off.');
   };
 
   const handleInsertToolbar = (prefix, suffix = '') => {
@@ -289,6 +240,11 @@ export default function PersonalizedEmailEditorModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('File size exceeds the 25 MB limit.');
+      return;
+    }
+
     setUploadingAttachment(true);
     try {
       const formData = new FormData();
@@ -316,14 +272,6 @@ export default function PersonalizedEmailEditorModal({
       setUploadingAttachment(false);
       if (localFileInputRef.current) localFileInputRef.current.value = '';
     }
-  };
-
-  const handleRevertToOriginal = () => {
-    if (!draft) return;
-    setSubject(draft.extracted_subject || '');
-    setBodyText(draft.extracted_body_plain || '');
-    setIsModifiedAfterApproval(false);
-    toast.info('Restored original extracted email text.');
   };
 
   // Resolve current active signature HTML
@@ -447,30 +395,34 @@ export default function PersonalizedEmailEditorModal({
   const activeAttachedDocs = documents.filter((d) => attachedDocIds.includes(d.id));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <Card className="w-full max-w-5xl bg-slate-900 border-slate-700 text-slate-100 shadow-2xl flex flex-col max-h-[94vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <Card className="w-full max-w-5xl bg-card border-border text-foreground shadow-dialog flex flex-col max-h-[94vh] overflow-hidden rounded-xl">
         {/* Top Header */}
-        <div className="flex items-center justify-between p-4 px-6 border-b border-slate-800 bg-slate-950/70">
+        <div className="flex items-center justify-between p-4 px-6 border-b border-border bg-muted/20">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded bg-primary/10 text-primary border border-primary/20">
               Email #{currentIndex + 1} of {allDrafts.length}
             </span>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-base font-semibold text-foreground">
                 {draft.extracted_company || matchedLead?.company_name || 'Personalized Company Outreach'}
               </h2>
+              {/* Semantic CRM Matching Status Badges */}
               {draft.match_status === 'matched' ? (
-                <Badge className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px]">
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[11px] font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
                   CRM Matched
-                </Badge>
+                </span>
               ) : draft.match_status === 'needs_review' ? (
-                <Badge className="bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[11px]">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[11px] font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
                   Needs Review
-                </Badge>
+                </span>
               ) : (
-                <Badge className="bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px]">
+                <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
                   Unmatched
-                </Badge>
+                </span>
               )}
             </div>
           </div>
@@ -481,7 +433,7 @@ export default function PersonalizedEmailEditorModal({
               size="sm"
               disabled={currentIndex <= 0}
               onClick={() => onNavigate?.(currentIndex - 1)}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800 h-8 text-xs"
+              className="border-border text-foreground hover:bg-muted/40 h-8 text-xs"
             >
               Previous
             </Button>
@@ -490,13 +442,13 @@ export default function PersonalizedEmailEditorModal({
               size="sm"
               disabled={currentIndex >= allDrafts.length - 1}
               onClick={() => onNavigate?.(currentIndex + 1)}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800 h-8 text-xs"
+              className="border-border text-foreground hover:bg-muted/40 h-8 text-xs"
             >
               Next
             </Button>
             <button
               onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors ml-2"
+              className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-2"
             >
               <X className="w-5 h-5" />
             </button>
@@ -507,11 +459,11 @@ export default function PersonalizedEmailEditorModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {/* Alert if content modified after approval */}
           {isModifiedAfterApproval && (
-            <div className="p-3.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-300 text-xs animate-in fade-in">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+            <div className="p-3.5 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-amber-500 text-xs animate-in fade-in">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
               <div>
-                <p className="font-semibold text-amber-200">Content Modified After Approval</p>
-                <p className="text-amber-300/90 mt-0.5">
+                <p className="font-semibold text-amber-400">Content Modified After Approval</p>
+                <p className="text-amber-500/90 mt-0.5">
                   You have made changes to the text, recipient, signature, or attachments. The approval status resets to <strong>Needs Review</strong> until you re-approve it.
                 </p>
               </div>
@@ -519,23 +471,23 @@ export default function PersonalizedEmailEditorModal({
           )}
 
           {/* CRM Company & Contact Resolution Card */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+          <div className="p-4 rounded-xl border border-border bg-card space-y-3 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <Building className="w-4 h-4 text-amber-400" />
-                <span className="text-xs uppercase font-bold tracking-wider text-slate-400">Target Company:</span>
-                <span className="text-sm font-semibold text-white">
+                <Building className="w-4 h-4 text-primary" />
+                <span className="text-xs uppercase font-bold tracking-wider text-muted-foreground">Target Company:</span>
+                <span className="text-sm font-semibold text-foreground">
                   {matchedLead ? matchedLead.company_name : draft.extracted_company || 'Unlinked'}
                 </span>
                 {matchedLead?.country && (
-                  <span className="text-xs text-slate-400">({matchedLead.country})</span>
+                  <span className="text-xs text-muted-foreground">({matchedLead.country})</span>
                 )}
                 {matchedLead?.website && (
                   <a
                     href={matchedLead.website.startsWith('http') ? matchedLead.website : `https://${matchedLead.website}`}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs text-amber-400 hover:underline flex items-center gap-0.5"
+                    className="text-xs text-primary hover:underline flex items-center gap-0.5"
                   >
                     {matchedLead.website.replace(/^https?:\/\//, '')}
                     <ExternalLink className="w-3 h-3" />
@@ -547,7 +499,7 @@ export default function PersonalizedEmailEditorModal({
                 variant="outline"
                 size="sm"
                 onClick={() => setIsRematchOpen(true)}
-                className="h-7 text-xs border-slate-700 text-slate-300 hover:bg-slate-800 hover:text-white"
+                className="h-7 text-xs border-border text-foreground hover:bg-muted/40"
               >
                 {matchedLead ? 'Change / Rematch CRM' : 'Link to CRM Lead'}
               </Button>
@@ -556,18 +508,18 @@ export default function PersonalizedEmailEditorModal({
             {/* Contacts Section */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <User className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-primary" />
                   Select Recipient Contact(s) ({selectedContacts.length} selected):
                 </span>
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px] text-muted-foreground">
                   Click contact to select. The contact tagged TO receives direct dispatch.
                 </span>
               </div>
 
               {allContacts.length === 0 ? (
-                <div className="p-2.5 rounded bg-slate-900 border border-slate-800 text-xs text-slate-400 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400" />
+                <div className="p-2.5 rounded bg-muted/20 border border-border text-xs text-muted-foreground flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-500" />
                   No contacts found in CRM for this company. Please add an email address or link to a valid lead.
                 </div>
               ) : (
@@ -584,29 +536,29 @@ export default function PersonalizedEmailEditorModal({
                         onClick={() => toggleContactSelection(contact)}
                         className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-start justify-between ${
                           isSelected
-                            ? 'border-amber-500/60 bg-amber-500/10 text-white'
-                            : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700'
+                            ? 'border-primary/60 bg-primary/10 text-foreground font-medium'
+                            : 'border-border bg-card text-muted-foreground hover:border-border/80'
                         }`}
                       >
                         <div className="space-y-0.5">
-                          <div className="flex items-center gap-1.5 font-medium text-slate-200">
+                          <div className="flex items-center gap-1.5 font-medium text-foreground">
                             <span>{contact.name || 'Unnamed Contact'}</span>
                             {isPrimary && (
-                              <span className="text-[10px] px-1 rounded bg-amber-500 text-slate-950 font-bold">
+                              <span className="text-[10px] px-1 rounded bg-primary text-primary-foreground font-bold">
                                 TO
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-slate-400">{contact.email}</p>
+                          <p className="text-[11px] text-muted-foreground">{contact.email}</p>
                           {contact.title && (
-                            <p className="text-[10px] text-slate-500">{contact.title}</p>
+                            <p className="text-[10px] text-muted-foreground/80">{contact.title}</p>
                           )}
                         </div>
 
                         <div className="flex flex-col items-end gap-1">
                           <div
                             className={`w-4 h-4 rounded border flex items-center justify-center ${
-                              isSelected ? 'border-amber-500 bg-amber-500 text-slate-950' : 'border-slate-600'
+                              isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
                             }`}
                           >
                             {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
@@ -619,7 +571,7 @@ export default function PersonalizedEmailEditorModal({
                                 e.stopPropagation();
                                 setPrimaryContactEmail(contact.email);
                               }}
-                              className="text-[10px] text-amber-400 hover:underline mt-1"
+                              className="text-[10px] text-primary hover:underline mt-1"
                             >
                               Set as TO
                             </button>
@@ -632,27 +584,27 @@ export default function PersonalizedEmailEditorModal({
               )}
 
               {/* CC & BCC Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pt-2 border-t border-slate-800/60">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 pt-2 border-t border-border">
                 <div>
-                  <label className="text-[11px] font-medium text-slate-400 block mb-1">
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">
                     CC (comma-separated emails):
                   </label>
                   <Input
                     value={ccInput}
                     onChange={(e) => setCcInput(e.target.value)}
                     placeholder="e.g. procurement@company.com, team@company.com"
-                    className="h-8 text-xs bg-slate-900 border-slate-800 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border text-foreground"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-medium text-slate-400 block mb-1">
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">
                     BCC (comma-separated emails):
                   </label>
                   <Input
                     value={bccInput}
                     onChange={(e) => setBccInput(e.target.value)}
                     placeholder="e.g. rauf@mine-tech.be, archive@mine-tech.be"
-                    className="h-8 text-xs bg-slate-900 border-slate-800 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border text-foreground"
                   />
                 </div>
               </div>
@@ -662,28 +614,28 @@ export default function PersonalizedEmailEditorModal({
           {/* Email Content Section */}
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-semibold text-slate-300 block mb-1.5">
+              <label className="text-xs font-semibold text-foreground block mb-1.5">
                 Subject Line:
               </label>
               <Input
                 value={subject}
                 onChange={handleSubjectChange}
                 placeholder="Enter email subject line..."
-                className="bg-slate-950 border-slate-700 text-white text-sm font-medium focus:border-amber-500"
+                className="bg-background border-border text-foreground text-sm font-medium"
               />
             </div>
 
             {/* Editor Tabs: Edit vs Realistic Preview vs Raw PDF Compare */}
-            <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950/60">
-              <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-slate-900 border-b border-slate-800 gap-2">
-                <div className="flex items-center gap-1 bg-slate-950 p-0.5 rounded-lg border border-slate-800">
+            <div className="border border-border rounded-xl overflow-hidden bg-card shadow-xs">
+              <div className="flex flex-wrap items-center justify-between px-4 py-2.5 bg-muted/20 border-b border-border gap-2">
+                <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-lg border border-border">
                   <button
                     type="button"
                     onClick={() => setActiveTab('editor')}
                     className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
                       activeTab === 'editor'
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
@@ -695,8 +647,8 @@ export default function PersonalizedEmailEditorModal({
                     onClick={() => setActiveTab('preview')}
                     className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
                       activeTab === 'preview'
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <Eye className="w-3.5 h-3.5" />
@@ -708,55 +660,30 @@ export default function PersonalizedEmailEditorModal({
                     onClick={() => setActiveTab('compare')}
                     className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
                       activeTab === 'compare'
-                        ? 'bg-amber-600 text-white shadow-sm'
-                        : 'text-slate-400 hover:text-white'
+                        ? 'bg-primary text-primary-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
                     Compare with Raw PDF
                   </button>
                 </div>
-
-                {activeTab === 'editor' && (
-                  <div className="flex items-center gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleUnwrapLineBreaks}
-                      title="Fix soft line wraps from PDF extraction"
-                      className="h-7 text-[11px] text-amber-300 hover:bg-amber-500/10 border border-amber-500/30"
-                    >
-                      <AlignLeft className="w-3 h-3 mr-1" />
-                      Fix PDF Line Wraps
-                    </Button>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleRevertToOriginal}
-                      className="h-7 text-[11px] text-slate-400 hover:text-amber-300 hover:bg-slate-800"
-                    >
-                      <RotateCcw className="w-3 h-3 mr-1" />
-                      Revert Text
-                    </Button>
-                  </div>
-                )}
               </div>
 
               {/* Duplicate Closing Notification Banner */}
               {hasDuplicateClosing && activeTab === 'editor' && (
-                <div className="p-3 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-300">
+                <div className="p-3 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between text-xs text-amber-500">
                   <div className="flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
                     <span>
-                      <strong>Duplicate closing detected:</strong> Body contains closing sign-off text (e.g. &ldquo;Kind regards...&rdquo;). Your selected signature will append another sign-off.
+                      <strong>Duplicate closing detected:</strong> Email body already contains closing text (e.g. &ldquo;Kind regards...&rdquo;). Your Gmail signature provides the official closing.
                     </span>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleStripClosingFromBody}
-                    className="h-6 text-[11px] border-amber-500/40 bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 shrink-0 ml-3"
+                    className="h-6 text-[11px] border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 shrink-0 ml-3"
                   >
                     <Scissors className="w-3 h-3 mr-1" />
                     Trim Closing from Body
@@ -767,12 +694,12 @@ export default function PersonalizedEmailEditorModal({
               {/* TAB 1: Editor */}
               {activeTab === 'editor' && (
                 <div className="p-4 space-y-4">
-                  {/* Lightweight Formatting Toolbar */}
-                  <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800 text-xs text-slate-400">
+                  {/* Lightweight Formatting Toolbar (Without PDF line wrap buttons) */}
+                  <div className="flex items-center gap-1 p-1 bg-muted/20 rounded-lg border border-border text-xs text-muted-foreground">
                     <button
                       type="button"
                       onClick={() => handleInsertToolbar('**', '**')}
-                      className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                      className="p-1.5 hover:text-foreground hover:bg-muted/40 rounded transition-colors"
                       title="Bold"
                     >
                       <Bold className="w-3.5 h-3.5" />
@@ -780,7 +707,7 @@ export default function PersonalizedEmailEditorModal({
                     <button
                       type="button"
                       onClick={() => handleInsertToolbar('*', '*')}
-                      className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                      className="p-1.5 hover:text-foreground hover:bg-muted/40 rounded transition-colors"
                       title="Italic"
                     >
                       <Italic className="w-3.5 h-3.5" />
@@ -788,13 +715,13 @@ export default function PersonalizedEmailEditorModal({
                     <button
                       type="button"
                       onClick={() => handleInsertToolbar('• ')}
-                      className="p-1.5 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                      className="p-1.5 hover:text-foreground hover:bg-muted/40 rounded transition-colors"
                       title="Bullet Point"
                     >
                       <List className="w-3.5 h-3.5" />
                     </button>
-                    <div className="h-4 w-px bg-slate-800 mx-1" />
-                    <span className="text-[11px] text-slate-500 px-1">
+                    <div className="h-4 w-px bg-border mx-1" />
+                    <span className="text-[11px] text-muted-foreground px-1">
                       Professional Business Typography: Arial / Helvetica 14px
                     </span>
                   </div>
@@ -810,31 +737,31 @@ export default function PersonalizedEmailEditorModal({
                       fontSize: '14px',
                       lineHeight: '1.6',
                     }}
-                    className="w-full bg-slate-950 border-slate-800 text-slate-100 p-4 focus:border-amber-500 resize-y rounded-lg font-sans"
+                    className="w-full bg-background border-border text-foreground p-4 rounded-lg font-sans resize-y"
                     placeholder="Write or edit the personalized outreach email body..."
                   />
 
                   {/* Character count & helpful note */}
-                  <div className="flex items-center justify-between text-[11px] text-slate-500">
-                    <span>Clean paragraphs render automatically with standard email spacing.</span>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>Paragraphs render automatically with clean business spacing.</span>
                     <span>{bodyText.length} characters • {bodyText.split(/\s+/).filter(Boolean).length} words</span>
                   </div>
 
                   {/* In-Editor Visible Signature Rendering */}
-                  <div className="mt-4 p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                    <div className="flex items-center justify-between text-xs text-slate-400 border-b border-slate-800/80 pb-2">
-                      <span className="font-semibold text-slate-300 flex items-center gap-1.5">
-                        <FileSignature className="w-3.5 h-3.5 text-amber-400" />
-                        Signature Rendered at End of Email:
+                  <div className="mt-4 p-4 rounded-xl bg-card border border-border space-y-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground border-b border-border pb-2">
+                      <span className="font-semibold text-foreground flex items-center gap-1.5">
+                        <FileSignature className="w-3.5 h-3.5 text-primary" />
+                        Gmail Signature (Rendered Below Email Body):
                       </span>
-                      <span className="text-[11px] text-slate-500">
-                        {currentSignature?.name || (isCustomSigOpen ? 'Custom Signature' : 'Preset')}
+                      <span className="text-[11px] text-muted-foreground">
+                        {currentSignature?.name || (isCustomSigOpen ? 'Custom Signature' : 'Gmail Synced')}
                       </span>
                     </div>
 
                     <div
-                      className="p-3 rounded-lg bg-slate-950 border border-slate-800/80 text-xs text-slate-300"
-                      dangerouslySetInnerHTML={{ __html: resolvedSignatureHtml || '<p class="text-slate-500 italic">No signature assigned</p>' }}
+                      className="p-4 rounded-lg bg-white text-slate-900 border border-slate-200 text-xs shadow-xs"
+                      dangerouslySetInnerHTML={{ __html: resolvedSignatureHtml || '<p class="text-slate-400 italic">No signature assigned</p>' }}
                     />
                   </div>
                 </div>
@@ -842,8 +769,8 @@ export default function PersonalizedEmailEditorModal({
 
               {/* TAB 2: Realistic Outgoing Email Preview */}
               {activeTab === 'preview' && (
-                <div className="p-6 bg-slate-950/80 min-h-[460px] flex flex-col justify-start">
-                  <div className="max-w-3xl w-full mx-auto bg-white text-slate-900 rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-in fade-in">
+                <div className="p-6 bg-muted/30 min-h-[460px] flex flex-col justify-start">
+                  <div className="max-w-3xl w-full mx-auto bg-white text-slate-900 rounded-xl shadow-lg border border-slate-300 overflow-hidden animate-in fade-in">
                     {/* Realistic Email Client Header */}
                     <div className="p-5 border-b border-slate-200 bg-slate-50 space-y-2 text-xs text-slate-700">
                       <div className="flex items-center justify-between">
@@ -921,7 +848,7 @@ export default function PersonalizedEmailEditorModal({
                                 key={doc.id}
                                 className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 text-xs flex items-center gap-2 font-medium"
                               >
-                                <Paperclip className="w-3.5 h-3.5 text-amber-600" />
+                                <Paperclip className="w-3.5 h-3.5 text-primary" />
                                 <span>{doc.name}</span>
                                 <span className="text-[11px] text-slate-500 font-normal">({doc.fileSize})</span>
                               </div>
@@ -936,26 +863,26 @@ export default function PersonalizedEmailEditorModal({
 
               {/* TAB 3: Compare with Raw PDF Text */}
               {activeTab === 'compare' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-800 p-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border p-4 gap-4">
                   <div>
-                    <span className="text-xs font-semibold text-slate-400 block mb-2">
+                    <span className="text-xs font-semibold text-muted-foreground block mb-2">
                       Original Text Extracted from PDF (Verbatim):
                     </span>
                     <div
                       style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px', lineHeight: '1.6' }}
-                      className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 whitespace-pre-wrap max-h-80 overflow-y-auto"
+                      className="p-3.5 rounded-lg bg-muted/20 border border-border text-foreground whitespace-pre-wrap max-h-80 overflow-y-auto"
                     >
                       {draft.extracted_body_plain || 'No original text available'}
                     </div>
                   </div>
 
                   <div>
-                    <span className="text-xs font-semibold text-amber-300 block mb-2">
+                    <span className="text-xs font-semibold text-primary block mb-2">
                       Current Edited Text:
                     </span>
                     <div
                       style={{ fontFamily: 'Arial, Helvetica, sans-serif', fontSize: '13px', lineHeight: '1.6' }}
-                      className="p-3.5 rounded-lg bg-slate-900 border border-slate-800 text-slate-200 whitespace-pre-wrap max-h-80 overflow-y-auto"
+                      className="p-3.5 rounded-lg bg-muted/20 border border-border text-foreground whitespace-pre-wrap max-h-80 overflow-y-auto"
                     >
                       {bodyText || 'No edited content'}
                     </div>
@@ -966,16 +893,16 @@ export default function PersonalizedEmailEditorModal({
           </div>
 
           {/* Signature Configuration Section */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-3">
+          <div className="p-4 rounded-xl border border-border bg-card space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <FileSignature className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <FileSignature className="w-3.5 h-3.5 text-primary" />
                 Choose / Configure Signature:
               </span>
               <button
                 type="button"
                 onClick={() => setIsCustomSigOpen(!isCustomSigOpen)}
-                className="text-xs text-amber-400 hover:underline flex items-center gap-1"
+                className="text-xs text-primary hover:underline flex items-center gap-1"
               >
                 <Edit3 className="w-3 h-3" />
                 {isCustomSigOpen ? 'Use Preset Signature' : 'Edit / Build Custom Signature'}
@@ -994,7 +921,7 @@ export default function PersonalizedEmailEditorModal({
                       setSelectedSignatureId(e.target.value);
                     }
                   }}
-                  className="flex-1 h-9 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 focus:border-amber-500 focus:outline-none"
+                  className="flex-1 h-9 rounded-md bg-background border border-border text-xs text-foreground px-3 focus:outline-none"
                 >
                   {signatures.map((sig) => (
                     <option key={sig.id} value={sig.id}>
@@ -1005,101 +932,94 @@ export default function PersonalizedEmailEditorModal({
                 </select>
               </div>
             ) : (
-              <div className="p-3.5 rounded-lg bg-slate-900 border border-amber-500/30 space-y-3 animate-in fade-in">
-                <span className="text-[11px] font-semibold text-amber-300 block uppercase tracking-wider">
+              <div className="p-3.5 rounded-lg bg-muted/20 border border-border space-y-3 animate-in fade-in">
+                <span className="text-[11px] font-semibold text-primary block uppercase tracking-wider">
                   Custom Signature Builder
                 </span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Full Name</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Full Name</label>
                     <Input
                       value={customSigName}
                       onChange={(e) => setCustomSigName(e.target.value)}
-                      placeholder="e.g. Abdullah Rauf"
-                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                      className="h-8 text-xs bg-background border-border"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Title / Designation</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Title / Designation</label>
                     <Input
                       value={customSigTitle}
                       onChange={(e) => setCustomSigTitle(e.target.value)}
-                      placeholder="e.g. Head of Sales"
-                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                      className="h-8 text-xs bg-background border-border"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Company</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Company</label>
                     <Input
                       value={customSigCompany}
                       onChange={(e) => setCustomSigCompany(e.target.value)}
-                      placeholder="e.g. Minetech Resources BV – Belgium"
-                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                      className="h-8 text-xs bg-background border-border"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Direct Phone</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Direct Phone</label>
                     <Input
                       value={customSigPhone}
-                      onChange={(e) => setCustomSigPhone(e.target.value)}
-                      placeholder="e.g. +32 486 287 751"
-                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                      onChange={(e) => setCustomPhone(e.target.value)}
+                      className="h-8 text-xs bg-background border-border"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Email Address</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Email Address</label>
                     <Input
                       value={customSigEmail}
                       onChange={(e) => setCustomSigEmail(e.target.value)}
-                      placeholder="e.g. rauf@mine-tech.be"
-                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                      className="h-8 text-xs bg-background border-border"
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] text-slate-400 block mb-1">Website</label>
+                    <label className="text-[10px] text-muted-foreground block mb-1">Website</label>
                     <Input
                       value={customSigWebsite}
                       onChange={(e) => setCustomSigWebsite(e.target.value)}
-                      placeholder="e.g. www.mine-tech.be"
-                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                      className="h-8 text-xs bg-background border-border"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">BTW / Legal Addresses / Disclaimer</label>
+                  <label className="text-[10px] text-muted-foreground block mb-1">BTW / Legal Addresses / Disclaimer</label>
                   <Textarea
                     value={customSigExtra}
                     onChange={(e) => setCustomSigExtra(e.target.value)}
                     rows={2}
-                    className="text-xs bg-slate-950 border-slate-700 text-white resize-none"
-                    placeholder="BTW No., Registration, Warehouse address..."
+                    className="text-xs bg-background border-border resize-none"
                   />
                 </div>
               </div>
             )}
 
             {/* Workspace-wide propagation checkbox */}
-            <label className="flex items-center gap-2 pt-1 text-xs text-amber-200 cursor-pointer select-none">
+            <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={applySignatureToAll}
                 onChange={(e) => setApplySignatureToAll(e.target.checked)}
-                className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+                className="w-3.5 h-3.5 accent-primary rounded cursor-pointer"
               />
               <span>Apply this signature to all {allDrafts.length} emails in workspace</span>
             </label>
           </div>
 
           {/* Document & Attachment Library Section */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-3">
+          <div className="p-4 rounded-xl border border-border bg-card space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <Paperclip className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5 text-primary" />
                   Attached Documents ({attachedDocIds.length} attached)
                 </span>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-muted-foreground">
                   Select brochures, technical data sheets, and certificates for this company.
                 </p>
               </div>
@@ -1108,108 +1028,50 @@ export default function PersonalizedEmailEditorModal({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => localFileInputRef.current?.click()}
-                  disabled={uploadingAttachment}
-                  className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+                  onClick={() => setIsAttachModalOpen(true)}
+                  className="h-7 text-xs border-border text-foreground hover:bg-muted/40"
                 >
-                  {uploadingAttachment ? (
-                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                  ) : (
-                    <Upload className="w-3 h-3 mr-1 text-amber-400" />
-                  )}
-                  Upload File from Computer
-                </Button>
-                <input
-                  type="file"
-                  ref={localFileInputRef}
-                  onChange={handleLocalFileUpload}
-                  className="hidden"
-                />
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowDocLibrary(!showDocLibrary)}
-                  className="h-7 text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
-                >
-                  {showDocLibrary ? 'Close Library' : 'Browse Library'}
+                  <FolderOpen className="w-3 h-3 mr-1 text-primary" />
+                  Attachment Manager
                 </Button>
               </div>
             </div>
 
             {/* List of currently attached documents */}
-            {attachedDocIds.length > 0 && (
+            {attachedDocIds.length > 0 ? (
               <div className="flex flex-wrap gap-2 pt-1">
                 {documents
                   .filter((d) => attachedDocIds.includes(d.id))
                   .map((doc) => (
                     <div
                       key={doc.id}
-                      className="px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center gap-2"
+                      className="px-2.5 py-1 rounded-md bg-muted/40 border border-border text-foreground text-xs flex items-center gap-2"
                     >
-                      <FileText className="w-3.5 h-3.5 text-amber-400" />
+                      <FileText className="w-3.5 h-3.5 text-primary" />
                       <span>{doc.name}</span>
-                      <span className="text-[10px] text-slate-500">({doc.fileSize})</span>
+                      <span className="text-[10px] text-muted-foreground">({doc.fileSize})</span>
                       <button
                         type="button"
                         onClick={() => toggleDocumentAttachment(doc)}
-                        className="text-slate-400 hover:text-white"
+                        className="text-muted-foreground hover:text-rose-400"
+                        title="Remove from this email (does not delete from library)"
                       >
                         <X className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
               </div>
-            )}
-
-            {/* Document Library Selection Drawer */}
-            {showDocLibrary && (
-              <div className="mt-3 p-3 rounded-lg bg-slate-900 border border-slate-800 space-y-2 max-h-56 overflow-y-auto">
-                <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
-                  Available MineTech Library Documents:
-                </span>
-                <div className="space-y-1.5">
-                  {documents.map((doc) => {
-                    const isAttached = attachedDocIds.includes(doc.id);
-                    return (
-                      <div
-                        key={doc.id}
-                        onClick={() => toggleDocumentAttachment(doc)}
-                        className={`p-2 rounded border cursor-pointer text-xs flex items-center justify-between transition-colors ${
-                          isAttached
-                            ? 'border-amber-500/60 bg-amber-500/10 text-white'
-                            : 'border-slate-800 hover:bg-slate-800/60 text-slate-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <FileText className="w-4 h-4 text-amber-400 shrink-0" />
-                          <div>
-                            <span className="font-medium text-slate-200">{doc.name}</span>
-                            <span className="text-[10px] text-slate-500 ml-2">({doc.category} • {doc.fileSize})</span>
-                          </div>
-                        </div>
-
-                        <div
-                          className={`w-4 h-4 rounded border flex items-center justify-center ${
-                            isAttached ? 'border-amber-500 bg-amber-500 text-slate-950' : 'border-slate-600'
-                          }`}
-                        >
-                          {isAttached && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No files attached to this email.</p>
             )}
 
             {/* Workspace-wide propagation checkbox */}
-            <label className="flex items-center gap-2 pt-1 text-xs text-amber-200 cursor-pointer select-none">
+            <label className="flex items-center gap-2 pt-1 text-xs text-muted-foreground cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={applyAttachmentsToAll}
                 onChange={(e) => setApplyAttachmentsToAll(e.target.checked)}
-                className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+                className="w-3.5 h-3.5 accent-primary rounded cursor-pointer"
               />
               <span>Attach these files ({attachedDocIds.length}) to all {allDrafts.length} emails in workspace</span>
             </label>
@@ -1217,16 +1079,16 @@ export default function PersonalizedEmailEditorModal({
         </div>
 
         {/* Footer Action Bar */}
-        <div className="p-4 px-6 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-3">
+        <div className="p-4 px-6 border-t border-border bg-muted/20 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-400">Current Status:</span>
+            <span className="text-xs text-muted-foreground">Current Status:</span>
             {approvalStatus === 'approved' && !isModifiedAfterApproval ? (
-              <span className="text-xs px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1.5">
+              <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold border border-emerald-500/30 flex items-center gap-1.5">
                 <CheckCircle2 className="w-3.5 h-3.5" />
                 Approved by You
               </span>
             ) : (
-              <span className="text-xs px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30 flex items-center gap-1.5">
+              <span className="text-xs px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold border border-amber-500/30 flex items-center gap-1.5">
                 <AlertTriangle className="w-3.5 h-3.5" />
                 Needs Review
               </span>
@@ -1237,7 +1099,7 @@ export default function PersonalizedEmailEditorModal({
             <Button
               variant="outline"
               onClick={onClose}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+              className="border-border text-foreground hover:bg-muted/40 text-xs"
             >
               Cancel
             </Button>
@@ -1247,7 +1109,7 @@ export default function PersonalizedEmailEditorModal({
                 variant="outline"
                 onClick={() => handleSave(false, false, true)}
                 disabled={loading}
-                className="border-rose-500/30 text-rose-300 hover:bg-rose-500/10 text-xs"
+                className="border-rose-500/30 text-rose-500 hover:bg-rose-500/10 text-xs"
               >
                 Remove Approval
               </Button>
@@ -1257,7 +1119,7 @@ export default function PersonalizedEmailEditorModal({
               variant="secondary"
               onClick={() => handleSave(false, false)}
               disabled={loading}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs"
+              className="bg-muted text-foreground border border-border text-xs"
             >
               {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
               Save Draft
@@ -1266,7 +1128,7 @@ export default function PersonalizedEmailEditorModal({
             <Button
               onClick={() => handleSave(true, false)}
               disabled={loading}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow flex items-center gap-1"
+              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-xs flex items-center gap-1"
             >
               <Check className="w-3.5 h-3.5 mr-0.5" />
               Approve Email
@@ -1276,7 +1138,7 @@ export default function PersonalizedEmailEditorModal({
               <Button
                 onClick={() => handleSave(true, true)}
                 disabled={loading}
-                className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow flex items-center gap-1"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs flex items-center gap-1"
               >
                 Approve & Next
                 <ArrowRight className="w-3.5 h-3.5 ml-0.5" />
@@ -1293,6 +1155,31 @@ export default function PersonalizedEmailEditorModal({
         draft={draft}
         onMatched={(updatedDrafts) => {
           onSaveDraft?.(updatedDrafts);
+        }}
+      />
+
+      {/* Attachment Manager Sub-Modal */}
+      <AttachFilesModal
+        isOpen={isAttachModalOpen}
+        onClose={() => {
+          setIsAttachModalOpen(false);
+          // Refresh documents
+          fetch('/api/email/workspace/documents')
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.success && d.documents) setDocuments(d.documents);
+            });
+        }}
+        currentDraftId={draft.id}
+        totalDraftsCount={allDrafts.length}
+        selectedDraftIds={[draft.id]}
+        onAttachmentsApplied={(updatedDrafts, appliedDocs) => {
+          if (appliedDocs) {
+            setAttachedDocIds(appliedDocs.map((d) => d.id));
+          }
+          if (updatedDrafts) {
+            onSaveDraft?.(updatedDrafts);
+          }
         }}
       />
     </div>

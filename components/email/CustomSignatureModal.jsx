@@ -13,12 +13,20 @@ import {
   Loader2,
   Sparkles,
   Eye,
-  Edit3
+  Edit3,
+  RefreshCw,
+  AlertTriangle,
+  ShieldCheck,
+  CheckCircle2,
+  ExternalLink,
+  Code,
+  Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 export default function CustomSignatureModal({
@@ -28,13 +36,29 @@ export default function CustomSignatureModal({
   selectedDraftsCount = 0,
   selectedDraftIds = [],
   onSignatureApplied,
+  campaignId = null,
 }) {
   const [signatures, setSignatures] = useState([]);
-  const [selectedSigId, setSelectedSigId] = useState('sig-minetech-head-of-sales');
-  const [mode, setMode] = useState('preset'); // 'preset' | 'custom'
+  const [selectedSigId, setSelectedSigId] = useState('sig-gmail-synced');
+  const [activeTab, setActiveTab] = useState('gmail'); // 'gmail' | 'manual' | 'preset'
   const [loading, setLoading] = useState(false);
+  const [syncingGmail, setSyncingGmail] = useState(false);
 
-  // Custom signature form
+  // Active Gmail sync metadata
+  const [gmailSyncMeta, setGmailSyncMeta] = useState({
+    lastSyncedAt: null,
+    source: 'official_reference',
+    sendAsEmail: 'rauf@mine-tech.be',
+    displayName: 'Abdullah Rauf',
+    permissionStatus: 'ready',
+    requiredScope: 'https://www.googleapis.com/auth/gmail.settings.basic',
+  });
+
+  // Manual raw HTML signature editor
+  const [manualHtml, setManualHtml] = useState('');
+  const [previewHtml, setPreviewHtml] = useState('');
+
+  // Structured custom signature form
   const [customName, setCustomName] = useState('Abdullah Rauf');
   const [customTitle, setCustomTitle] = useState('Head of Sales');
   const [customCompany, setCustomCompany] = useState('Minetech Resources BV – Belgium');
@@ -45,28 +69,89 @@ export default function CustomSignatureModal({
     'BTW No. BE 1011004868\nFacility Address: Frederik Hendrikstraat 60, 4586 AC, Lamswaarde, Netherlands\nRegistered Office Address: Kernenergiestraat 19, Bus W16, 2610 Antwerpen, Belgium'
   );
 
+  const fetchSignatures = async () => {
+    try {
+      const res = await fetch('/api/email/workspace/signatures');
+      const d = await res.json();
+      if (d.success) {
+        setSignatures(d.signatures || []);
+        if (d.activeGmailSignature) {
+          setGmailSyncMeta(d.activeGmailSignature);
+          setManualHtml(d.activeGmailSignature.signatureHtml || '');
+          setPreviewHtml(d.activeGmailSignature.signatureHtml || '');
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load signatures:', e);
+    }
+  };
+
   useEffect(() => {
     if (isOpen) {
-      fetch('/api/email/workspace/signatures')
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.success && d.signatures) {
-            setSignatures(d.signatures);
-          }
-        })
-        .catch(() => {});
+      fetchSignatures();
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  // Generate HTML preview for custom signature
+  // Sync signature from Gmail API
+  const handleSyncGmailSignature = async () => {
+    setSyncingGmail(true);
+    try {
+      const res = await fetch('/api/email/workspace/signatures/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetEmail: gmailSyncMeta.sendAsEmail }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        if (data.reason === 'missing_permissions') {
+          toast.error(data.message, { duration: 6000 });
+          setGmailSyncMeta((prev) => ({
+            ...prev,
+            permissionStatus: 'missing_permissions',
+            requiredScope: data.requiredScope,
+          }));
+          return;
+        }
+        throw new Error(data.message || 'Gmail sync failed');
+      }
+
+      toast.success(data.message || 'Gmail signature successfully synced!');
+      setGmailSyncMeta({
+        lastSyncedAt: data.lastSyncedAt,
+        source: data.source,
+        sendAsEmail: data.sendAsEmail,
+        displayName: data.displayName,
+        permissionStatus: 'ready',
+      });
+
+      if (data.signatureHtml) {
+        setManualHtml(data.signatureHtml);
+        setPreviewHtml(data.signatureHtml);
+      }
+
+      fetchSignatures();
+    } catch (err) {
+      toast.error(err.message || 'Error syncing signature from Gmail');
+    } finally {
+      setSyncingGmail(false);
+    }
+  };
+
+  // Generate HTML from custom structured fields
   const generateCustomHtml = () => {
-    return `<p style="margin-top: 24px; color: #475569; font-size: 13px; line-height: 1.6; border-top: 1px solid #e2e8f0; padding-top: 16px;">
-  <strong style="color: #0f172a;">${customName}</strong>${customTitle ? ` - ${customTitle}` : ''}${customPhone ? ` | Mo. ${customPhone}` : ''}${customEmail ? ` | <a href="mailto:${customEmail}" style="color: #d97706; text-decoration: none;">${customEmail}</a>` : ''}<br/>
-  <strong style="color: #0f172a;">${customCompany}</strong> | <a href="https://${customWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color: #d97706; text-decoration: none;">${customWebsite}</a><br/>
-  ${customExtra ? `<span style="font-size: 11px; color: #64748b; margin-top: 6px; display: inline-block;">${customExtra.replace(/\n/g, '<br/>')}</span>` : ''}
-</p>`;
+    return `<div dir="ltr" class="gmail_signature" data-smartmail="gmail_signature">
+  <div dir="ltr">
+    <p style="margin-top:16px; margin-bottom:0; font-family:Arial, Helvetica, sans-serif; font-size:13px; line-height:1.5; color:#1f2937;">
+      Regards,<br/>
+      <strong style="color:#0f172a;">${customName}</strong>${customTitle ? ` - ${customTitle}` : ''}${customPhone ? ` | Mo. ${customPhone}` : ''}${customEmail ? ` | <a href="mailto:${customEmail}" style="color:#0284c7; text-decoration:none;" target="_blank">${customEmail}</a>` : ''}<br/>
+      <strong style="color:#0f172a;">${customCompany}</strong> | <a href="https://${customWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color:#0284c7; text-decoration:none;">${customWebsite}</a>
+    </p>
+    ${customExtra ? `<p style="margin-top:8px; margin-bottom:0; font-family:Arial, Helvetica, sans-serif; font-size:11px; line-height:1.4; color:#6b7280;">${customExtra.replace(/\n/g, '<br/>')}</p>` : ''}
+  </div>
+</div>`;
   };
 
   const handleApplySignature = async (applyToAll = true) => {
@@ -75,26 +160,55 @@ export default function CustomSignatureModal({
       let finalSigHtml = '';
       let sigId = selectedSigId;
 
-      if (mode === 'custom') {
-        finalSigHtml = generateCustomHtml();
-        sigId = `sig-custom-${Date.now()}`;
+      if (activeTab === 'gmail') {
+        finalSigHtml = gmailSyncMeta.signatureHtml || manualHtml || generateCustomHtml();
+        sigId = 'sig-gmail-synced';
+      } else if (activeTab === 'manual') {
+        finalSigHtml = manualHtml;
+        sigId = `sig-manual-${Date.now()}`;
 
-        // Save custom signature
+        // Save manual HTML
         await fetch('/api/email/workspace/signatures', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            name: `${customName} (${customTitle || 'Custom'})`,
-            senderName: customName,
-            senderTitle: customTitle,
-            senderCompany: customCompany,
-            bodyText: `${customName} - ${customTitle} | ${customCompany}`,
-            bodyHtml: finalSigHtml,
+            action: 'manual_html',
+            signatureHtml: manualHtml,
+            senderEmail: gmailSyncMeta.sendAsEmail,
           }),
         }).catch(() => {});
       } else {
-        const found = signatures.find((s) => s.id === selectedSigId);
-        finalSigHtml = found?.bodyHtml || '';
+        finalSigHtml = generateCustomHtml();
+        sigId = `sig-custom-${Date.now()}`;
+      }
+
+      // Handle Campaign Recipients scope if campaignId is provided
+      if (campaignId) {
+        const res = await fetch(`/api/email/campaigns/${campaignId}/recipients`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'bulk_signature',
+            applyToAll,
+            recipientIds: applyToAll ? undefined : (selectedDraftIds && selectedDraftIds.length > 0 ? selectedDraftIds : undefined),
+            signatureHtml: finalSigHtml,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Failed to apply signature to campaign recipients');
+        }
+
+        toast.success(
+          applyToAll
+            ? `Gmail signature applied to all ${totalDraftsCount} campaign recipients!`
+            : `Gmail signature applied to selected recipients!`
+        );
+
+        onSignatureApplied?.(finalSigHtml, data);
+        onClose();
+        return;
       }
 
       const res = await fetch('/api/email/workspace', {
@@ -116,8 +230,8 @@ export default function CustomSignatureModal({
 
       toast.success(
         applyToAll
-          ? `Signature applied to all ${totalDraftsCount} emails in workspace!`
-          : `Signature applied to selected emails!`
+          ? `Gmail signature applied to all ${totalDraftsCount} emails in workspace!`
+          : `Gmail signature applied to selected emails!`
       );
 
       onSignatureApplied?.(data.drafts);
@@ -129,218 +243,282 @@ export default function CustomSignatureModal({
     }
   };
 
+  const formatLastSyncedTime = (isoString) => {
+    if (!isoString) return 'Never synced';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString([], {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      return isoString;
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <Card className="w-full max-w-2xl bg-slate-900 border-slate-700 text-slate-100 shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+      <Card className="w-full max-w-3xl bg-card border-border text-foreground shadow-dialog flex flex-col max-h-[90vh] overflow-hidden rounded-xl">
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-slate-800 bg-slate-950/60">
+        <div className="flex items-center justify-between p-4 px-6 border-b border-border bg-muted/20">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400">
+            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary">
               <FileSignature className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">
-                Email Signature Manager
+              <h3 className="text-base font-semibold text-foreground">
+                Gmail Signature Integration
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Automatically add an official or custom signature at the end of every email
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Exact formatted HTML signature from your connected Gmail sending account
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Mode Selector */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 p-3 px-6 gap-2">
-          <button
-            type="button"
-            onClick={() => setMode('preset')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              mode === 'preset'
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
+        {/* Tab Controls */}
+        <div className="flex items-center justify-between px-6 pt-3 border-b border-border bg-muted/10">
+          <div className="flex items-center gap-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setActiveTab('gmail')}
+              className={`px-3 py-1.5 font-medium border-b-2 transition-colors ${
+                activeTab === 'gmail'
+                  ? 'border-primary text-primary font-semibold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Gmail Synchronized Signature
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('manual')}
+              className={`px-3 py-1.5 font-medium border-b-2 transition-colors ${
+                activeTab === 'manual'
+                  ? 'border-primary text-primary font-semibold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Manual HTML Fallback
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('custom')}
+              className={`px-3 py-1.5 font-medium border-b-2 transition-colors ${
+                activeTab === 'custom'
+                  ? 'border-primary text-primary font-semibold'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Custom Builder
+            </button>
+          </div>
+
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={syncingGmail}
+            onClick={handleSyncGmailSignature}
+            className="h-7 text-xs gap-1.5 border-border hover:bg-muted/40 mb-1"
           >
-            Choose Preconfigured Signature
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('custom')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              mode === 'custom'
-                ? 'bg-amber-600 text-white'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
-          >
-            <Edit3 className="w-3.5 h-3.5 inline mr-1.5" />
-            Create Custom Signature
-          </button>
+            <RefreshCw className={`w-3 h-3 text-primary ${syncingGmail ? 'animate-spin' : ''}`} />
+            Sync Gmail Signature
+          </Button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-4 flex-1">
-          {mode === 'preset' ? (
-            <div className="space-y-3">
-              <label className="text-xs font-semibold text-slate-300 block">
-                Select Signature Preset:
-              </label>
-              <div className="space-y-2">
-                {signatures.map((sig) => {
-                  const isSelected = selectedSigId === sig.id;
-                  return (
-                    <div
-                      key={sig.id}
-                      onClick={() => setSelectedSigId(sig.id)}
-                      className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-amber-500 bg-amber-500/10 text-white shadow-sm'
-                          : 'border-slate-800 bg-slate-950/40 hover:bg-slate-800/40 text-slate-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-xs text-white">{sig.name}</span>
-                          {sig.isDefault && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                              Default
-                            </span>
-                          )}
-                        </div>
-                        <div
-                          className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                            isSelected ? 'border-amber-500 bg-amber-500 text-slate-950' : 'border-slate-600'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                      </div>
-
-                      {sig.bodyHtml && (
-                        <div
-                          className="mt-2.5 p-2.5 rounded bg-slate-900 border border-slate-800/80 text-[11px] text-slate-300"
-                          dangerouslySetInnerHTML={{ __html: sig.bodyHtml }}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
+        {/* Content Body */}
+        <div className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Missing Permission Alert if detected */}
+          {gmailSyncMeta.permissionStatus === 'missing_permissions' && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3 text-xs text-amber-500">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold text-amber-400">Gmail Permission Required</p>
+                <p className="text-amber-500/90 leading-relaxed">
+                  Your Gmail account is connected, but the signature-reading scope (<code>{gmailSyncMeta.requiredScope}</code>) has not been granted. Please request this permission in your Google Workspace admin settings.
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Meanwhile, the verified MineTech official Gmail signature fallback below will be used automatically.
+                </p>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* Sync Status Banner */}
+          <div className="p-3 rounded-xl bg-muted/20 border border-border flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              <span className="text-muted-foreground">Sender Identity:</span>
+              <strong className="text-foreground">{gmailSyncMeta.displayName} &lt;{gmailSyncMeta.sendAsEmail}&gt;</strong>
+            </div>
+
+            <div className="flex items-center gap-2 text-muted-foreground text-[11px]">
+              <span>Last synced:</span>
+              <strong className="text-foreground">{formatLastSyncedTime(gmailSyncMeta.lastSyncedAt)}</strong>
+              <span className="px-1.5 py-0.5 rounded bg-muted/60 text-[10px] uppercase font-mono">
+                {gmailSyncMeta.source === 'gmail_api' ? 'Gmail API' : 'Official Reference'}
+              </span>
+            </div>
+          </div>
+
+          {/* TAB 1: Gmail Synced Signature View */}
+          {activeTab === 'gmail' && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground">
+                  Live Gmail Signature Preview (Delivered Message Styling):
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  Exact font, colors, bolding, hyperlinks, and layout
+                </span>
+              </div>
+
+              {/* Rendered Signature Box on Paper / Container */}
+              <div className="p-6 rounded-xl bg-white text-slate-900 border border-slate-300 shadow-sm overflow-hidden">
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: manualHtml || gmailSyncMeta.signatureHtml || generateCustomHtml(),
+                  }}
+                />
+              </div>
+
+              <div className="p-3 rounded-lg bg-muted/20 border border-border text-xs text-muted-foreground flex items-center gap-2">
+                <Info className="w-4 h-4 text-primary shrink-0" />
+                <span>
+                  This signature will be appended to outgoing emails and matches your Gmail client view identically. Loop prevention headers guarantee that dual-delivery won&apos;t create duplicates.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: Manual HTML Fallback */}
+          {activeTab === 'manual' && (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-foreground block mb-1.5">
+                  Direct HTML Signature Code:
+                </label>
+                <Textarea
+                  value={manualHtml}
+                  onChange={(e) => {
+                    setManualHtml(e.target.value);
+                    setPreviewHtml(e.target.value);
+                  }}
+                  rows={8}
+                  className="font-mono text-xs bg-background border-border text-foreground"
+                  placeholder="<div dir='ltr' class='gmail_signature'>...</div>"
+                />
+              </div>
+
+              <div>
+                <span className="text-xs font-semibold text-foreground block mb-1.5">
+                  Live Preview:
+                </span>
+                <div className="p-6 rounded-xl bg-white text-slate-900 border border-slate-300 shadow-sm overflow-hidden">
+                  <div dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-slate-400 italic">Enter HTML to preview</p>' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: Structured Custom Builder */}
+          {activeTab === 'custom' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Sender Full Name:
-                  </label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Full Name</label>
                   <Input
                     value={customName}
                     onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="e.g. Abdullah Rauf"
-                    className="h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Job Title / Role:
-                  </label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Title / Designation</label>
                   <Input
                     value={customTitle}
                     onChange={(e) => setCustomTitle(e.target.value)}
-                    placeholder="e.g. Head of Sales"
-                    className="h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Company Name:
-                  </label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Company</label>
                   <Input
                     value={customCompany}
                     onChange={(e) => setCustomCompany(e.target.value)}
-                    placeholder="e.g. Minetech Resources BV – Belgium"
-                    className="h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Mobile / Phone Number:
-                  </label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Phone Number</label>
                   <Input
                     value={customPhone}
                     onChange={(e) => setCustomPhone(e.target.value)}
-                    placeholder="e.g. +32 486 287 751"
-                    className="h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Email Address:
-                  </label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Email Address</label>
                   <Input
                     value={customEmail}
                     onChange={(e) => setCustomEmail(e.target.value)}
-                    placeholder="e.g. rauf@mine-tech.be"
-                    className="h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                    Website URL:
-                  </label>
+                  <label className="text-xs font-semibold text-foreground block mb-1">Company Website</label>
                   <Input
                     value={customWebsite}
                     onChange={(e) => setCustomWebsite(e.target.value)}
-                    placeholder="e.g. www.mine-tech.be"
-                    className="h-8 text-xs bg-slate-950 border-slate-700 text-white focus:border-amber-500"
+                    className="h-8 text-xs bg-background border-border"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="text-[11px] font-semibold text-slate-300 block mb-1">
-                  Addresses / VAT No. / Legal Footnote:
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Addresses & Registration Details
                 </label>
                 <Textarea
                   value={customExtra}
                   onChange={(e) => setCustomExtra(e.target.value)}
                   rows={3}
-                  placeholder="e.g. BTW No. BE 1011004868&#10;Facility Address: Netherlands&#10;Registered Office: Belgium"
-                  className="bg-slate-950 border-slate-700 text-white text-xs leading-relaxed focus:border-amber-500"
+                  className="text-xs bg-background border-border"
                 />
               </div>
 
-              {/* Live Preview Card */}
-              <div className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/60 space-y-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
-                  <Eye className="w-3.5 h-3.5" />
-                  Live Signature Preview (appended at end of each email):
+              <div>
+                <span className="text-xs font-semibold text-foreground block mb-1.5">
+                  Generated Preview:
                 </span>
-                <div
-                  className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300"
-                  dangerouslySetInnerHTML={{ __html: generateCustomHtml() }}
-                />
+                <div className="p-6 rounded-xl bg-white text-slate-900 border border-slate-300 shadow-sm overflow-hidden">
+                  <div dangerouslySetInnerHTML={{ __html: generateCustomHtml() }} />
+                </div>
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="p-4 px-6 border-t border-slate-800 bg-slate-950/80 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs text-slate-400">
-            {totalDraftsCount} total emails in workspace
+        <div className="p-4 px-6 border-t border-border bg-muted/20 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">
+            {selectedDraftsCount > 0 ? `${selectedDraftsCount} email(s) selected` : `${totalDraftsCount} total email(s)`}
           </span>
 
           <div className="flex gap-2">
             <Button
               variant="outline"
               onClick={onClose}
-              className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs"
+              className="border-border text-foreground hover:bg-muted/40 text-xs"
             >
               Cancel
             </Button>
@@ -350,7 +528,7 @@ export default function CustomSignatureModal({
                 variant="secondary"
                 disabled={loading}
                 onClick={() => handleApplySignature(false)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs"
+                className="bg-muted text-foreground border border-border text-xs"
               >
                 Apply to Selected ({selectedDraftsCount})
               </Button>
@@ -359,10 +537,10 @@ export default function CustomSignatureModal({
             <Button
               disabled={loading}
               onClick={() => handleApplySignature(true)}
-              className="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs shadow"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs"
             >
-              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
-              Apply Signature to All Emails ({totalDraftsCount})
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Check className="w-3.5 h-3.5 mr-1.5" />}
+              Apply Signature to All ({totalDraftsCount})
             </Button>
           </div>
         </div>
