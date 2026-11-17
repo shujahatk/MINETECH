@@ -25,7 +25,7 @@ export async function POST(request) {
     // 1. Fetch leads
     let leadsQuery = supabaseAdmin
       .from('leads')
-      .select('id, company, full_name, first_name, last_name, email, phone, website, industry, niche, notes, classification, custom_fields, tags, status, is_dnc')
+      .select('id, company, full_name, first_name, last_name, email, phone, website, industry, niche, notes, custom_fields, tags, status, is_dnc')
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -48,8 +48,11 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: tplErr.message }, { status: 500 });
     }
 
-    // 3. Optional Claude Company Intelligence enrichment for leads without company_intelligence
-    let enrichedLeads = leads || [];
+    // 3. Optional MineTech AI Company Intelligence enrichment for leads without company_intelligence
+    let enrichedLeads = (leads || []).map((l) => ({
+      ...l,
+      classification: l.classification || l.custom_fields?.classification || l.custom_fields?.company_intelligence?.buyer_seller_status || 'Unclassified'
+    }));
     if (runAiClassification && enrichedLeads.length > 0) {
       const leadsNeedingIntel = enrichedLeads.filter(
         (l) => !l.custom_fields?.company_intelligence || l.classification === 'Unclassified'
@@ -61,10 +64,15 @@ export async function POST(request) {
         // Re-fetch enriched leads
         const { data: refreshed } = await supabaseAdmin
           .from('leads')
-          .select('id, company, full_name, first_name, last_name, email, phone, website, industry, niche, notes, classification, custom_fields, tags, status, is_dnc')
+          .select('id, company, full_name, first_name, last_name, email, phone, website, industry, niche, notes, custom_fields, tags, status, is_dnc')
           .in('id', enrichedLeads.map((l) => l.id));
 
-        if (refreshed) enrichedLeads = refreshed;
+        if (refreshed) {
+          enrichedLeads = refreshed.map((l) => ({
+            ...l,
+            classification: l.classification || l.custom_fields?.classification || l.custom_fields?.company_intelligence?.buyer_seller_status || 'Unclassified'
+          }));
+        }
       }
     }
 

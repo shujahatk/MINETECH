@@ -505,11 +505,10 @@ export default function TemplateManager() {
                     <span className="tone-brand inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-semibold text-amber-500 border-amber-500/20 bg-amber-500/10">
                       {t.product_category || t.category || 'Minerals'}
                     </span>
-                    <span className={`inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-semibold uppercase ${
-                      t.recipient_type?.includes('supplier')
-                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    }`}>
+                    <span className={`inline-flex h-[18px] items-center rounded border px-1.5 text-[10px] font-semibold uppercase ${t.recipient_type?.includes('supplier')
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                      : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                      }`}>
                       {t.recipient_type?.includes('supplier') ? 'Supplier' : 'Buyer'}
                     </span>
                   </div>

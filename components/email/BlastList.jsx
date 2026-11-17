@@ -338,11 +338,10 @@ export default function BlastList() {
               <button
                 key={tab.id}
                 onClick={() => setStatusFilter(tab.id)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition ${
-                  active
-                    ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                }`}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium whitespace-nowrap transition ${active
+                  ? 'bg-primary text-primary-foreground font-semibold shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                  }`}
               >
                 {tab.label}
               </button>

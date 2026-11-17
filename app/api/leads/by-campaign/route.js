@@ -45,7 +45,7 @@ export async function GET(request) {
       // Fetch all recipients to calculate exact breakdown per campaign
       const { data: recipients, error: recErr } = await supabaseAdmin
         .from('email_recipients')
-        .select('campaign_id, status, lead:leads(id, classification, custom_fields)');
+        .select('campaign_id, status, lead:leads(id, custom_fields)');
 
       if (recErr) throw recErr;
 
@@ -104,7 +104,7 @@ export async function GET(request) {
 
     let query = supabaseAdmin
       .from('email_recipients')
-      .select('id, campaign_id, lead_id, status, sent_at, opened_at, replied_at, bounced_at, lead:leads(id, full_name, email, company, job_title, status, score, tags, classification, custom_fields)')
+      .select('id, campaign_id, lead_id, status, sent_at, opened_at, replied_at, bounced_at, lead:leads(id, full_name, email, company, job_title, status, score, tags, custom_fields)')
       .eq('campaign_id', campaignId)
       .order('created_at', { ascending: false });
 
