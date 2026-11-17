@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   X,
   Building,
@@ -23,7 +23,9 @@ import {
   Send,
   ArrowRight,
   RefreshCw,
-  HelpCircle
+  HelpCircle,
+  FileSignature,
+  Upload
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -60,9 +62,36 @@ export default function PersonalizedEmailEditorModal({
   const [signatures, setSignatures] = useState([]);
   const [selectedSignatureId, setSelectedSignatureId] = useState('');
   const [showSignaturePreview, setShowSignaturePreview] = useState(false);
+  const [isCustomSigOpen, setIsCustomSigOpen] = useState(false);
+
+  // Custom signature builder fields
+  const [customSigName, setCustomSigName] = useState('Abdullah Rauf');
+  const [customSigTitle, setCustomSigTitle] = useState('Head of Sales');
+  const [customSigCompany, setCustomSigCompany] = useState('Minetech Resources BV – Belgium');
+  const [customSigPhone, setCustomSigPhone] = useState('+32 486 287 751');
+  const [customSigEmail, setCustomSigEmail] = useState('rauf@mine-tech.be');
+  const [customSigWebsite, setCustomSigWebsite] = useState('www.mine-tech.be');
+  const [customSigExtra, setCustomSigExtra] = useState(
+    'BTW No. BE 1011004868\nFacility Address: Frederik Hendrikstraat 60, 4586 AC, Lamswaarde, Netherlands\nRegistered Office Address: Kernenergiestraat 19, Bus W16, 2610 Antwerpen, Belgium'
+  );
+
+  const [applySignatureToAll, setApplySignatureToAll] = useState(false);
+  const [applyAttachmentsToAll, setApplyAttachmentsToAll] = useState(false);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const localFileInputRef = useRef(null);
+
   const [documents, setDocuments] = useState([]);
   const [attachedDocIds, setAttachedDocIds] = useState([]);
   const [showDocLibrary, setShowDocLibrary] = useState(false);
+
+  // Generate custom HTML signature string
+  const generateCustomSigHtml = () => {
+    return `<p style="margin-top: 24px; color: #475569; font-size: 13px; line-height: 1.6; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+  <strong style="color: #0f172a;">${customSigName}</strong>${customSigTitle ? ` - ${customSigTitle}` : ''}${customSigPhone ? ` | Mo. ${customSigPhone}` : ''}${customSigEmail ? ` | <a href="mailto:${customSigEmail}" style="color: #d97706; text-decoration: none;">${customSigEmail}</a>` : ''}<br/>
+  <strong style="color: #0f172a;">${customSigCompany}</strong> | <a href="https://${customSigWebsite.replace(/^https?:\/\//, '')}" target="_blank" style="color: #d97706; text-decoration: none;">${customSigWebsite}</a><br/>
+  ${customSigExtra ? `<span style="font-size: 11px; color: #64748b; margin-top: 6px; display: inline-block;">${customSigExtra.replace(/\n/g, '<br/>')}</span>` : ''}
+</p>`;
+  };
 
   // Initial load
   useEffect(() => {
@@ -158,6 +187,40 @@ export default function PersonalizedEmailEditorModal({
     });
   };
 
+  // Upload custom file directly from local computer
+  const handleLocalFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAttachment(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('name', file.name.replace(/\.[^/.]+$/, ''));
+      formData.append('category', 'Custom Uploads');
+
+      const res = await fetch('/api/email/workspace/documents', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'File upload failed');
+      }
+
+      toast.success(`Attached "${file.name}" to email!`);
+      const newDoc = data.document;
+      setDocuments((prev) => [newDoc, ...prev]);
+      setAttachedDocIds((prev) => [...prev, newDoc.id]);
+    } catch (err) {
+      toast.error(err.message || 'Failed to upload attachment');
+    } finally {
+      setUploadingAttachment(false);
+      if (localFileInputRef.current) localFileInputRef.current.value = '';
+    }
+  };
+
   const handleRevertToOriginal = () => {
     if (!draft) return;
     setSubject(draft.extracted_subject || '');
@@ -171,7 +234,17 @@ export default function PersonalizedEmailEditorModal({
     setLoading(true);
 
     try {
-      const activeSignature = signatures.find((s) => s.id === selectedSignatureId);
+      let finalSigHtml = '';
+      let finalSigId = selectedSignatureId;
+
+      if (selectedSignatureId === 'custom' || isCustomSigOpen) {
+        finalSigHtml = generateCustomSigHtml();
+        finalSigId = `sig-custom-${Date.now()}`;
+      } else {
+        const found = signatures.find((s) => s.id === selectedSignatureId);
+        finalSigHtml = found?.bodyHtml || draft.assigned_signature_html || '';
+      }
+
       const activeAttachments = documents.filter((d) => attachedDocIds.includes(d.id));
 
       const updatedContacts = selectedContacts.map((c) => ({
@@ -204,9 +277,11 @@ export default function PersonalizedEmailEditorModal({
         selected_contacts: updatedContacts,
         cc_emails: parsedCc,
         bcc_emails: parsedBcc,
-        assigned_signature_id: selectedSignatureId,
-        assigned_signature_html: activeSignature?.bodyHtml || null,
+        assigned_signature_id: finalSigId,
+        assigned_signature_html: finalSigHtml || null,
         assigned_attachments: activeAttachments,
+        applySignatureToAll,
+        applyAttachmentsToAll,
       };
 
       const res = await fetch('/api/email/workspace', {
@@ -553,45 +628,157 @@ export default function PersonalizedEmailEditorModal({
           </div>
 
           {/* Signature Selection Section */}
-          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-2">
+          <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-slate-300">
+              <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <FileSignature className="w-3.5 h-3.5 text-amber-400" />
                 Email Signature:
               </span>
-              <button
-                type="button"
-                onClick={() => setShowSignaturePreview(!showSignaturePreview)}
-                className="text-xs text-amber-400 hover:underline"
-              >
-                {showSignaturePreview ? 'Hide Signature Preview' : 'Show Signature Preview'}
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomSigOpen(!isCustomSigOpen)}
+                  className="text-xs text-amber-400 hover:underline flex items-center gap-1"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  {isCustomSigOpen ? 'Use Preset Signature' : 'Edit / Build Custom Signature'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSignaturePreview(!showSignaturePreview)}
+                  className="text-xs text-slate-400 hover:text-amber-300"
+                >
+                  {showSignaturePreview ? 'Hide Preview' : 'Show Preview'}
+                </button>
+              </div>
             </div>
 
-            <div className="flex gap-3">
-              <select
-                value={selectedSignatureId}
-                onChange={(e) => setSelectedSignatureId(e.target.value)}
-                className="flex-1 h-9 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 focus:border-amber-500 focus:outline-none"
-              >
-                {signatures.map((sig) => (
-                  <option key={sig.id} value={sig.id}>
-                    {sig.name} {sig.isDefault ? '(Default)' : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {!isCustomSigOpen ? (
+              <div className="flex gap-3">
+                <select
+                  value={selectedSignatureId}
+                  onChange={(e) => {
+                    if (e.target.value === '__custom__') {
+                      setIsCustomSigOpen(true);
+                      setSelectedSignatureId('custom');
+                    } else {
+                      setSelectedSignatureId(e.target.value);
+                    }
+                  }}
+                  className="flex-1 h-9 rounded-md bg-slate-900 border border-slate-700 text-xs text-slate-200 px-3 focus:border-amber-500 focus:outline-none"
+                >
+                  {signatures.map((sig) => (
+                    <option key={sig.id} value={sig.id}>
+                      {sig.name} {sig.isDefault ? '(Default)' : ''}
+                    </option>
+                  ))}
+                  <option value="__custom__">✎ Create / Build Custom Signature...</option>
+                </select>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-lg bg-slate-900 border border-amber-500/30 space-y-3 animate-in fade-in">
+                <span className="text-[11px] font-semibold text-amber-300 block uppercase tracking-wider">
+                  Custom Signature Builder
+                </span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Full Name</label>
+                    <Input
+                      value={customSigName}
+                      onChange={(e) => setCustomSigName(e.target.value)}
+                      placeholder="e.g. Abdullah Rauf"
+                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Title / Designation</label>
+                    <Input
+                      value={customSigTitle}
+                      onChange={(e) => setCustomSigTitle(e.target.value)}
+                      placeholder="e.g. Head of Sales"
+                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Company</label>
+                    <Input
+                      value={customSigCompany}
+                      onChange={(e) => setCustomSigCompany(e.target.value)}
+                      placeholder="e.g. Minetech Resources BV – Belgium"
+                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Direct Phone</label>
+                    <Input
+                      value={customSigPhone}
+                      onChange={(e) => setCustomSigPhone(e.target.value)}
+                      placeholder="e.g. +32 486 287 751"
+                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Email Address</label>
+                    <Input
+                      value={customSigEmail}
+                      onChange={(e) => setCustomSigEmail(e.target.value)}
+                      placeholder="e.g. rauf@mine-tech.be"
+                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-slate-400 block mb-1">Website</label>
+                    <Input
+                      value={customSigWebsite}
+                      onChange={(e) => setCustomSigWebsite(e.target.value)}
+                      placeholder="e.g. www.mine-tech.be"
+                      className="h-8 text-xs bg-slate-950 border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
 
-            {showSignaturePreview && currentSignature && (
-              <div
-                className="mt-3 p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 animate-in fade-in"
-                dangerouslySetInnerHTML={{ __html: currentSignature.bodyHtml || '<p>No signature</p>' }}
-              />
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">BTW / Legal Addresses / Disclaimer</label>
+                  <Textarea
+                    value={customSigExtra}
+                    onChange={(e) => setCustomSigExtra(e.target.value)}
+                    rows={2}
+                    className="text-xs bg-slate-950 border-slate-700 text-white resize-none"
+                    placeholder="BTW No., Registration, Warehouse address..."
+                  />
+                </div>
+              </div>
             )}
+
+            {/* Live Signature Preview */}
+            {(showSignaturePreview || isCustomSigOpen) && (
+              <div className="p-3 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300 animate-in fade-in">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Signature Preview:</span>
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: isCustomSigOpen
+                      ? generateCustomSigHtml()
+                      : (currentSignature?.bodyHtml || draft.assigned_signature_html || '<p>No signature selected</p>'),
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Workspace-wide propagation checkbox */}
+            <label className="flex items-center gap-2 pt-1 text-xs text-amber-200 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applySignatureToAll}
+                onChange={(e) => setApplySignatureToAll(e.target.checked)}
+                className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+              />
+              <span>Apply this signature to all {allDrafts.length} emails in workspace</span>
+            </label>
           </div>
 
           {/* Document & Attachment Library Section */}
           <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/40 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                   <Paperclip className="w-3.5 h-3.5 text-amber-400" />
@@ -602,14 +789,37 @@ export default function PersonalizedEmailEditorModal({
                 </p>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowDocLibrary(!showDocLibrary)}
-                className="h-7 text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
-              >
-                {showDocLibrary ? 'Close Library' : 'Browse Document Library'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => localFileInputRef.current?.click()}
+                  disabled={uploadingAttachment}
+                  className="h-7 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+                >
+                  {uploadingAttachment ? (
+                    <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                  ) : (
+                    <Upload className="w-3 h-3 mr-1 text-amber-400" />
+                  )}
+                  Upload File from Computer
+                </Button>
+                <input
+                  type="file"
+                  ref={localFileInputRef}
+                  onChange={handleLocalFileUpload}
+                  className="hidden"
+                />
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDocLibrary(!showDocLibrary)}
+                  className="h-7 text-xs border-slate-700 text-slate-300 hover:bg-slate-800"
+                >
+                  {showDocLibrary ? 'Close Library' : 'Browse Library'}
+                </Button>
+              </div>
             </div>
 
             {/* List of currently attached documents */}
@@ -677,6 +887,17 @@ export default function PersonalizedEmailEditorModal({
                 </div>
               </div>
             )}
+
+            {/* Workspace-wide propagation checkbox */}
+            <label className="flex items-center gap-2 pt-1 text-xs text-amber-200 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={applyAttachmentsToAll}
+                onChange={(e) => setApplyAttachmentsToAll(e.target.checked)}
+                className="w-3.5 h-3.5 accent-amber-500 rounded cursor-pointer"
+              />
+              <span>Attach these files ({attachedDocIds.length}) to all {allDrafts.length} emails in workspace</span>
+            </label>
           </div>
         </div>
 

@@ -181,6 +181,25 @@ export async function PATCH(request) {
       }
 
       drafts[draftIndex] = mergedDraft;
+
+      // If user selected "Apply Signature to All Emails"
+      if (updates.applySignatureToAll && updates.assigned_signature_id) {
+        drafts = drafts.map((d) => ({
+          ...d,
+          assigned_signature_id: updates.assigned_signature_id,
+          assigned_signature_html: updates.assigned_signature_html,
+          updated_at: nowIso,
+        }));
+      }
+
+      // If user selected "Apply Attachments to All Emails"
+      if (updates.applyAttachmentsToAll && Array.isArray(updates.assigned_attachments)) {
+        drafts = drafts.map((d) => ({
+          ...d,
+          assigned_attachments: updates.assigned_attachments,
+          updated_at: nowIso,
+        }));
+      }
     }
 
     // 2. Rematch Lead (Manual Override / Assignment)
@@ -260,9 +279,9 @@ export async function PATCH(request) {
 
     // 3. Bulk Approve
     else if (action === 'bulk_approve') {
-      const targetIds = new Set(draftIds || []);
+      const targetIds = draftIds && draftIds.length > 0 ? new Set(draftIds) : null;
       drafts = drafts.map((d) => {
-        if (targetIds.has(d.id)) {
+        if (!targetIds || targetIds.has(d.id)) {
           return {
             ...d,
             approval_status: 'approved',
@@ -274,11 +293,13 @@ export async function PATCH(request) {
       });
     }
 
-    // 4. Bulk Assign Signature
+    // 4. Bulk Assign Signature (to selected or all emails)
     else if (action === 'bulk_signature') {
-      const targetIds = new Set(draftIds || []);
+      const applyToAll = body.applyToAll || !draftIds || draftIds.length === 0 || draftIds === 'all';
+      const targetIds = applyToAll ? null : new Set(draftIds);
+
       drafts = drafts.map((d) => {
-        if (targetIds.has(d.id)) {
+        if (!targetIds || targetIds.has(d.id)) {
           return {
             ...d,
             assigned_signature_id: signatureId,
@@ -290,14 +311,25 @@ export async function PATCH(request) {
       });
     }
 
-    // 5. Bulk Assign Attachments
+    // 5. Bulk Assign Attachments (to selected or all emails)
     else if (action === 'bulk_attachments') {
-      const targetIds = new Set(draftIds || []);
+      const applyToAll = body.applyToAll || !draftIds || draftIds.length === 0 || draftIds === 'all';
+      const targetIds = applyToAll ? null : new Set(draftIds);
+      const mode = body.mode || 'replace'; // 'replace' | 'append'
+      const newAttachments = Array.isArray(attachments) ? attachments : [];
+
       drafts = drafts.map((d) => {
-        if (targetIds.has(d.id)) {
+        if (!targetIds || targetIds.has(d.id)) {
+          let updatedAtts = newAttachments;
+          if (mode === 'append' && Array.isArray(d.assigned_attachments)) {
+            const existingNames = new Set(d.assigned_attachments.map((a) => a.fileName || a.name || a.id));
+            const toAdd = newAttachments.filter((a) => !existingNames.has(a.fileName || a.name || a.id));
+            updatedAtts = [...d.assigned_attachments, ...toAdd];
+          }
+
           return {
             ...d,
-            assigned_attachments: attachments || [],
+            assigned_attachments: updatedAtts,
             updated_at: nowIso,
           };
         }

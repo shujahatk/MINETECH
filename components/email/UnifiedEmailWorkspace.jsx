@@ -27,7 +27,8 @@ import {
   FileCheck,
   ShieldCheck,
   ArrowRight,
-  Info
+  Info,
+  FileSignature
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,8 @@ import { toast } from 'sonner';
 import PersonalizedEmailEditorModal from './PersonalizedEmailEditorModal';
 import CreatePersonalizedCampaignModal from './CreatePersonalizedCampaignModal';
 import RematchCompanyModal from './RematchCompanyModal';
+import CustomSignatureModal from './CustomSignatureModal';
+import AttachFilesModal from './AttachFilesModal';
 
 export default function UnifiedEmailWorkspace() {
   const [loading, setLoading] = useState(true);
@@ -62,6 +65,8 @@ export default function UnifiedEmailWorkspace() {
   const [rematchDraft, setRematchDraft] = useState(null);
   const [isCampaignModalOpen, setIsCampaignModalOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
+  const [isAttachFilesModalOpen, setIsAttachFilesModalOpen] = useState(false);
   const [rawTextInput, setRawTextInput] = useState('');
   const [uploadTab, setUploadTab] = useState('file'); // file | text
   const fileInputRef = useRef(null);
@@ -318,15 +323,37 @@ export default function UnifiedEmailWorkspace() {
 
         <div className="flex flex-wrap items-center gap-2.5">
           {drafts.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearWorkspace}
-              className="border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-slate-800 text-xs h-9"
-            >
-              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-              Reset Workspace
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSignatureModalOpen(true)}
+                className="border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs h-9"
+              >
+                <FileSignature className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+                Signature Settings
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAttachFilesModalOpen(true)}
+                className="border-slate-700 text-slate-200 hover:text-white hover:bg-slate-800 text-xs h-9"
+              >
+                <Paperclip className="w-3.5 h-3.5 mr-1.5 text-amber-400" />
+                Attach Files
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearWorkspace}
+                className="border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-slate-800 text-xs h-9"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                Reset Workspace
+              </Button>
+            </>
           )}
 
           <Button
@@ -649,7 +676,7 @@ export default function UnifiedEmailWorkspace() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -663,11 +690,21 @@ export default function UnifiedEmailWorkspace() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleBulkAttachBrochure}
+              onClick={() => setIsAttachFilesModalOpen(true)}
               className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
             >
               <Paperclip className="w-3.5 h-3.5 mr-1 text-amber-400" />
-              Attach MineTech Brochure
+              Attach Files
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSignatureModalOpen(true)}
+              className="h-8 text-xs border-amber-500/40 text-amber-300 hover:bg-amber-500/20"
+            >
+              <FileSignature className="w-3.5 h-3.5 mr-1 text-amber-400" />
+              Change Signature
             </Button>
 
             <Button
@@ -726,7 +763,7 @@ export default function UnifiedEmailWorkspace() {
                   <th className="py-3 px-4">Company & CRM Match</th>
                   <th className="py-3 px-4">Target Contact(s)</th>
                   <th className="py-3 px-4">Email Preview</th>
-                  <th className="py-3 px-4">Docs</th>
+                  <th className="py-3 px-4">Files & Signature</th>
                   <th className="py-3 px-4">Match Status</th>
                   <th className="py-3 px-4">Approval</th>
                   <th className="py-3 px-4 text-right">Actions</th>
@@ -816,16 +853,31 @@ export default function UnifiedEmailWorkspace() {
                         </div>
                       </td>
 
-                      {/* Attachments */}
+                      {/* Attachments & Signature */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        {attachmentsCount > 0 ? (
-                          <span className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium flex items-center gap-1 w-fit">
-                            <Paperclip className="w-3 h-3" />
-                            {attachmentsCount} {attachmentsCount === 1 ? 'doc' : 'docs'}
+                        <div className="space-y-1">
+                          {attachmentsCount > 0 ? (
+                            <span
+                              className="px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 text-[11px] font-medium flex items-center gap-1 w-fit cursor-default"
+                              title={draft.assigned_attachments?.map((a) => a.name || a.fileName).join(', ')}
+                            >
+                              <Paperclip className="w-3 h-3" />
+                              {attachmentsCount} {attachmentsCount === 1 ? 'file' : 'files'}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                              <Paperclip className="w-3 h-3 text-slate-600" /> No files
+                            </span>
+                          )}
+
+                          <span
+                            className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 text-[10px] flex items-center gap-1 w-fit cursor-default"
+                            title={draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Signature' : 'Official MineTech Signature'}
+                          >
+                            <FileSignature className="w-3 h-3 text-amber-400" />
+                            {draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Sig' : 'Official Sig'}
                           </span>
-                        ) : (
-                          <span className="text-[11px] text-slate-500">—</span>
-                        )}
+                        </div>
                       </td>
 
                       {/* Match Status */}
@@ -936,6 +988,32 @@ export default function UnifiedEmailWorkspace() {
           }}
         />
       )}
+
+      {/* Signature Manager Modal */}
+      <CustomSignatureModal
+        isOpen={isSignatureModalOpen}
+        onClose={() => setIsSignatureModalOpen(false)}
+        totalDraftsCount={drafts.length}
+        selectedDraftsCount={selectedDraftIds.size}
+        selectedDraftIds={Array.from(selectedDraftIds)}
+        onSignatureApplied={(updatedDrafts) => {
+          setDrafts(updatedDrafts);
+          fetchWorkspace();
+        }}
+      />
+
+      {/* Attach Files Modal */}
+      <AttachFilesModal
+        isOpen={isAttachFilesModalOpen}
+        onClose={() => setIsAttachFilesModalOpen(false)}
+        totalDraftsCount={drafts.length}
+        selectedDraftsCount={selectedDraftIds.size}
+        selectedDraftIds={Array.from(selectedDraftIds)}
+        onAttachmentsApplied={(updatedDrafts) => {
+          setDrafts(updatedDrafts);
+          fetchWorkspace();
+        }}
+      />
     </div>
   );
 }
