@@ -227,6 +227,13 @@ export default function PersonalizedEmailEditorModal({
     return false;
   }, [bodyText]);
 
+  const activeAttachedDocs = useMemo(() => {
+    if (Array.isArray(draft?.assigned_attachments) && draft.assigned_attachments.length > 0) {
+      return draft.assigned_attachments;
+    }
+    return documents.filter((d) => attachedDocIds.includes(d.id));
+  }, [draft?.assigned_attachments, documents, attachedDocIds]);
+
   // Open Preview of Paragraph Reconstruction
   const handleOpenFormatFix = async () => {
     try {
@@ -552,7 +559,6 @@ export default function PersonalizedEmailEditorModal({
   const currentSignature = signatures.find((s) => s.id === selectedSignatureId);
   const matchedLead = draft.matched_lead;
   const allContacts = draft.all_company_contacts || [];
-  const activeAttachedDocs = documents.filter((d) => attachedDocIds.includes(d.id));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
@@ -1187,82 +1193,57 @@ export default function PersonalizedEmailEditorModal({
             </label>
           </div>
 
-          {/* Document & Attachment Library Section */}
+          {/* Campaign Attachments Section */}
           <div className="p-4 rounded-xl border border-border bg-card space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Paperclip className="w-3.5 h-3.5 text-primary" />
-                  Attached Documents ({attachedDocIds.length} attached)
+                  Campaign Attachments ({activeAttachedDocs.length} attached)
                 </span>
                 <p className="text-[11px] text-muted-foreground">
-                  Select brochures, technical data sheets, and certificates for this company.
+                  Files attached at the campaign level and automatically delivered with this email.
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsAttachModalOpen(true)}
-                  className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10 gap-1"
-                >
-                  <Paperclip className="w-3 h-3" />
-                  Quick Attach
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open('/settings?section=attachments', '_blank')}
-                  className="h-7 text-xs border-border text-foreground hover:bg-muted/40 gap-1"
-                >
-                  <FolderOpen className="w-3 h-3" />
-                  Attachment Manager
-                </Button>
-              </div>
+              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
+                Auto-Attached to All Emails
+              </Badge>
             </div>
 
             {/* List of currently attached documents */}
-            {attachedDocIds.length > 0 ? (
+            {activeAttachedDocs.length > 0 ? (
               <div className="flex flex-wrap gap-2 pt-1">
-                {documents
-                  .filter((d) => attachedDocIds.includes(d.id))
-                  .map((doc) => {
-                    const type = (doc.fileType || '').toLowerCase();
-                    const name = (doc.fileName || doc.name || '').toLowerCase();
-                    const isPdf = type.includes('pdf') || name.endsWith('.pdf');
-                    const isImage = type.includes('image') || name.endsWith('.png') || name.endsWith('.jpg');
+                {activeAttachedDocs.map((doc) => {
+                  const type = (doc.fileType || '').toLowerCase();
+                  const name = (doc.fileName || doc.name || '').toLowerCase();
+                  const isPdf = type.includes('pdf') || name.endsWith('.pdf');
+                  const isImage = type.includes('image') || name.endsWith('.png') || name.endsWith('.jpg');
 
-                    return (
-                      <div
-                        key={doc.id}
-                        className="px-2.5 py-1.5 rounded-lg bg-card border border-border text-foreground text-xs flex items-center gap-2 shadow-xs"
+                  return (
+                    <div
+                      key={doc.id || doc.fileName || doc.name}
+                      className="px-2.5 py-1.5 rounded-lg bg-card border border-border text-foreground text-xs flex items-center gap-2 shadow-xs"
+                    >
+                      <FileText className={`w-3.5 h-3.5 ${isPdf ? 'text-rose-500' : isImage ? 'text-purple-500' : 'text-primary'}`} />
+                      <span className="font-medium truncate max-w-[220px]">{doc.fileName || doc.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">({doc.fileSize || '1.0 MB'})</span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewDoc(doc)}
+                        className="text-muted-foreground hover:text-primary ml-1"
+                        title="Preview attachment"
                       >
-                        <FileText className={`w-3.5 h-3.5 ${isPdf ? 'text-rose-500' : isImage ? 'text-purple-500' : 'text-primary'}`} />
-                        <span className="font-medium truncate max-w-[220px]">{doc.name || doc.fileName}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">({doc.fileSize || '1.0 MB'})</span>
-                        <button
-                          type="button"
-                          onClick={() => setPreviewDoc(doc)}
-                          className="text-muted-foreground hover:text-primary ml-1"
-                          title="Preview attachment"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleDocumentAttachment(doc)}
-                          className="text-muted-foreground hover:text-rose-500 ml-0.5"
-                          title="Remove from this email (does not delete from library)"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    );
-                  })}
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground italic">No files attached to this email.</p>
+              <p className="text-xs text-muted-foreground italic py-1">
+                No campaign attachments configured. You can upload collateral once on the main workspace to attach to all emails.
+              </p>
             )}
 
             {/* Workspace-wide propagation checkbox */}

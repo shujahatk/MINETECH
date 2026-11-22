@@ -147,7 +147,13 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
     setPreviewCc((r.tokens?.cc || []).join(', '));
     setPreviewBcc((r.tokens?.bcc || []).join(', '));
     setPreviewSigHtml(r.tokens?.signature_html || defaultSigHtml || '');
-    setPreviewAttachments(r.tokens?.attachments || []);
+    const campAttachments = Array.isArray(campaign?.stats?.campaign_attachments)
+      ? campaign.stats.campaign_attachments
+      : (Array.isArray(campaign?.stats?.attachments) ? campaign.stats.attachments : []);
+    const recipientAtts = Array.isArray(r.tokens?.attachments) && r.tokens.attachments.length > 0
+      ? r.tokens.attachments
+      : campAttachments;
+    setPreviewAttachments(recipientAtts);
     setPreviewApproval(r.tokens?.approval_status || (r.tokens?.user_approved ? 'approved' : 'needs_review'));
   };
 
@@ -578,10 +584,12 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
         <Card className="p-3.5 bg-card border-border shadow-xs">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold block">
-            Attachments
+            Campaign Files
           </span>
-          <div className="text-xl font-bold text-primary mt-1">{totalAttachments}</div>
-          <span className="text-[10px] text-muted-foreground">TDS & brochures linked</span>
+          <div className="text-xl font-bold text-primary mt-1">
+            {campaign?.stats?.campaign_attachments?.length || (Array.isArray(recipients[0]?.tokens?.attachments) ? recipients[0].tokens.attachments.length : 0)}
+          </div>
+          <span className="text-[10px] text-muted-foreground">Attached to all emails</span>
         </Card>
 
         <Card className="p-3.5 bg-card border-border shadow-xs">
@@ -1238,8 +1246,22 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Total File Attachments:</span>
-                <span className="font-medium text-primary">{totalAttachments} files</span>
+                <span className="text-muted-foreground">Campaign Attachments:</span>
+                <span className="font-semibold text-primary">
+                  {(campaign?.stats?.campaign_attachments?.length || (Array.isArray(recipients[0]?.tokens?.attachments) ? recipients[0].tokens.attachments.length : 0))} files attached to all emails
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Email Signature:</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {senderName || 'Abdullah Rauf — MineTech Resources BV'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Recipient Verification:</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">All {approvedCount} recipients verified</span>
               </div>
 
               <div className="flex items-center justify-between">

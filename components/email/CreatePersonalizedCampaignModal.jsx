@@ -33,6 +33,22 @@ export default function CreatePersonalizedCampaignModal({
   const [submitting, setSubmitting] = useState(false);
   const [createdCampaignId, setCreatedCampaignId] = useState(null);
 
+  const campaignFiles = React.useMemo(() => {
+    for (const d of selectedDrafts) {
+      if (Array.isArray(d.assigned_attachments) && d.assigned_attachments.length > 0) {
+        return d.assigned_attachments;
+      }
+    }
+    return [];
+  }, [selectedDrafts]);
+
+  const signatureSummary = React.useMemo(() => {
+    for (const d of selectedDrafts) {
+      if (d.assigned_signature_name) return d.assigned_signature_name;
+    }
+    return 'Abdullah Rauf — Minetech Resources BV';
+  }, [selectedDrafts]);
+
   if (!isOpen) return null;
 
   const totalCompanies = selectedDrafts.length;
@@ -45,10 +61,6 @@ export default function CreatePersonalizedCampaignModal({
       ? d.selected_contacts.length
       : 1;
     return sum + count;
-  }, 0);
-
-  const totalAttachments = selectedDrafts.reduce((sum, d) => {
-    return sum + (Array.isArray(d.assigned_attachments) ? d.assigned_attachments.length : 0);
   }, 0);
 
   const canProceed = totalCompanies > 0 && unmatchedCount === 0;
@@ -190,8 +202,8 @@ export default function CreatePersonalizedCampaignModal({
 
                 <div className="p-3.5 rounded-lg bg-muted/20 border border-border text-center">
                   <Paperclip className="w-4 h-4 text-emerald-500 mx-auto mb-1" />
-                  <span className="text-xl font-bold text-foreground">{totalAttachments}</span>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Attachments</p>
+                  <span className="text-xl font-bold text-foreground">{campaignFiles.length}</span>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Campaign Files</p>
                 </div>
               </div>
 
@@ -208,6 +220,28 @@ export default function CreatePersonalizedCampaignModal({
                   </span>
                   <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                     {approvedCount} of {totalCompanies}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-foreground flex items-center gap-1.5">
+                    <Paperclip className="w-4 h-4 text-primary" />
+                    Campaign Attachments:
+                  </span>
+                  <span className="font-semibold text-primary">
+                    {campaignFiles.length > 0
+                      ? `${campaignFiles.length} file${campaignFiles.length > 1 ? 's' : ''} auto-attached to all`
+                      : '0 files (None attached)'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                    Email Signature:
+                  </span>
+                  <span className="font-semibold text-foreground">
+                    {signatureSummary}
                   </span>
                 </div>
 

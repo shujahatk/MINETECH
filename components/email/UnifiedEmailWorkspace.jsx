@@ -76,6 +76,14 @@ export default function UnifiedEmailWorkspace() {
   const [activeAttachScope, setActiveAttachScope] = useState('all');
   const [activeDraftIdForAttach, setActiveDraftIdForAttach] = useState(null);
 
+  // Campaign-Level Attachments & Signature State
+  const [campaignAttachments, setCampaignAttachments] = useState([]);
+  const [configuredSignature, setConfiguredSignature] = useState(null);
+  const [uploadingCampaignFile, setUploadingCampaignFile] = useState(false);
+  const [deletingAttachmentId, setDeletingAttachmentId] = useState(null);
+  const [previewAttachmentDoc, setPreviewAttachmentDoc] = useState(null);
+  const campaignFileInputRef = useRef(null);
+
   // Formatting fix modal state
   const [isBulkFixModalOpen, setIsBulkFixModalOpen] = useState(false);
   const [bulkFixTargetIds, setBulkFixTargetIds] = useState([]); // array or 'all'
@@ -97,6 +105,8 @@ export default function UnifiedEmailWorkspace() {
         setActiveBatch(data.batch);
         setDrafts(data.drafts || []);
         setMetrics(data.metrics || {});
+        setCampaignAttachments(data.campaignAttachments || data.batch?.campaignAttachments || []);
+        setConfiguredSignature(data.configuredSignature || null);
         // Default select all drafts that are ready if user has not made custom selection
         const readyIds = new Set(
           (data.drafts || [])
@@ -110,6 +120,74 @@ export default function UnifiedEmailWorkspace() {
       toast.error('Failed to load email workspace');
     } finally {
       if (!silent) setLoading(false);
+    }
+  };
+
+  // Handle Campaign-Level File Upload (upload once -> automatically attached to all drafts)
+  const handleCampaignFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    if (activeBatch?.id) {
+      formData.append('batchId', activeBatch.id);
+    }
+
+    setUploadingCampaignFile(true);
+    try {
+      const res = await fetch('/api/email/workspace/campaign-attachments', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to upload campaign file');
+      }
+
+      toast.success(data.message || `"${file.name}" automatically attached to all emails!`);
+      setCampaignAttachments(data.attachments || []);
+      if (data.drafts) {
+        setDrafts(data.drafts);
+      } else {
+        fetchWorkspace(true);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error uploading campaign file');
+    } finally {
+      setUploadingCampaignFile(false);
+      if (campaignFileInputRef.current) campaignFileInputRef.current.value = '';
+    }
+  };
+
+  // Handle Campaign-Level File Removal (removes file and detaches from all drafts)
+  const handleDeleteCampaignAttachment = async (attachmentId, fileName) => {
+    if (!confirm(`Remove "${fileName}" from this campaign? It will be automatically detached from all emails.`)) {
+      return;
+    }
+
+    setDeletingAttachmentId(attachmentId);
+    try {
+      const batchParam = activeBatch?.id ? `&batchId=${activeBatch.id}` : '';
+      const res = await fetch(`/api/email/workspace/campaign-attachments?id=${encodeURIComponent(attachmentId)}${batchParam}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove file');
+      }
+
+      toast.success(data.message || 'File removed from campaign and detached from all emails.');
+      setCampaignAttachments(data.attachments || []);
+      if (data.drafts) {
+        setDrafts(data.drafts);
+      } else {
+        fetchWorkspace(true);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Error removing campaign file');
+    } finally {
+      setDeletingAttachmentId(null);
     }
   };
 
@@ -450,39 +528,11 @@ export default function UnifiedEmailWorkspace() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  window.location.href = '/settings?section=attachments';
-                }}
-                className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
-                title="Open Central Attachment Manager in Settings"
-              >
-                <FolderOpen className="w-3.5 h-3.5 mr-1.5 text-primary" />
-                Attachment Manager
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setActiveDraftIdForAttach(null);
-                  setActiveAttachScope('all');
-                  setIsAttachFilesModalOpen(true);
-                }}
-                className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
-                title={`Attach collateral to all ${drafts.length} emails in active workspace`}
-              >
-                <Paperclip className="w-3.5 h-3.5 mr-1.5 text-primary" />
-                Attach to All ({drafts.length})
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
                 onClick={() => setIsSignatureModalOpen(true)}
                 className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
               >
                 <FileSignature className="w-3.5 h-3.5 mr-1.5 text-primary" />
-                Signature Settings
+                Configure Signature
               </Button>
 
               <Button
@@ -770,6 +820,198 @@ export default function UnifiedEmailWorkspace() {
         </Card>
       </div>
 
+      {/* Campaign Preparation: Campaign-Level Attachments & Automatic Signature */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Card 1: Campaign Attachments */}
+        <Card className="p-4 bg-card border-border shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
+                  <Paperclip className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-foreground flex items-center gap-2">
+                    Campaign Attachments
+                    <Badge
+                      variant="outline"
+                      className={`text-[10px] h-5 font-semibold ${
+                        campaignAttachments.length > 0
+                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {campaignAttachments.length > 0
+                        ? `${campaignAttachments.length} file${campaignAttachments.length > 1 ? 's' : ''} auto-attached to all ${drafts.length} emails`
+                        : '0 files'}
+                    </Badge>
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Upload brochures or catalogs once — automatically attached to every email.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <input
+                  ref={campaignFileInputRef}
+                  type="file"
+                  accept=".pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg"
+                  className="hidden"
+                  onChange={handleCampaignFileUpload}
+                  disabled={uploadingCampaignFile}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => campaignFileInputRef.current?.click()}
+                  disabled={uploadingCampaignFile}
+                  className="h-8 text-xs border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
+                >
+                  {uploadingCampaignFile ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  <span>Add Files</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Uploaded Campaign Files List */}
+            <div className="mt-3 space-y-2">
+              {campaignAttachments.length === 0 ? (
+                <div
+                  onClick={() => campaignFileInputRef.current?.click()}
+                  className="border border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:bg-muted/20 transition-colors"
+                >
+                  <Paperclip className="w-5 h-5 text-muted-foreground/60 mx-auto mb-1" />
+                  <p className="text-xs font-medium text-foreground">No campaign files attached yet</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Click <strong className="text-primary hover:underline">Add Files</strong> to upload collateral for all {drafts.length} emails
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                  {campaignAttachments.map((att) => {
+                    const isDeleting = deletingAttachmentId === att.id;
+                    const fileName = att.fileName || att.name;
+                    const isPdf = (att.fileType || '').includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
+                    return (
+                      <div
+                        key={att.id || fileName}
+                        className="flex items-center justify-between p-2 rounded-lg bg-muted/20 border border-border hover:bg-muted/40 transition-colors text-xs"
+                      >
+                        <div className="flex items-center gap-2 truncate max-w-[280px]">
+                          <FileText className={`w-4 h-4 shrink-0 ${isPdf ? 'text-rose-500' : 'text-primary'}`} />
+                          <span className="font-medium text-foreground truncate" title={fileName}>
+                            {fileName}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                            ({att.fileSize || '1.0 MB'})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewAttachmentDoc(att)}
+                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            title="Preview file"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isDeleting}
+                            onClick={() => handleDeleteCampaignAttachment(att.id, fileName)}
+                            className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            title="Remove from campaign (detaches from all emails)"
+                          >
+                            {isDeleting ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
+                            ) : (
+                              <X className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              Attached to {drafts.length} recipient emails
+            </span>
+            <span>Supported: PDF, Word, Excel, Images (Max 25 MB)</span>
+          </div>
+        </Card>
+
+        {/* Card 2: Campaign Automatic Signature */}
+        <Card className="p-4 bg-card border-border shadow-xs flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                  <FileSignature className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-foreground flex items-center gap-2">
+                    Campaign Email Signature
+                    <Badge variant="outline" className="text-[10px] h-5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold gap-1">
+                      <Check className="w-2.5 h-2.5" />
+                      Auto-applied to all {drafts.length} emails
+                    </Badge>
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Official MineTech signature automatically appended upon dispatch.
+                  </p>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsSignatureModalOpen(true)}
+                className="h-8 text-xs border-border hover:bg-muted/40 gap-1.5"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-primary" />
+                <span>Configure Signature</span>
+              </Button>
+            </div>
+
+            {/* Signature Preview Card */}
+            <div className="mt-3 p-3 rounded-lg bg-muted/10 border border-border text-xs max-h-44 overflow-y-auto">
+              <div className="text-[11px] text-muted-foreground mb-1.5 flex items-center justify-between">
+                <span>
+                  Sender: <strong className="text-foreground">{configuredSignature?.senderName || 'Abdullah Rauf'}</strong> ({configuredSignature?.senderTitle || 'Head of Sales'})
+                </span>
+                <span className="text-[10px] font-mono">{configuredSignature?.senderEmail || 'rauf@mine-tech.be'}</span>
+              </div>
+              <div
+                className="p-2.5 rounded bg-background border border-border/80 text-[11px] leading-relaxed select-text"
+                dangerouslySetInnerHTML={{
+                  __html: configuredSignature?.bodyHtml || `<p>Regards,<br/><strong>Abdullah Rauf</strong><br/>Minetech Resources BV</p>`,
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="mt-3 pt-2 border-t border-border/60 flex items-center justify-between text-[11px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-500" />
+              Verified Gmail HTML layout
+            </span>
+            <span>No duplicate sign-offs or manual copying required</span>
+          </div>
+        </Card>
+      </div>
+
       {/* Filter Tabs & Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20 p-2.5 rounded-xl border border-border">
         <div className="flex flex-wrap items-center gap-1.5">
@@ -857,21 +1099,6 @@ export default function UnifiedEmailWorkspace() {
             >
               <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-500" />
               Bulk Approve Selected
-            </Button>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setActiveDraftIdForAttach(null);
-                setActiveAttachScope('selected');
-                setIsAttachFilesModalOpen(true);
-              }}
-              className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
-              title={`Attach files to ${selectedDraftIds.size} selected emails`}
-            >
-              <Paperclip className="w-3.5 h-3.5 mr-1 text-primary" />
-              Attach to Selected ({selectedDraftIds.size})
             </Button>
 
             <Button
@@ -1044,46 +1271,27 @@ export default function UnifiedEmailWorkspace() {
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {attachmentsCount > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {draft.assigned_attachments.map((a, aIdx) => (
-                                  <span
-                                    key={aIdx}
-                                    className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-medium flex items-center gap-1 max-w-[170px] truncate"
-                                    title={`${a.name || a.fileName} (${a.fileSize || ''})`}
-                                  >
-                                    <Paperclip className="w-2.5 h-2.5 shrink-0" />
-                                    <span className="truncate">{a.name || a.fileName}</span>
-                                  </span>
-                                ))}
-                              </div>
+                            {(campaignAttachments.length > 0 || attachmentsCount > 0) ? (
+                              <span
+                                className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-semibold flex items-center gap-1"
+                                title={(campaignAttachments.length > 0 ? campaignAttachments : draft.assigned_attachments || []).map((a) => a.fileName || a.name).join(', ')}
+                              >
+                                <Paperclip className="w-2.5 h-2.5 shrink-0" />
+                                <span>{(campaignAttachments.length || attachmentsCount)} Campaign File{(campaignAttachments.length || attachmentsCount) > 1 ? 's' : ''}</span>
+                              </span>
                             ) : (
                               <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                                 <Paperclip className="w-3 h-3 text-muted-foreground/60" /> No files
                               </span>
                             )}
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveDraftIdForAttach(draft.id);
-                                setActiveAttachScope('individual');
-                                setIsAttachFilesModalOpen(true);
-                              }}
-                              className="px-1.5 py-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-colors inline-flex items-center gap-1 text-[10px]"
-                              title="Quick Attach file to this email"
-                            >
-                              <Paperclip className="w-2.5 h-2.5 text-primary" />
-                              <span>+ Attach</span>
-                            </button>
                           </div>
 
                           <span
-                            className="px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border text-[10px] flex items-center gap-1 w-fit cursor-default"
-                            title={draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Signature' : 'Official Gmail Signature'}
+                            className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 text-[10px] font-medium flex items-center gap-1 w-fit cursor-default"
+                            title="Official MineTech Gmail signature automatically applied"
                           >
-                            <FileSignature className="w-3 h-3 text-primary" />
-                            {draft.assigned_signature_id?.startsWith('sig-custom') ? 'Custom Sig' : 'Gmail Sig'}
+                            <FileSignature className="w-3 h-3 text-emerald-500" />
+                            Auto Sig: {configuredSignature?.senderName ? configuredSignature.senderName.split(' ')[0] : 'Rauf'}
                           </span>
                         </div>
                       </td>
@@ -1382,6 +1590,50 @@ export default function UnifiedEmailWorkspace() {
               </Button>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Campaign Attachment File Preview Modal */}
+      {previewAttachmentDoc && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in">
+          <div className="bg-card border border-border rounded-xl shadow-dialog w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" />
+                <span className="text-sm font-semibold text-foreground">
+                  {previewAttachmentDoc.fileName || previewAttachmentDoc.name}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono">
+                  ({previewAttachmentDoc.fileSize})
+                </span>
+              </div>
+              <button
+                onClick={() => setPreviewAttachmentDoc(null)}
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 flex-1 overflow-auto flex items-center justify-center min-h-[400px] bg-muted/10">
+              {previewAttachmentDoc.url ? (
+                <iframe
+                  src={previewAttachmentDoc.url}
+                  className="w-full h-[650px] rounded border border-border"
+                  title="Document Preview"
+                />
+              ) : (
+                <div className="text-center p-8 space-y-2">
+                  <Paperclip className="w-12 h-12 text-primary mx-auto" />
+                  <p className="text-sm font-medium text-foreground">
+                    {previewAttachmentDoc.fileName || previewAttachmentDoc.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Document stored in campaign assets and ready for outgoing MIME attachment.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

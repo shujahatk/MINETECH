@@ -108,6 +108,10 @@ export async function POST(request) {
       const cleanPlain = normalizeEmailParagraphs(rawBody);
       const cleanHtml = formatBodyHtml(cleanPlain);
 
+      const draftAttachments = (Array.isArray(draft.assigned_attachments) && draft.assigned_attachments.length > 0)
+        ? draft.assigned_attachments
+        : (Array.isArray(targetBatch.stats?.campaign_attachments) ? targetBatch.stats.campaign_attachments : []);
+
       personalizedRecipients.push({
         leadId: draft.matched_lead.id,
         companyName: draft.extracted_company || draft.matched_lead.company_name,
@@ -119,7 +123,7 @@ export async function POST(request) {
         customSubject: draft.edited_subject || draft.extracted_subject,
         customBodyHtml: cleanHtml,
         customBodyPlain: cleanPlain,
-        attachments: draft.assigned_attachments || [],
+        attachments: draftAttachments,
         signatureHtml: draft.assigned_signature_html || null,
         draftId: draft.id,
         approvalStatus: draft.approval_status || 'needs_review',
@@ -146,6 +150,7 @@ export async function POST(request) {
       bodyHtml: '<p>Personalized B2B Outreach Batch</p>',
       bodyText: 'Personalized B2B Outreach Batch',
       campaignType: 'personalized_batch',
+      campaignAttachments: targetBatch.stats?.campaign_attachments || [],
       scheduledAt,
       status: 'DRAFT',
       personalizedRecipients,

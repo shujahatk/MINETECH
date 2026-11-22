@@ -8,6 +8,14 @@ import {
   normalizeEmailParagraphs,
   hasLineWrapArtifacts
 } from '@/lib/services/personalizedEmailExtractor';
+import {
+  getConfiguredSignatureAsync,
+  getDefaultSignature
+} from '@/lib/services/signatureService';
+import {
+  getActiveGmailSignature,
+  OFFICIAL_GMAIL_SIGNATURE_HTML
+} from '@/lib/services/gmailSignatureService';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +102,16 @@ export async function GET(request) {
       });
     }
 
+    // Retrieve active configured signature and campaign-level attachments
+    const configuredSig = await getConfiguredSignatureAsync();
+    const activeGmailSig = getActiveGmailSignature();
+    const effectiveSigHtml = configuredSig?.bodyHtml || activeGmailSig?.signatureHtml || OFFICIAL_GMAIL_SIGNATURE_HTML;
+    const effectiveSigName = configuredSig?.senderName || activeGmailSig?.displayName || 'Abdullah Rauf';
+    const effectiveSigEmail = configuredSig?.senderEmail || activeGmailSig?.sendAsEmail || 'rauf@mine-tech.be';
+    const campaignAttachments = Array.isArray(batchRecord.stats?.campaign_attachments)
+      ? batchRecord.stats.campaign_attachments
+      : [];
+
     let needsBatchSave = false;
     const rawDrafts = batchRecord.stats.drafts || [];
     const drafts = rawDrafts.map((d) => {
@@ -101,6 +119,24 @@ export async function GET(request) {
       const currentText = updated.edited_body_plain || updated.extracted_body_plain || '';
       const hasArtifacts = hasLineWrapArtifacts(currentText);
       updated.has_formatting_issues = hasArtifacts;
+
+      // Campaign-Level Attachments Auto-Sync:
+      // If campaign has attachments and draft does not have them or is out of sync, inherit campaign attachments
+      if (campaignAttachments.length > 0) {
+        if (!Array.isArray(updated.assigned_attachments) || updated.assigned_attachments.length === 0) {
+          updated.assigned_attachments = campaignAttachments;
+          needsBatchSave = true;
+        }
+      }
+
+      // Automatic Email Signature Auto-Sync:
+      // Ensure every email draft inherits the active MineTech signature automatically
+      if (!updated.assigned_signature_html) {
+        updated.assigned_signature_html = effectiveSigHtml;
+        updated.assigned_signature_id = 'sig-gmail-synced';
+        updated.assigned_signature_name = effectiveSigName;
+        needsBatchSave = true;
+      }
 
       // Critical Rule: Matching does not mean approved. Normalize previous auto-approved drafts that were never reviewed by user.
       if (updated.approval_status === 'approved' && !updated.user_approved) {
@@ -124,6 +160,7 @@ export async function GET(request) {
         .update({
           stats: {
             ...batchRecord.stats,
+            campaign_attachments: campaignAttachments,
             drafts,
             updated_at: new Date().toISOString(),
           },
@@ -143,6 +180,19 @@ export async function GET(request) {
         updatedAt: batchRecord.updated_at,
         extractionSummary: batchRecord.stats.extraction_summary || {},
         matchingSummary: batchRecord.stats.matching_summary || {},
+        campaignAttachments,
+      },
+      campaignAttachments,
+      configuredSignature: {
+        senderName: effectiveSigName,
+        senderEmail: effectiveSigEmail,
+        senderTitle: configuredSig?.senderTitle || 'Head of Sales',
+        senderCompany: configuredSig?.senderCompany || 'Minetech Resources BV – Belgium',
+        senderPhone: configuredSig?.senderPhone || '+32 486 287 751',
+        senderWebsite: configuredSig?.senderWebsite || 'www.mine-tech.be',
+        senderExtra: configuredSig?.senderExtra || '',
+        bodyHtml: effectiveSigHtml,
+        source: activeGmailSig?.source || 'configured_settings',
       },
       drafts,
       metrics,
