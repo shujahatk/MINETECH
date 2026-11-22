@@ -20,6 +20,7 @@ export async function GET(request) {
     const { data: campaigns, error } = await supabaseAdmin
       .from('email_campaigns')
       .select('*')
+      .neq('status', 'SETTINGS')
       .order('created_at', { ascending: false });
 
     if (error) {

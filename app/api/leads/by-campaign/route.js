@@ -38,6 +38,7 @@ export async function GET(request) {
       const { data: campaigns, error: campErr } = await supabaseAdmin
         .from('email_campaigns')
         .select('id, name, status, created_at, updated_at')
+        .neq('status', 'SETTINGS')
         .order('created_at', { ascending: false });
 
       if (campErr) throw campErr;
