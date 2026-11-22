@@ -97,7 +97,7 @@ export default function UnifiedEmailWorkspace() {
         // Default select all drafts that are ready if user has not made custom selection
         const readyIds = new Set(
           (data.drafts || [])
-            .filter((d) => d.approval_status === 'approved' && d.match_status === 'matched')
+            .filter((d) => d.approval_status === 'approved' && Boolean(d.user_approved) && d.match_status === 'matched')
             .map((d) => d.id)
         );
         setSelectedDraftIds((prev) => (prev && prev.size > 0 ? prev : readyIds));
@@ -347,10 +347,21 @@ export default function UnifiedEmailWorkspace() {
 
   // Selection toggle
   const toggleSelectAll = () => {
-    if (selectedDraftIds.size === filteredDrafts.length) {
-      setSelectedDraftIds(new Set());
+    const visibleIds = filteredDrafts.map((d) => d.id);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedDraftIds.has(id));
+
+    if (allVisibleSelected) {
+      setSelectedDraftIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.delete(id));
+        return next;
+      });
     } else {
-      setSelectedDraftIds(new Set(filteredDrafts.map((d) => d.id)));
+      setSelectedDraftIds((prev) => {
+        const next = new Set(prev);
+        visibleIds.forEach((id) => next.add(id));
+        return next;
+      });
     }
   };
 
@@ -370,16 +381,23 @@ export default function UnifiedEmailWorkspace() {
       if (statusTab === 'ready') {
         const isReady =
           d.approval_status === 'approved' &&
+          Boolean(d.user_approved) &&
+          Boolean(d.matched_lead?.id) &&
           d.match_status === 'matched' &&
           Array.isArray(d.selected_contacts) &&
-          d.selected_contacts.length > 0;
+          d.selected_contacts.length > 0 &&
+          d.selected_contacts.some((c) => c.email && c.email.trim());
         if (!isReady) return false;
       } else if (statusTab === 'needs_review') {
-        if (d.approval_status !== 'needs_review' && d.match_status !== 'needs_review') return false;
+        const needsReview =
+          (!d.user_approved || d.approval_status !== 'approved') &&
+          Boolean(d.matched_lead?.id) &&
+          d.match_status !== 'unmatched';
+        if (!needsReview) return false;
       } else if (statusTab === 'unmatched') {
-        if (d.match_status !== 'unmatched') return false;
+        if (Boolean(d.matched_lead?.id) && d.match_status !== 'unmatched') return false;
       } else if (statusTab === 'approved') {
-        if (d.approval_status !== 'approved') return false;
+        if (d.approval_status !== 'approved' || !d.user_approved || !d.matched_lead?.id) return false;
       }
 
       // Search query filter
@@ -813,9 +831,11 @@ export default function UnifiedEmailWorkspace() {
             </span>
             <button
               onClick={toggleSelectAll}
-              className="text-xs text-primary hover:underline"
+              className="text-xs text-primary hover:underline font-medium"
             >
-              {selectedDraftIds.size === filteredDrafts.length ? 'Deselect all' : 'Select all'}
+              {filteredDrafts.length > 0 && filteredDrafts.every((d) => selectedDraftIds.has(d.id))
+                ? 'Deselect all'
+                : 'Select all'}
             </button>
           </div>
 
@@ -909,7 +929,7 @@ export default function UnifiedEmailWorkspace() {
                   <th className="py-3 px-4 w-10">
                     <input
                       type="checkbox"
-                      checked={selectedDraftIds.size > 0 && selectedDraftIds.size === filteredDrafts.length}
+                      checked={filteredDrafts.length > 0 && filteredDrafts.every((d) => selectedDraftIds.has(d.id))}
                       onChange={toggleSelectAll}
                       className="w-4 h-4 accent-primary rounded cursor-pointer"
                     />

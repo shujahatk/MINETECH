@@ -467,6 +467,7 @@ export default function PersonalizedEmailEditorModal({
         edited_subject: subject,
         edited_body_plain: bodyText,
         edited_body_html: formattedHtmlBody,
+        match_status: shouldApprove && draft.matched_lead?.id ? 'matched' : draft.match_status,
         approval_status: newApproval,
         user_approved: userApprovedVal,
         user_approved_at: shouldApprove ? new Date().toISOString() : (explicitUnapprove ? null : draft.user_approved_at),

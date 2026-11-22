@@ -109,6 +109,12 @@ export async function GET(request) {
         needsBatchSave = true;
       }
 
+      // If user approved the draft and it has a valid matched CRM lead, confirm match_status as 'matched'
+      if (updated.approval_status === 'approved' && updated.user_approved && updated.matched_lead?.id && updated.match_status !== 'matched') {
+        updated.match_status = 'matched';
+        needsBatchSave = true;
+      }
+
       return updated;
     });
 
@@ -237,6 +243,9 @@ export async function PATCH(request) {
       const mergedDraft = {
         ...existingDraft,
         ...updates,
+        match_status: isApproving && (updates.matched_lead?.id || existingDraft.matched_lead?.id)
+          ? 'matched'
+          : (updates.match_status || existingDraft.match_status),
         approval_status: finalApproval,
         user_approved: userApproved,
         user_approved_at: isApproving ? nowIso : (userApproved ? existingDraft.user_approved_at : null),
@@ -278,6 +287,7 @@ export async function PATCH(request) {
 
       drafts[draftIndex] = {
         ...drafts[draftIndex],
+        match_status: drafts[draftIndex].matched_lead?.id ? 'matched' : drafts[draftIndex].match_status,
         approval_status: 'approved',
         user_approved: true,
         user_approved_at: nowIso,
@@ -388,6 +398,7 @@ export async function PATCH(request) {
         if (!targetIds || targetIds.has(d.id)) {
           return {
             ...d,
+            match_status: d.matched_lead?.id ? 'matched' : d.match_status,
             approval_status: 'approved',
             user_approved: true,
             user_approved_at: nowIso,
@@ -604,20 +615,26 @@ export async function DELETE(request) {
 
 function calculateMetrics(drafts = []) {
   const total = drafts.length;
-  const matched = drafts.filter((d) => d.match_status === 'matched').length;
-  const unmatched = drafts.filter((d) => d.match_status === 'unmatched').length;
-  const approved = drafts.filter((d) => d.approval_status === 'approved' && Boolean(d.user_approved)).length;
-  const needs_review = drafts.filter(
-    (d) => d.match_status !== 'matched' || d.approval_status !== 'approved' || !d.user_approved
+  const unmatched = drafts.filter((d) => !d.matched_lead?.id || d.match_status === 'unmatched').length;
+  const approved = drafts.filter(
+    (d) => d.approval_status === 'approved' && Boolean(d.user_approved) && Boolean(d.matched_lead?.id)
   ).length;
+  const needs_review = drafts.filter(
+    (d) =>
+      (!d.user_approved || d.approval_status !== 'approved') &&
+      Boolean(d.matched_lead?.id) &&
+      d.match_status !== 'unmatched'
+  ).length;
+  const matched = drafts.filter((d) => d.match_status === 'matched' && Boolean(d.matched_lead?.id)).length;
   const ready = drafts.filter(
     (d) =>
       d.approval_status === 'approved' &&
       Boolean(d.user_approved) &&
+      Boolean(d.matched_lead?.id) &&
       d.match_status === 'matched' &&
       Array.isArray(d.selected_contacts) &&
       d.selected_contacts.length > 0 &&
-      d.selected_contacts.some((c) => c.email)
+      d.selected_contacts.some((c) => c.email && c.email.trim())
   ).length;
 
   let formattingIssuesCount = 0;
