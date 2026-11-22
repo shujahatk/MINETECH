@@ -28,12 +28,14 @@ import {
   Plus,
   Trash2,
   Sparkles,
+  Paperclip,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { SectionCard } from '@/components/ui/section-card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTheme } from '@/components/theme/ThemeProvider';
+import AttachmentManager from './AttachmentManager';
 
 export default function SettingsView() {
   const { theme, setTheme, resolvedTheme } = useTheme();
@@ -125,6 +127,14 @@ export default function SettingsView() {
   useEffect(() => {
     fetchSettings();
     fetchCatalog();
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const targetSection = params.get('section') || params.get('tab');
+      if (targetSection) {
+        setSection(targetSection);
+      }
+    }
   }, []);
 
   const handleSaveCatalog = async () => {
@@ -312,6 +322,7 @@ export default function SettingsView() {
   const SECTIONS = [
     { key: 'general', label: 'General', icon: User, hint: 'Profile and session' },
     { key: 'email', label: 'Email', icon: Mail, hint: 'Sender and daily limit' },
+    { key: 'attachments', label: 'Attachment Manager', icon: Paperclip, hint: 'Document library' },
     { key: 'ai', label: 'AI', icon: Sparkles, hint: 'Assistant status' },
     { key: 'campaigns', label: 'Campaigns', icon: Layers, hint: 'Mineral catalog' },
     { key: 'access', label: 'Users & access', icon: Shield, hint: 'Password and role' },
@@ -491,6 +502,11 @@ export default function SettingsView() {
                 </SaveBar>
               </SectionCard>
             </form>
+          )}
+
+          {/* ATTACHMENT MANAGER */}
+          {section === 'attachments' && (
+            <AttachmentManager />
           )}
 
           {/* AI */}

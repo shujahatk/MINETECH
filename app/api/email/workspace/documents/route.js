@@ -1,11 +1,16 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
+import { supabaseAdmin } from '@/lib/supabase';
 import {
   getAllDocumentsAsync,
   addCustomDocumentAsync,
   renameDocumentAsync,
   deleteDocumentAsync,
   getDocumentByIdAsync,
+  validateAndSanitizeFile,
+  restoreDefaultDocumentsAsync,
+  recordRecentlyUsedDocAsync,
+  getRecentlyUsedDocumentsAsync,
 } from '@/lib/services/documentLibraryService';
 
 export const dynamic = 'force-dynamic';
@@ -27,9 +32,50 @@ export async function GET(request) {
     }
 
     const documents = await getAllDocumentsAsync();
+    const recentlyUsed = await getRecentlyUsedDocumentsAsync();
+
+    // Compute active workspace draft usage for every document
+    let activeBatchDrafts = [];
+    try {
+      const { data: batches } = await supabaseAdmin
+        .from('email_campaigns')
+        .select('id, stats')
+        .filter('stats->>is_personalized_workspace', 'eq', 'true')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (batches && batches.length > 0 && Array.isArray(batches[0].stats?.drafts)) {
+        activeBatchDrafts = batches[0].stats.drafts;
+      }
+    } catch (e) {
+      console.warn('[documents GET] Failed to fetch active batch for usage tracking:', e.message);
+    }
+
+    const enrichedDocs = documents.map((doc) => {
+      const matchingDrafts = activeBatchDrafts.filter(
+        (d) =>
+          Array.isArray(d.assigned_attachments) &&
+          d.assigned_attachments.some(
+            (a) => a.id === doc.id || (a.fileName && a.fileName === doc.fileName) || a.name === doc.name
+          )
+      );
+
+      return {
+        ...doc,
+        usage: {
+          activeDraftsCount: matchingDrafts.length,
+          companies: matchingDrafts.map(
+            (d) => d.extracted_company || d.matched_lead?.company_name || `Draft #${d.id}`
+          ).slice(0, 10),
+          totalDrafts: activeBatchDrafts.length,
+        },
+      };
+    });
+
     return NextResponse.json({
       success: true,
-      documents,
+      documents: enrichedDocs,
+      recentlyUsed,
     });
   } catch (err) {
     console.error('[API /api/email/workspace/documents GET Error]:', err);
@@ -50,6 +96,17 @@ export async function POST(request) {
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
+      const action = formData.get('action');
+
+      if (action === 'restore_defaults') {
+        const restored = await restoreDefaultDocumentsAsync();
+        return NextResponse.json({
+          success: true,
+          documents: restored,
+          message: 'Default preconfigured collateral restored successfully.',
+        });
+      }
+
       const file = formData.get('file');
       const name = formData.get('name') || file?.name || 'Custom Document';
       const category = formData.get('category') || 'Custom Uploads';
@@ -62,10 +119,12 @@ export async function POST(request) {
         );
       }
 
-      // 25 MB max provider attachment size limit check
-      if (file.size > 25 * 1024 * 1024) {
+      // Phase 5 Security: MIME, Extension, and Size Validation
+      try {
+        validateAndSanitizeFile(file.name, file.type, file.size);
+      } catch (valErr) {
         return NextResponse.json(
-          { success: false, message: 'File exceeds maximum attachment limit of 25 MB.' },
+          { success: false, message: valErr.message },
           { status: 400 }
         );
       }
@@ -109,16 +168,34 @@ export async function POST(request) {
         storagePath,
       };
     } else {
-      docData = await request.json();
+      const body = await request.json();
+      if (body.action === 'restore_defaults') {
+        const restored = await restoreDefaultDocumentsAsync();
+        return NextResponse.json({
+          success: true,
+          documents: restored,
+          message: 'Default preconfigured collateral restored successfully.',
+        });
+      }
+      if (body.action === 'record_recent' && body.docId) {
+        await recordRecentlyUsedDocAsync(body.docId);
+        const recentlyUsed = await getRecentlyUsedDocumentsAsync();
+        return NextResponse.json({ success: true, recentlyUsed });
+      }
+      docData = body;
     }
 
     const savedDoc = await addCustomDocumentAsync(docData);
+    await recordRecentlyUsedDocAsync(savedDoc.id);
+
     const documents = await getAllDocumentsAsync();
+    const recentlyUsed = await getRecentlyUsedDocumentsAsync();
 
     return NextResponse.json({
       success: true,
       document: savedDoc,
       documents,
+      recentlyUsed,
       message: 'Document added to library permanently.',
     });
   } catch (err) {

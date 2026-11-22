@@ -428,19 +428,42 @@ export async function PATCH(request) {
       });
     }
 
-    // 5. Bulk Assign Attachments (to selected or all emails)
+    // 5. Bulk Assign Attachments (to individual, selected, or all emails)
     else if (action === 'bulk_attachments') {
-      const applyToAll = body.applyToAll || !draftIds || draftIds.length === 0 || draftIds === 'all';
-      const targetIds = applyToAll ? null : new Set(draftIds);
-      const mode = body.mode || 'replace'; // 'replace' | 'append'
+      const applyToAll = Boolean(body.applyToAll) || draftIds === 'all' || (!draftIds && !draftId);
+      const targetIdList = Array.isArray(draftIds)
+        ? draftIds
+        : (draftId ? [draftId] : (body.draftId ? [body.draftId] : []));
+      const targetIds = applyToAll ? null : new Set(targetIdList);
+      const mode = body.mode || 'append'; // Default to safe 'append'
       const newAttachments = Array.isArray(attachments) ? attachments : [];
 
+      // Deduplicate new attachments against themselves first
+      const seenKeys = new Set();
+      const uniqueNewAttachments = [];
+      for (const att of newAttachments) {
+        const key = att.id || att.fileName || att.name;
+        if (key && !seenKeys.has(key)) {
+          seenKeys.add(key);
+          uniqueNewAttachments.push(att);
+        }
+      }
+
+      let updatedCount = 0;
       drafts = drafts.map((d) => {
         if (!targetIds || targetIds.has(d.id)) {
-          let updatedAtts = newAttachments;
+          updatedCount++;
+          let updatedAtts = uniqueNewAttachments;
           if (mode === 'append' && Array.isArray(d.assigned_attachments)) {
-            const existingNames = new Set(d.assigned_attachments.map((a) => a.fileName || a.name || a.id));
-            const toAdd = newAttachments.filter((a) => !existingNames.has(a.fileName || a.name || a.id));
+            const existingKeys = new Set(
+              d.assigned_attachments.map((a) => a.id || a.fileName || a.name)
+            );
+            const toAdd = uniqueNewAttachments.filter(
+              (a) =>
+                !existingKeys.has(a.id) &&
+                !existingKeys.has(a.fileName) &&
+                !existingKeys.has(a.name)
+            );
             updatedAtts = [...d.assigned_attachments, ...toAdd];
           }
 
@@ -452,6 +475,18 @@ export async function PATCH(request) {
         }
         return d;
       });
+
+      // Record attached documents in persistent recently_used_doc_ids
+      try {
+        const { recordRecentlyUsedDocAsync } = await import('@/lib/services/documentLibraryService');
+        for (const att of uniqueNewAttachments) {
+          if (att?.id) {
+            await recordRecentlyUsedDocAsync(att.id);
+          }
+        }
+      } catch (recErr) {
+        console.warn('[bulk_attachments] Could not record recently used doc:', recErr.message);
+      }
     }
 
     // 6. Preview Formatting Fix (Non-destructive Before/After comparison)

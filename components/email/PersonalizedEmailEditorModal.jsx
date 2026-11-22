@@ -90,6 +90,7 @@ export default function PersonalizedEmailEditorModal({
   const [applySignatureToAll, setApplySignatureToAll] = useState(false);
   const [applyAttachmentsToAll, setApplyAttachmentsToAll] = useState(false);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState(null);
   const localFileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -1204,9 +1205,18 @@ export default function PersonalizedEmailEditorModal({
                   variant="outline"
                   size="sm"
                   onClick={() => setIsAttachModalOpen(true)}
-                  className="h-7 text-xs border-border text-foreground hover:bg-muted/40"
+                  className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10 gap-1"
                 >
-                  <FolderOpen className="w-3 h-3 mr-1 text-primary" />
+                  <Paperclip className="w-3 h-3" />
+                  Quick Attach
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open('/settings?section=attachments', '_blank')}
+                  className="h-7 text-xs border-border text-foreground hover:bg-muted/40 gap-1"
+                >
+                  <FolderOpen className="w-3 h-3" />
                   Attachment Manager
                 </Button>
               </div>
@@ -1217,24 +1227,39 @@ export default function PersonalizedEmailEditorModal({
               <div className="flex flex-wrap gap-2 pt-1">
                 {documents
                   .filter((d) => attachedDocIds.includes(d.id))
-                  .map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="px-2.5 py-1 rounded-md bg-muted/40 border border-border text-foreground text-xs flex items-center gap-2"
-                    >
-                      <FileText className="w-3.5 h-3.5 text-primary" />
-                      <span>{doc.name}</span>
-                      <span className="text-[10px] text-muted-foreground">({doc.fileSize})</span>
-                      <button
-                        type="button"
-                        onClick={() => toggleDocumentAttachment(doc)}
-                        className="text-muted-foreground hover:text-rose-400"
-                        title="Remove from this email (does not delete from library)"
+                  .map((doc) => {
+                    const type = (doc.fileType || '').toLowerCase();
+                    const name = (doc.fileName || doc.name || '').toLowerCase();
+                    const isPdf = type.includes('pdf') || name.endsWith('.pdf');
+                    const isImage = type.includes('image') || name.endsWith('.png') || name.endsWith('.jpg');
+
+                    return (
+                      <div
+                        key={doc.id}
+                        className="px-2.5 py-1.5 rounded-lg bg-card border border-border text-foreground text-xs flex items-center gap-2 shadow-xs"
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
+                        <FileText className={`w-3.5 h-3.5 ${isPdf ? 'text-rose-500' : isImage ? 'text-purple-500' : 'text-primary'}`} />
+                        <span className="font-medium truncate max-w-[220px]">{doc.name || doc.fileName}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">({doc.fileSize || '1.0 MB'})</span>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewDoc(doc)}
+                          className="text-muted-foreground hover:text-primary ml-1"
+                          title="Preview attachment"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleDocumentAttachment(doc)}
+                          className="text-muted-foreground hover:text-rose-500 ml-0.5"
+                          title="Remove from this email (does not delete from library)"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    );
+                  })}
               </div>
             ) : (
               <p className="text-xs text-muted-foreground italic">No files attached to this email.</p>
@@ -1347,6 +1372,7 @@ export default function PersonalizedEmailEditorModal({
             });
         }}
         currentDraftId={draft.id}
+        initialScope="individual"
         totalDraftsCount={allDrafts.length}
         selectedDraftIds={[draft.id]}
         onAttachmentsApplied={(updatedDrafts, appliedDocs) => {
@@ -1358,6 +1384,59 @@ export default function PersonalizedEmailEditorModal({
           }
         }}
       />
+
+      {/* Attachment Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <Card className="w-full max-w-3xl bg-card border-border text-foreground shadow-dialog flex flex-col h-[80vh] overflow-hidden rounded-xl">
+            <div className="p-4 px-6 border-b border-border bg-muted/20 flex items-center justify-between">
+              <div>
+                <h4 className="text-sm font-semibold text-foreground truncate">
+                  {previewDoc.name || previewDoc.fileName}
+                </h4>
+                <p className="text-xs text-muted-foreground font-mono">
+                  {previewDoc.fileName} &bull; {previewDoc.fileSize}
+                </p>
+              </div>
+              <button
+                onClick={() => setPreviewDoc(null)}
+                className="p-1 rounded text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 bg-muted/20 p-4 overflow-hidden flex items-center justify-center">
+              {previewDoc.dataBase64 ? (
+                previewDoc.fileType?.includes('image') ? (
+                  <img
+                    src={`data:${previewDoc.fileType || 'image/png'};base64,${previewDoc.dataBase64}`}
+                    alt={previewDoc.name}
+                    className="max-h-full max-w-full object-contain rounded shadow"
+                  />
+                ) : (
+                  <iframe
+                    src={`data:application/pdf;base64,${previewDoc.dataBase64}#toolbar=0`}
+                    title={previewDoc.name}
+                    className="w-full h-full rounded border border-border bg-white"
+                  />
+                )
+              ) : previewDoc.url ? (
+                <iframe
+                  src={previewDoc.url}
+                  title={previewDoc.name}
+                  className="w-full h-full rounded border border-border bg-white"
+                />
+              ) : (
+                <div className="text-center p-6 text-muted-foreground space-y-2">
+                  <FileText className="w-10 h-10 mx-auto text-muted-foreground/40" />
+                  <p className="text-xs">Document preview not stored locally.</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {/* Before / After Format Fix Preview Modal */}
       {isFormatFixOpen && (

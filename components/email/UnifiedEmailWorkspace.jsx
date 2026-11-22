@@ -31,7 +31,8 @@ import {
   Info,
   FileSignature,
   Eye,
-  Plus
+  Plus,
+  FolderOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -72,6 +73,8 @@ export default function UnifiedEmailWorkspace() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false);
   const [isAttachFilesModalOpen, setIsAttachFilesModalOpen] = useState(false);
+  const [activeAttachScope, setActiveAttachScope] = useState('all');
+  const [activeDraftIdForAttach, setActiveDraftIdForAttach] = useState(null);
 
   // Formatting fix modal state
   const [isBulkFixModalOpen, setIsBulkFixModalOpen] = useState(false);
@@ -308,7 +311,7 @@ export default function UnifiedEmailWorkspace() {
           setIsBulkFixModalOpen(true);
           return;
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     setBulkFixSample(null);
@@ -447,21 +450,39 @@ export default function UnifiedEmailWorkspace() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsSignatureModalOpen(true)}
+                onClick={() => {
+                  window.location.href = '/settings?section=attachments';
+                }}
                 className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
+                title="Open Central Attachment Manager in Settings"
               >
-                <FileSignature className="w-3.5 h-3.5 mr-1.5 text-primary" />
-                Signature Settings
+                <FolderOpen className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                Attachment Manager
               </Button>
 
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsAttachFilesModalOpen(true)}
+                onClick={() => {
+                  setActiveDraftIdForAttach(null);
+                  setActiveAttachScope('all');
+                  setIsAttachFilesModalOpen(true);
+                }}
                 className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
+                title={`Attach collateral to all ${drafts.length} emails in active workspace`}
               >
                 <Paperclip className="w-3.5 h-3.5 mr-1.5 text-primary" />
-                Attach Files
+                Attach to All ({drafts.length})
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsSignatureModalOpen(true)}
+                className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
+              >
+                <FileSignature className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                Signature Settings
               </Button>
 
               <Button
@@ -528,22 +549,20 @@ export default function UnifiedEmailWorkspace() {
             <button
               type="button"
               onClick={() => setUploadTab('file')}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                uploadTab === 'file'
-                  ? 'bg-primary text-primary-foreground font-semibold'
-                  : 'bg-muted/40 text-muted-foreground hover:text-foreground'
-              }`}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${uploadTab === 'file'
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'bg-muted/40 text-muted-foreground hover:text-foreground'
+                }`}
             >
               File Upload (PDF, Word, TXT)
             </button>
             <button
               type="button"
               onClick={() => setUploadTab('text')}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                uploadTab === 'text'
-                  ? 'bg-primary text-primary-foreground font-semibold'
-                  : 'bg-muted/40 text-muted-foreground hover:text-foreground'
-              }`}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${uploadTab === 'text'
+                ? 'bg-primary text-primary-foreground font-semibold'
+                : 'bg-muted/40 text-muted-foreground hover:text-foreground'
+                }`}
             >
               Paste Email Text Directly
             </button>
@@ -650,11 +669,10 @@ export default function UnifiedEmailWorkspace() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card
           onClick={() => setStatusTab('all')}
-          className={`p-4 bg-card border cursor-pointer transition-all ${
-            statusTab === 'all'
-              ? 'border-primary/50 shadow-xs bg-primary/5'
-              : 'border-border hover:border-border/80'
-          }`}
+          className={`p-4 bg-card border cursor-pointer transition-all ${statusTab === 'all'
+            ? 'border-primary/50 shadow-xs bg-primary/5'
+            : 'border-border hover:border-border/80'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -684,11 +702,10 @@ export default function UnifiedEmailWorkspace() {
         {/* Needs Review: Strict Yellow/Amber */}
         <Card
           onClick={() => setStatusTab('needs_review')}
-          className={`p-4 bg-card border cursor-pointer transition-all ${
-            statusTab === 'needs_review'
-              ? 'border-amber-500 shadow-xs bg-amber-500/10'
-              : 'border-border hover:border-border/80'
-          }`}
+          className={`p-4 bg-card border cursor-pointer transition-all ${statusTab === 'needs_review'
+            ? 'border-amber-500 shadow-xs bg-amber-500/10'
+            : 'border-border hover:border-border/80'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
@@ -703,11 +720,10 @@ export default function UnifiedEmailWorkspace() {
         {/* Unmatched: Strict Red */}
         <Card
           onClick={() => setStatusTab('unmatched')}
-          className={`p-4 bg-card border cursor-pointer transition-all ${
-            statusTab === 'unmatched'
-              ? 'border-rose-500 shadow-xs bg-rose-500/10'
-              : 'border-border hover:border-border/80'
-          }`}
+          className={`p-4 bg-card border cursor-pointer transition-all ${statusTab === 'unmatched'
+            ? 'border-rose-500 shadow-xs bg-rose-500/10'
+            : 'border-border hover:border-border/80'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider">
@@ -721,11 +737,10 @@ export default function UnifiedEmailWorkspace() {
 
         <Card
           onClick={() => setStatusTab('approved')}
-          className={`p-4 bg-card border cursor-pointer transition-all ${
-            statusTab === 'approved'
-              ? 'border-emerald-500/60 shadow-xs bg-emerald-500/5'
-              : 'border-border hover:border-border/80'
-          }`}
+          className={`p-4 bg-card border cursor-pointer transition-all ${statusTab === 'approved'
+            ? 'border-emerald-500/60 shadow-xs bg-emerald-500/5'
+            : 'border-border hover:border-border/80'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -739,11 +754,10 @@ export default function UnifiedEmailWorkspace() {
 
         <Card
           onClick={() => setStatusTab('ready')}
-          className={`p-4 bg-card border cursor-pointer transition-all ${
-            statusTab === 'ready'
-              ? 'border-primary shadow-xs bg-primary/10'
-              : 'border-border hover:border-border/80'
-          }`}
+          className={`p-4 bg-card border cursor-pointer transition-all ${statusTab === 'ready'
+            ? 'border-primary shadow-xs bg-primary/10'
+            : 'border-border hover:border-border/80'
+            }`}
         >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">
@@ -761,51 +775,46 @@ export default function UnifiedEmailWorkspace() {
         <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setStatusTab('all')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-              statusTab === 'all'
-                ? 'bg-primary text-primary-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            }`}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${statusTab === 'all'
+              ? 'bg-primary text-primary-foreground font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
           >
             All Emails ({drafts.length})
           </button>
           <button
             onClick={() => setStatusTab('ready')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-              statusTab === 'ready'
-                ? 'bg-primary text-primary-foreground font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            }`}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${statusTab === 'ready'
+              ? 'bg-primary text-primary-foreground font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
           >
             Ready to Send ({metrics.ready || 0})
           </button>
           <button
             onClick={() => setStatusTab('needs_review')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-              statusTab === 'needs_review'
-                ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            }`}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${statusTab === 'needs_review'
+              ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30 font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
           >
             Needs Review ({metrics.needs_review || 0})
           </button>
           <button
             onClick={() => setStatusTab('unmatched')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-              statusTab === 'unmatched'
-                ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            }`}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${statusTab === 'unmatched'
+              ? 'bg-rose-500/20 text-rose-500 border border-rose-500/30 font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
           >
             Unmatched ({metrics.unmatched || 0})
           </button>
           <button
             onClick={() => setStatusTab('approved')}
-            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-              statusTab === 'approved'
-                ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 font-semibold'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            }`}
+            className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${statusTab === 'approved'
+              ? 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 font-semibold'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
           >
             Approved ({metrics.approved || 0})
           </button>
@@ -853,11 +862,16 @@ export default function UnifiedEmailWorkspace() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setIsAttachFilesModalOpen(true)}
+              onClick={() => {
+                setActiveDraftIdForAttach(null);
+                setActiveAttachScope('selected');
+                setIsAttachFilesModalOpen(true);
+              }}
               className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
+              title={`Attach files to ${selectedDraftIds.size} selected emails`}
             >
               <Paperclip className="w-3.5 h-3.5 mr-1 text-primary" />
-              Attach Files
+              Attach to Selected ({selectedDraftIds.size})
             </Button>
 
             <Button
@@ -955,9 +969,8 @@ export default function UnifiedEmailWorkspace() {
                   return (
                     <tr
                       key={draft.id}
-                      className={`hover:bg-muted/30 transition-colors ${
-                        isSelected ? 'bg-primary/5' : ''
-                      }`}
+                      className={`hover:bg-muted/30 transition-colors ${isSelected ? 'bg-primary/5' : ''
+                        }`}
                     >
                       {/* Checkbox */}
                       <td className="py-3.5 px-4">
@@ -1030,24 +1043,40 @@ export default function UnifiedEmailWorkspace() {
                       {/* Attachments & Signature */}
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="space-y-1">
-                          {attachmentsCount > 0 ? (
-                            <div className="flex flex-wrap gap-1">
-                              {draft.assigned_attachments.map((a, aIdx) => (
-                                <span
-                                  key={aIdx}
-                                  className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-medium flex items-center gap-1 max-w-[170px] truncate"
-                                  title={`${a.name || a.fileName} (${a.fileSize || ''})`}
-                                >
-                                  <Paperclip className="w-2.5 h-2.5 shrink-0" />
-                                  <span className="truncate">{a.name || a.fileName}</span>
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground flex items-center gap-1">
-                              <Paperclip className="w-3 h-3 text-muted-foreground/60" /> No files
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {attachmentsCount > 0 ? (
+                              <div className="flex flex-wrap gap-1">
+                                {draft.assigned_attachments.map((a, aIdx) => (
+                                  <span
+                                    key={aIdx}
+                                    className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-medium flex items-center gap-1 max-w-[170px] truncate"
+                                    title={`${a.name || a.fileName} (${a.fileSize || ''})`}
+                                  >
+                                    <Paperclip className="w-2.5 h-2.5 shrink-0" />
+                                    <span className="truncate">{a.name || a.fileName}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                                <Paperclip className="w-3 h-3 text-muted-foreground/60" /> No files
+                              </span>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveDraftIdForAttach(draft.id);
+                                setActiveAttachScope('individual');
+                                setIsAttachFilesModalOpen(true);
+                              }}
+                              className="px-1.5 py-0.5 rounded text-muted-foreground hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/20 transition-colors inline-flex items-center gap-1 text-[10px]"
+                              title="Quick Attach file to this email"
+                            >
+                              <Paperclip className="w-2.5 h-2.5 text-primary" />
+                              <span>+ Attach</span>
+                            </button>
+                          </div>
 
                           <span
                             className="px-2 py-0.5 rounded bg-muted text-muted-foreground border border-border text-[10px] flex items-center gap-1 w-fit cursor-default"
@@ -1211,10 +1240,15 @@ export default function UnifiedEmailWorkspace() {
       {/* Attach Files Modal */}
       <AttachFilesModal
         isOpen={isAttachFilesModalOpen}
-        onClose={() => setIsAttachFilesModalOpen(false)}
+        onClose={() => {
+          setIsAttachFilesModalOpen(false);
+          setActiveDraftIdForAttach(null);
+        }}
         totalDraftsCount={drafts.length}
         selectedDraftsCount={selectedDraftIds.size}
         selectedDraftIds={Array.from(selectedDraftIds)}
+        currentDraftId={activeDraftIdForAttach}
+        initialScope={activeAttachScope}
         onAttachmentsApplied={(updatedDrafts) => {
           setDrafts(updatedDrafts);
           fetchWorkspace(true);
