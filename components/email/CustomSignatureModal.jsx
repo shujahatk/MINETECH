@@ -77,8 +77,25 @@ export default function CustomSignatureModal({
         setSignatures(d.signatures || []);
         if (d.activeGmailSignature) {
           setGmailSyncMeta(d.activeGmailSignature);
-          setManualHtml(d.activeGmailSignature.signatureHtml || '');
-          setPreviewHtml(d.activeGmailSignature.signatureHtml || '');
+          if (!manualHtml) {
+            setManualHtml(d.activeGmailSignature.signatureHtml || '');
+            setPreviewHtml(d.activeGmailSignature.signatureHtml || '');
+          }
+        }
+        if (d.configuredSignature) {
+          const cfg = d.configuredSignature;
+          if (cfg.senderName) setCustomName(cfg.senderName);
+          if (cfg.senderTitle) setCustomTitle(cfg.senderTitle);
+          if (cfg.senderCompany) setCustomCompany(cfg.senderCompany);
+          if (cfg.senderPhone) setCustomPhone(cfg.senderPhone);
+          if (cfg.senderEmail) setCustomEmail(cfg.senderEmail);
+          if (cfg.senderWebsite) setCustomWebsite(cfg.senderWebsite);
+          if (cfg.senderExtra !== undefined) setCustomExtra(cfg.senderExtra);
+          if (cfg.activeTab) setActiveTab(cfg.activeTab);
+          if (cfg.bodyHtml) {
+            setManualHtml(cfg.bodyHtml);
+            setPreviewHtml(cfg.bodyHtml);
+          }
         }
       }
     } catch (e) {
@@ -165,22 +182,31 @@ export default function CustomSignatureModal({
         sigId = 'sig-gmail-synced';
       } else if (activeTab === 'manual') {
         finalSigHtml = manualHtml;
-        sigId = `sig-manual-${Date.now()}`;
-
-        // Save manual HTML
-        await fetch('/api/email/workspace/signatures', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'manual_html',
-            signatureHtml: manualHtml,
-            senderEmail: gmailSyncMeta.sendAsEmail,
-          }),
-        }).catch(() => {});
+        sigId = 'sig-manual-saved';
       } else {
         finalSigHtml = generateCustomHtml();
-        sigId = `sig-custom-${Date.now()}`;
+        sigId = 'sig-custom-configured';
       }
+
+      // Permanently save the configured signature to database (updating existing record rather than duplicating)
+      await fetch('/api/email/workspace/signatures', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sigId,
+          name: customName || 'Configured Signature',
+          senderName: customName,
+          senderTitle: customTitle,
+          senderCompany: customCompany,
+          senderPhone: customPhone,
+          senderEmail: customEmail,
+          senderWebsite: customWebsite,
+          senderExtra: customExtra,
+          activeTab,
+          bodyHtml: finalSigHtml,
+          applyToAll,
+        }),
+      }).catch((e) => console.error('Failed to save signature to database:', e));
 
       // Handle Campaign Recipients scope if campaignId is provided
       if (campaignId) {

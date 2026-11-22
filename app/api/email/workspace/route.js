@@ -207,8 +207,8 @@ export async function PATCH(request) {
       // CRITICAL REQUIREMENT:
       // If the user edits the email body, subject, signature, or attachments after approval,
       // the approval status must automatically reset to 'needs_review' requiring renewed approval.
-      const isApproving = updates.approval_status === 'approved';
-      const isUnapproving = updates.approval_status === 'needs_review';
+      const isApproving = updates.approval_status === 'approved' || Boolean(updates.user_approved);
+      const isUnapproving = updates.approval_status === 'needs_review' && !updates.user_approved;
 
       const contentChanged =
         (updates.edited_body_plain !== undefined && updates.edited_body_plain !== existingDraft.edited_body_plain) ||
@@ -264,6 +264,45 @@ export async function PATCH(request) {
           updated_at: nowIso,
         }));
       }
+    }
+
+    // 1b. Fast Single Draft Approval Toggle
+    else if (action === 'approve_draft') {
+      const draftIndex = drafts.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) {
+        return NextResponse.json(
+          { success: false, message: `Draft with ID ${draftId} not found.` },
+          { status: 404 }
+        );
+      }
+
+      drafts[draftIndex] = {
+        ...drafts[draftIndex],
+        approval_status: 'approved',
+        user_approved: true,
+        user_approved_at: nowIso,
+        content_modified_after_approval: false,
+        updated_at: nowIso,
+      };
+    }
+
+    else if (action === 'unapprove_draft') {
+      const draftIndex = drafts.findIndex((d) => d.id === draftId);
+      if (draftIndex === -1) {
+        return NextResponse.json(
+          { success: false, message: `Draft with ID ${draftId} not found.` },
+          { status: 404 }
+        );
+      }
+
+      drafts[draftIndex] = {
+        ...drafts[draftIndex],
+        approval_status: 'needs_review',
+        user_approved: false,
+        user_approved_at: null,
+        content_modified_after_approval: false,
+        updated_at: nowIso,
+      };
     }
 
     // 2. Rematch Lead (Manual Override / Assignment)

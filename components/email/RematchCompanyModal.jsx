@@ -154,11 +154,10 @@ export default function RematchCompanyModal({
                 <div
                   key={lead.id}
                   onClick={() => setSelectedLeadId(lead.id)}
-                  className={`p-3.5 rounded-lg border cursor-pointer transition-all ${
-                    isSelected
+                  className={`p-3.5 rounded-lg border cursor-pointer transition-all ${isSelected
                       ? 'border-primary bg-primary/10 text-foreground shadow-xs'
                       : 'border-border bg-card hover:border-border hover:bg-muted/40 text-foreground'
-                  }`}
+                    }`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -203,9 +202,8 @@ export default function RematchCompanyModal({
 
                     <div className="flex items-center">
                       <div
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                          isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
-                        }`}
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+                          }`}
                       >
                         {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>

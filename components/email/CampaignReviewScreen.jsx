@@ -705,9 +705,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                   return (
                     <tr
                       key={rec.id}
-                      className={`hover:bg-muted/30 transition-colors ${
-                        isSelected ? 'bg-primary/5' : ''
-                      }`}
+                      className={`hover:bg-muted/30 transition-colors ${isSelected ? 'bg-primary/5' : ''
+                        }`}
                     >
                       <td className="py-3.5 px-4">
                         <input
@@ -857,11 +856,10 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 <button
                   type="button"
                   onClick={() => setIsEditingInPreview(false)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    !isEditingInPreview
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${!isEditingInPreview
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   <Eye className="w-3.5 h-3.5 inline mr-1.5" />
                   Realistic Outgoing Preview
@@ -869,11 +867,10 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                 <button
                   type="button"
                   onClick={() => setIsEditingInPreview(true)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    isEditingInPreview
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${isEditingInPreview
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   <Edit3 className="w-3.5 h-3.5 inline mr-1.5" />
                   Edit Email Content

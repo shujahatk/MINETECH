@@ -451,12 +451,16 @@ export default function PersonalizedEmailEditorModal({
         .filter((s) => s.length > 0 && s.includes('@'));
 
       let newApproval = approvalStatus;
+      let userApprovedVal = Boolean(draft.user_approved);
       if (explicitUnapprove) {
         newApproval = 'needs_review';
+        userApprovedVal = false;
       } else if (shouldApprove) {
         newApproval = 'approved';
+        userApprovedVal = true;
       } else if (isModifiedAfterApproval) {
         newApproval = 'needs_review';
+        userApprovedVal = false;
       }
 
       const updates = {
@@ -464,6 +468,8 @@ export default function PersonalizedEmailEditorModal({
         edited_body_plain: bodyText,
         edited_body_html: formattedHtmlBody,
         approval_status: newApproval,
+        user_approved: userApprovedVal,
+        user_approved_at: shouldApprove ? new Date().toISOString() : (explicitUnapprove ? null : draft.user_approved_at),
         content_modified_after_approval: shouldApprove ? false : (explicitUnapprove ? false : isModifiedAfterApproval),
         selected_contacts: updatedContacts,
         cc_emails: parsedCc,
@@ -504,8 +510,33 @@ export default function PersonalizedEmailEditorModal({
 
       onSaveDraft?.(data.drafts);
 
-      if (advanceNext && currentIndex < allDrafts.length - 1) {
-        onNavigate?.(currentIndex + 1);
+      if (advanceNext) {
+        const updatedList = data.drafts || allDrafts;
+        let nextIdx = -1;
+        // Search forward from currentIndex + 1
+        for (let i = currentIndex + 1; i < updatedList.length; i++) {
+          if (updatedList[i].approval_status !== 'approved' || !updatedList[i].user_approved) {
+            nextIdx = i;
+            break;
+          }
+        }
+        // If not found forward, wrap around from 0
+        if (nextIdx === -1) {
+          for (let i = 0; i < currentIndex; i++) {
+            if (updatedList[i].approval_status !== 'approved' || !updatedList[i].user_approved) {
+              nextIdx = i;
+              break;
+            }
+          }
+        }
+
+        if (nextIdx !== -1) {
+          onNavigate?.(nextIdx);
+        } else if (currentIndex < allDrafts.length - 1) {
+          onNavigate?.(currentIndex + 1);
+        } else {
+          toast.success('All emails have been approved and are ready for campaign staging!', { duration: 5000 });
+        }
       }
     } catch (err) {
       toast.error(err.message || 'Error saving email draft');
@@ -1283,11 +1314,12 @@ export default function PersonalizedEmailEditorModal({
               Approve Email
             </Button>
 
-            {currentIndex < allDrafts.length - 1 && (
+            {allDrafts.length > 1 && (
               <Button
                 onClick={() => handleSave(true, true)}
                 disabled={loading}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shadow-xs flex items-center gap-1"
+                title="Save changes, approve this draft, and advance to the next email requiring review"
               >
                 Approve & Next
                 <ArrowRight className="w-3.5 h-3.5 ml-0.5" />

@@ -224,6 +224,53 @@ export default function UnifiedEmailWorkspace() {
     }
   };
 
+  // Direct 1-Click Single Email Approval
+  const handleDirectApprove = async (draftId, e) => {
+    e?.stopPropagation();
+    try {
+      const res = await fetch('/api/email/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve_draft',
+          draftId,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Email approved!');
+        setDrafts(data.drafts);
+        setMetrics(data.metrics);
+      }
+    } catch (err) {
+      toast.error('Failed to approve email');
+    }
+  };
+
+  const handleDirectUnapprove = async (draftId, e) => {
+    e?.stopPropagation();
+    try {
+      const res = await fetch('/api/email/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'unapprove_draft',
+          draftId,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.info('Approval removed. Marked as Needs Review.');
+        setDrafts(data.drafts);
+        setMetrics(data.metrics);
+      }
+    } catch (err) {
+      toast.error('Failed to reset approval status');
+    }
+  };
+
   // Compute number of drafts with line-wrap formatting issues
   const formattingIssuesCount = useMemo(() => {
     if (metrics?.formattingIssuesCount !== undefined) {
@@ -961,16 +1008,21 @@ export default function UnifiedEmailWorkspace() {
                       </td>
 
                       {/* Attachments & Signature */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
+                      <td className="py-3.5 px-4 max-w-xs">
                         <div className="space-y-1">
                           {attachmentsCount > 0 ? (
-                            <span
-                              className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[11px] font-medium flex items-center gap-1 w-fit cursor-default"
-                              title={draft.assigned_attachments?.map((a) => a.name || a.fileName).join(', ')}
-                            >
-                              <Paperclip className="w-3 h-3" />
-                              {attachmentsCount} {attachmentsCount === 1 ? 'file' : 'files'}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {draft.assigned_attachments.map((a, aIdx) => (
+                                <span
+                                  key={aIdx}
+                                  className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-medium flex items-center gap-1 max-w-[170px] truncate"
+                                  title={`${a.name || a.fileName} (${a.fileSize || ''})`}
+                                >
+                                  <Paperclip className="w-2.5 h-2.5 shrink-0" />
+                                  <span className="truncate">{a.name || a.fileName}</span>
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-[11px] text-muted-foreground flex items-center gap-1">
                               <Paperclip className="w-3 h-3 text-muted-foreground/60" /> No files
@@ -1025,6 +1077,29 @@ export default function UnifiedEmailWorkspace() {
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          {draft.approval_status === 'approved' ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => handleDirectUnapprove(draft.id, e)}
+                              className="h-7 text-xs border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-rose-500/10 hover:text-rose-500 hover:border-rose-500/30 transition-colors"
+                              title="Click to remove approval"
+                            >
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Approved
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={(e) => handleDirectApprove(draft.id, e)}
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-medium shadow-xs"
+                              title="Click to approve this personalized email"
+                            >
+                              <Check className="w-3 h-3 mr-1" />
+                              Approve
+                            </Button>
+                          )}
+
                           <Button
                             variant="outline"
                             size="sm"

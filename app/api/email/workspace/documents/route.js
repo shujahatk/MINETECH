@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import {
-  getAllDocuments,
-  addCustomDocument,
-  renameDocument,
-  deleteDocument,
-  getDocumentById,
+  getAllDocumentsAsync,
+  addCustomDocumentAsync,
+  renameDocumentAsync,
+  deleteDocumentAsync,
+  getDocumentByIdAsync,
 } from '@/lib/services/documentLibraryService';
 
 export const dynamic = 'force-dynamic';
@@ -19,14 +19,14 @@ export async function GET(request) {
     const docId = url.searchParams.get('id');
 
     if (docId) {
-      const doc = getDocumentById(docId);
+      const doc = await getDocumentByIdAsync(docId);
       if (!doc) {
         return NextResponse.json({ success: false, message: 'Document not found' }, { status: 404 });
       }
       return NextResponse.json({ success: true, document: doc });
     }
 
-    const documents = getAllDocuments();
+    const documents = await getAllDocumentsAsync();
     return NextResponse.json({
       success: true,
       documents,
@@ -87,13 +87,14 @@ export async function POST(request) {
       docData = await request.json();
     }
 
-    const savedDoc = addCustomDocument(docData);
+    const savedDoc = await addCustomDocumentAsync(docData);
+    const documents = await getAllDocumentsAsync();
 
     return NextResponse.json({
       success: true,
       document: savedDoc,
-      documents: getAllDocuments(),
-      message: 'Document added to library successfully.',
+      documents,
+      message: 'Document added to library permanently.',
     });
   } catch (err) {
     console.error('[API /api/email/workspace/documents POST Error]:', err);
@@ -119,11 +120,13 @@ export async function PATCH(request) {
       );
     }
 
-    const updatedDoc = renameDocument(id, name);
+    const updatedDoc = await renameDocumentAsync(id, name);
+    const documents = await getAllDocumentsAsync();
+
     return NextResponse.json({
       success: true,
       document: updatedDoc,
-      documents: getAllDocuments(),
+      documents,
       message: 'Document renamed successfully.',
     });
   } catch (err) {
@@ -156,13 +159,14 @@ export async function DELETE(request) {
       );
     }
 
-    deleteDocument(docId);
+    await deleteDocumentAsync(docId);
+    const documents = await getAllDocumentsAsync();
 
     return NextResponse.json({
       success: true,
       deletedId: docId,
-      documents: getAllDocuments(),
-      message: 'Document removed from document library.',
+      documents,
+      message: 'Document permanently removed from document library.',
     });
   } catch (err) {
     console.error('[API /api/email/workspace/documents DELETE Error]:', err);

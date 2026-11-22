@@ -198,19 +198,21 @@ export default function AttachFilesModal({
 
     setLoading(true);
     try {
+      const isAll = attachmentScope === 'campaign';
+      const isIndividual = attachmentScope === 'individual' && currentDraftId;
+
       // Handle Campaign Recipients scope if campaignId is provided
       if (campaignId) {
-        const isIndividual = attachmentScope === 'individual' && currentDraftId;
-        const targetRecipientIds = isIndividual
-          ? [currentDraftId]
-          : (selectedDraftIds && selectedDraftIds.length > 0 ? selectedDraftIds : undefined);
+        const targetRecipientIds = isAll
+          ? undefined
+          : (isIndividual ? [currentDraftId] : (selectedDraftIds && selectedDraftIds.length > 0 ? selectedDraftIds : undefined));
 
         const res = await fetch(`/api/email/campaigns/${campaignId}/recipients`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'bulk_attachments',
-            applyToAll: !isIndividual && (!selectedDraftIds || selectedDraftIds.length === 0),
+            applyToAll: isAll,
             recipientIds: targetRecipientIds,
             attachments: selectedDocs,
             mode: attachMode,
@@ -225,7 +227,7 @@ export default function AttachFilesModal({
         toast.success(
           isIndividual
             ? `Attached ${selectedDocs.length} file(s) to recipient!`
-            : `Attached ${selectedDocs.length} file(s) to campaign!`
+            : `Attached ${selectedDocs.length} file(s) to all campaign recipients!`
         );
 
         onAttachmentsApplied?.(data, selectedDocs);
@@ -233,18 +235,17 @@ export default function AttachFilesModal({
         return;
       }
 
-      const isIndividual = attachmentScope === 'individual' && currentDraftId;
-      const targetDraftIds = isIndividual
-        ? [currentDraftId]
-        : (selectedDraftIds && selectedDraftIds.length > 0 ? selectedDraftIds : undefined);
+      const targetDraftIds = isAll
+        ? undefined
+        : (isIndividual ? [currentDraftId] : (selectedDraftIds && selectedDraftIds.length > 0 ? selectedDraftIds : undefined));
 
       const res = await fetch('/api/email/workspace', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'bulk_attachments',
-          applyToAll: !isIndividual && (!selectedDraftIds || selectedDraftIds.length === 0),
-          draftIds: targetDraftIds,
+          applyToAll: isAll || (!currentDraftId && (!selectedDraftIds || selectedDraftIds.length === 0)),
+          draftIds: isAll ? 'all' : targetDraftIds,
           attachments: selectedDocs,
           mode: attachMode,
         }),
@@ -258,7 +259,7 @@ export default function AttachFilesModal({
       toast.success(
         isIndividual
           ? `Attached ${selectedDocs.length} file(s) to this email!`
-          : `Attached ${selectedDocs.length} file(s) to campaign emails!`
+          : `Attached ${selectedDocs.length} file(s) to all ${totalDraftsCount || data.drafts?.length || 24} emails in workspace!`
       );
 
       onAttachmentsApplied?.(data.drafts, selectedDocs);
@@ -662,7 +663,7 @@ export default function AttachFilesModal({
                 {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Paperclip className="w-3.5 h-3.5 mr-1.5" />}
                 {attachmentScope === 'individual'
                   ? `Attach to This Email (${selectedDocs.length})`
-                  : `Apply to Campaign (${selectedDocs.length})`}
+                  : `Attach to All Emails (${selectedDocs.length})`}
               </Button>
             )}
           </div>
