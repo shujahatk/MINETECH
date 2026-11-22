@@ -40,7 +40,7 @@ export default function CustomSignatureModal({
 }) {
   const [signatures, setSignatures] = useState([]);
   const [selectedSigId, setSelectedSigId] = useState('sig-gmail-synced');
-  const [activeTab, setActiveTab] = useState('gmail'); // 'gmail' | 'manual' | 'preset'
+  const [activeTab, setActiveTab] = useState('gmail'); // 'gmail' | 'custom'
   const [loading, setLoading] = useState(false);
   const [syncingGmail, setSyncingGmail] = useState(false);
 
@@ -53,10 +53,6 @@ export default function CustomSignatureModal({
     permissionStatus: 'ready',
     requiredScope: 'https://www.googleapis.com/auth/gmail.settings.basic',
   });
-
-  // Manual raw HTML signature editor
-  const [manualHtml, setManualHtml] = useState('');
-  const [previewHtml, setPreviewHtml] = useState('');
 
   // Structured custom signature form
   const [customName, setCustomName] = useState('Abdullah Rauf');
@@ -77,10 +73,6 @@ export default function CustomSignatureModal({
         setSignatures(d.signatures || []);
         if (d.activeGmailSignature) {
           setGmailSyncMeta(d.activeGmailSignature);
-          if (!manualHtml) {
-            setManualHtml(d.activeGmailSignature.signatureHtml || '');
-            setPreviewHtml(d.activeGmailSignature.signatureHtml || '');
-          }
         }
         if (d.configuredSignature) {
           const cfg = d.configuredSignature;
@@ -91,10 +83,10 @@ export default function CustomSignatureModal({
           if (cfg.senderEmail) setCustomEmail(cfg.senderEmail);
           if (cfg.senderWebsite) setCustomWebsite(cfg.senderWebsite);
           if (cfg.senderExtra !== undefined) setCustomExtra(cfg.senderExtra);
-          if (cfg.activeTab) setActiveTab(cfg.activeTab);
-          if (cfg.bodyHtml) {
-            setManualHtml(cfg.bodyHtml);
-            setPreviewHtml(cfg.bodyHtml);
+          if (cfg.activeTab === 'custom' || cfg.isCustom) {
+            setActiveTab('custom');
+          } else {
+            setActiveTab('gmail');
           }
         }
       }
@@ -177,15 +169,12 @@ export default function CustomSignatureModal({
       let finalSigHtml = '';
       let sigId = selectedSigId;
 
-      if (activeTab === 'gmail') {
-        finalSigHtml = gmailSyncMeta.signatureHtml || manualHtml || generateCustomHtml();
-        sigId = 'sig-gmail-synced';
-      } else if (activeTab === 'manual') {
-        finalSigHtml = manualHtml;
-        sigId = 'sig-manual-saved';
-      } else {
+      if (activeTab === 'custom') {
         finalSigHtml = generateCustomHtml();
         sigId = 'sig-custom-configured';
+      } else {
+        finalSigHtml = gmailSyncMeta.signatureHtml || generateCustomHtml();
+        sigId = 'sig-gmail-synced';
       }
 
       // Permanently save the configured signature to database (updating existing record rather than duplicating)
@@ -327,17 +316,6 @@ export default function CustomSignatureModal({
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('manual')}
-              className={`px-3 py-1.5 font-medium border-b-2 transition-colors ${
-                activeTab === 'manual'
-                  ? 'border-primary text-primary font-semibold'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              Manual HTML Fallback
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveTab('custom')}
               className={`px-3 py-1.5 font-medium border-b-2 transition-colors ${
                 activeTab === 'custom'
@@ -412,7 +390,7 @@ export default function CustomSignatureModal({
               <div className="p-6 rounded-xl bg-white text-slate-900 border border-slate-300 shadow-sm overflow-hidden">
                 <div
                   dangerouslySetInnerHTML={{
-                    __html: manualHtml || gmailSyncMeta.signatureHtml || generateCustomHtml(),
+                    __html: gmailSyncMeta.signatureHtml || generateCustomHtml(),
                   }}
                 />
               </div>
@@ -426,37 +404,7 @@ export default function CustomSignatureModal({
             </div>
           )}
 
-          {/* TAB 2: Manual HTML Fallback */}
-          {activeTab === 'manual' && (
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-foreground block mb-1.5">
-                  Direct HTML Signature Code:
-                </label>
-                <Textarea
-                  value={manualHtml}
-                  onChange={(e) => {
-                    setManualHtml(e.target.value);
-                    setPreviewHtml(e.target.value);
-                  }}
-                  rows={8}
-                  className="font-mono text-xs bg-background border-border text-foreground"
-                  placeholder="<div dir='ltr' class='gmail_signature'>...</div>"
-                />
-              </div>
-
-              <div>
-                <span className="text-xs font-semibold text-foreground block mb-1.5">
-                  Live Preview:
-                </span>
-                <div className="p-6 rounded-xl bg-white text-slate-900 border border-slate-300 shadow-sm overflow-hidden">
-                  <div dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-slate-400 italic">Enter HTML to preview</p>' }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: Structured Custom Builder */}
+          {/* TAB 2: Structured Custom Builder */}
           {activeTab === 'custom' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

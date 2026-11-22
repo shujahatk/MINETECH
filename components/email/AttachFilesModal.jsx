@@ -251,17 +251,18 @@ export default function AttachFilesModal({
   };
 
   // Apply attachments to emails
-  const executeApplyAttachments = async () => {
+  const executeApplyAttachments = async (overrideScope = null) => {
     if (selectedDocs.length === 0) {
       toast.error('Please select or upload at least one file to attach.');
       return;
     }
 
+    const scope = overrideScope || attachmentScope;
     setLoading(true);
     try {
-      const isAll = attachmentScope === 'all';
-      const isSelected = attachmentScope === 'selected';
-      const isIndividual = attachmentScope === 'individual' && currentDraftId;
+      const isAll = scope === 'all';
+      const isSelected = scope === 'selected';
+      const isIndividual = scope === 'individual' && currentDraftId;
 
       // Handle Campaign Recipients scope if campaignId is provided
       if (campaignId) {
@@ -1000,17 +1001,14 @@ export default function AttachFilesModal({
         {/* Footer Actions */}
         <div className="p-4 px-6 border-t border-border bg-muted/20 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Target:</span>
-            {attachmentScope === 'individual' ? (
-              <span className="font-semibold text-foreground">1 Individual Email</span>
-            ) : attachmentScope === 'selected' ? (
-              <span className="font-semibold text-primary">{selectedDraftIds?.length || 0} Selected Emails</span>
-            ) : (
-              <span className="font-semibold text-foreground">All {totalDraftsCount || 24} Emails in Workspace</span>
+            <span>Selected Files:</span>
+            <span className="font-semibold text-foreground">{selectedDocs.length} document{selectedDocs.length !== 1 ? 's' : ''}</span>
+            {selectedDraftIds?.length > 0 && !currentDraftId && (
+              <span className="text-primary font-medium">({selectedDraftIds.length} of {totalDraftsCount || 24} emails currently selected)</span>
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="outline"
               size="sm"
@@ -1020,28 +1018,43 @@ export default function AttachFilesModal({
               Cancel
             </Button>
 
-            <Button
-              size="sm"
-              onClick={handleApplyClick}
-              disabled={loading || selectedDocs.length === 0}
-              className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 gap-1.5"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  Applying Attachments...
-                </>
-              ) : (
-                <>
+            {currentDraftId ? (
+              <Button
+                size="sm"
+                onClick={() => executeApplyAttachments('individual')}
+                disabled={loading || selectedDocs.length === 0}
+                className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 gap-1.5"
+              >
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+                Attach to This Recipient ({selectedDocs.length})
+              </Button>
+            ) : (
+              <>
+                {/* Option 2: Attach to Selected Recipients */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => executeApplyAttachments('selected')}
+                  disabled={loading || selectedDocs.length === 0 || !selectedDraftIds || selectedDraftIds.length === 0}
+                  className="text-xs border-primary/40 text-primary hover:bg-primary/10 font-medium px-3 gap-1.5"
+                  title={selectedDraftIds?.length > 0 ? `Attach to ${selectedDraftIds.length} selected recipients` : 'Select emails in workspace first to attach to selection'}
+                >
                   <Paperclip className="w-3.5 h-3.5" />
-                  {attachmentScope === 'individual'
-                    ? `Attach ${selectedDocs.length} File(s) to This Email`
-                    : attachmentScope === 'selected'
-                    ? `Attach ${selectedDocs.length} File(s) to ${selectedDraftIds?.length || 0} Selected Emails`
-                    : `Attach ${selectedDocs.length} File(s) to All ${totalDraftsCount || 24} Emails`}
-                </>
-              )}
-            </Button>
+                  Attach to Selected Recipients ({selectedDraftIds?.length || 0} of {totalDraftsCount || 24})
+                </Button>
+
+                {/* Option 1: Attach to All Recipients */}
+                <Button
+                  size="sm"
+                  onClick={() => setIsConfirmAllOpen(true)}
+                  disabled={loading || selectedDocs.length === 0}
+                  className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 gap-1.5"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+                  Attach to All Recipients ({totalDraftsCount || 24})
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </Card>
@@ -1156,12 +1169,25 @@ export default function AttachFilesModal({
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setPreviewDoc(null)}
-                className="p-1 rounded text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-primary hover:underline px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Open in New Tab
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1 rounded text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 bg-muted/20 p-4 overflow-hidden flex items-center justify-center">

@@ -120,15 +120,6 @@ export async function GET(request) {
       const hasArtifacts = hasLineWrapArtifacts(currentText);
       updated.has_formatting_issues = hasArtifacts;
 
-      // Campaign-Level Attachments Auto-Sync:
-      // If campaign has attachments and draft does not have them or is out of sync, inherit campaign attachments
-      if (campaignAttachments.length > 0) {
-        if (!Array.isArray(updated.assigned_attachments) || updated.assigned_attachments.length === 0) {
-          updated.assigned_attachments = campaignAttachments;
-          needsBatchSave = true;
-        }
-      }
-
       // Automatic Email Signature Auto-Sync:
       // Ensure every email draft inherits the active MineTech signature automatically
       if (!updated.assigned_signature_html) {
@@ -600,7 +591,6 @@ export async function PATCH(request) {
         if (fixedPlain !== currentPlain.trim()) {
           updatedCount++;
           const fixedHtml = formatBodyHtml(fixedPlain);
-          const wasApproved = d.approval_status === 'approved' || Boolean(d.user_approved);
 
           return {
             ...d,
@@ -609,9 +599,10 @@ export async function PATCH(request) {
             has_formatting_issues: false,
             formatting_fixed: true,
             formatting_fixed_at: nowIso,
-            approval_status: wasApproved ? 'needs_review' : (d.approval_status || 'needs_review'),
-            user_approved: wasApproved ? false : Boolean(d.user_approved),
-            content_modified_after_approval: wasApproved ? true : Boolean(d.content_modified_after_approval),
+            // Critical: Formatting fixes MUST NOT reset or unapprove previously approved drafts!
+            approval_status: d.approval_status || 'needs_review',
+            user_approved: Boolean(d.user_approved),
+            content_modified_after_approval: false,
             updated_at: nowIso,
           };
         }

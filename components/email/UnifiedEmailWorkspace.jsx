@@ -362,6 +362,11 @@ export default function UnifiedEmailWorkspace() {
 
   // Open Bulk Formatting Fix Modal
   const handleOpenBulkFix = async (targetIds = 'all') => {
+    if (Array.isArray(targetIds) && targetIds.length === 0) {
+      toast.info('Please select one or more emails first to fix formatting.');
+      return;
+    }
+
     setBulkFixTargetIds(targetIds);
     setIncludeManuallyEdited(false);
 
@@ -546,6 +551,20 @@ export default function UnifiedEmailWorkspace() {
               </Button>
             </>
           )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setActiveAttachScope(selectedDraftIds.size > 0 ? 'selected' : 'all');
+              setActiveDraftIdForAttach(null);
+              setIsAttachFilesModalOpen(true);
+            }}
+            className="border-border text-foreground hover:bg-muted/40 text-xs h-9"
+          >
+            <Paperclip className="w-3.5 h-3.5 mr-1.5 text-primary" />
+            Attachment Library
+          </Button>
 
           <Button
             size="sm"
@@ -842,37 +861,28 @@ export default function UnifiedEmailWorkspace() {
                       }`}
                     >
                       {campaignAttachments.length > 0
-                        ? `${campaignAttachments.length} file${campaignAttachments.length > 1 ? 's' : ''} auto-attached to all ${drafts.length} emails`
+                        ? `${campaignAttachments.length} file${campaignAttachments.length > 1 ? 's' : ''} attached`
                         : '0 files'}
                     </Badge>
                   </h3>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Upload brochures or catalogs once — automatically attached to every email.
+                    Attach brochures or collateral to all or selected campaign recipients.
                   </p>
                 </div>
               </div>
 
               <div>
-                <input
-                  ref={campaignFileInputRef}
-                  type="file"
-                  accept=".pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg"
-                  className="hidden"
-                  onChange={handleCampaignFileUpload}
-                  disabled={uploadingCampaignFile}
-                />
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => campaignFileInputRef.current?.click()}
-                  disabled={uploadingCampaignFile}
+                  onClick={() => {
+                    setActiveAttachScope(selectedDraftIds.size > 0 ? 'selected' : 'all');
+                    setActiveDraftIdForAttach(null);
+                    setIsAttachFilesModalOpen(true);
+                  }}
                   className="h-8 text-xs border-primary/30 text-primary hover:bg-primary/10 gap-1.5"
                 >
-                  {uploadingCampaignFile ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Plus className="w-3.5 h-3.5" />
-                  )}
+                  <Plus className="w-3.5 h-3.5" />
                   <span>Add Files</span>
                 </Button>
               </div>
@@ -882,13 +892,17 @@ export default function UnifiedEmailWorkspace() {
             <div className="mt-3 space-y-2">
               {campaignAttachments.length === 0 ? (
                 <div
-                  onClick={() => campaignFileInputRef.current?.click()}
+                  onClick={() => {
+                    setActiveAttachScope(selectedDraftIds.size > 0 ? 'selected' : 'all');
+                    setActiveDraftIdForAttach(null);
+                    setIsAttachFilesModalOpen(true);
+                  }}
                   className="border border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:bg-muted/20 transition-colors"
                 >
                   <Paperclip className="w-5 h-5 text-muted-foreground/60 mx-auto mb-1" />
                   <p className="text-xs font-medium text-foreground">No campaign files attached yet</p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Click <strong className="text-primary hover:underline">Add Files</strong> to upload collateral for all {drafts.length} emails
+                    Click <strong className="text-primary hover:underline">Add Files</strong> to upload or select collateral from library
                   </p>
                 </div>
               ) : (
@@ -1104,6 +1118,20 @@ export default function UnifiedEmailWorkspace() {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => {
+                setActiveAttachScope('selected');
+                setActiveDraftIdForAttach(null);
+                setIsAttachFilesModalOpen(true);
+              }}
+              className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
+            >
+              <Paperclip className="w-3.5 h-3.5 mr-1 text-primary" />
+              Attach to Selected ({selectedDraftIds.size})
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setIsSignatureModalOpen(true)}
               className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
             >
@@ -1271,18 +1299,40 @@ export default function UnifiedEmailWorkspace() {
                       <td className="py-3.5 px-4 max-w-xs">
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {(campaignAttachments.length > 0 || attachmentsCount > 0) ? (
-                              <span
-                                className="px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-[10px] font-semibold flex items-center gap-1"
-                                title={(campaignAttachments.length > 0 ? campaignAttachments : draft.assigned_attachments || []).map((a) => a.fileName || a.name).join(', ')}
+                            {attachmentsCount > 0 ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (draft.assigned_attachments?.[0]) {
+                                    setPreviewAttachmentDoc(draft.assigned_attachments[0]);
+                                  } else {
+                                    setActiveDraftIdForAttach(draft.id);
+                                    setActiveAttachScope('individual');
+                                    setIsAttachFilesModalOpen(true);
+                                  }
+                                }}
+                                className="px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                                title={(draft.assigned_attachments || []).map((a) => a.fileName || a.name).join(', ')}
                               >
                                 <Paperclip className="w-2.5 h-2.5 shrink-0" />
-                                <span>{(campaignAttachments.length || attachmentsCount)} Campaign File{(campaignAttachments.length || attachmentsCount) > 1 ? 's' : ''}</span>
-                              </span>
+                                <span>{attachmentsCount} File{attachmentsCount > 1 ? 's' : ''}</span>
+                                <Eye className="w-2.5 h-2.5 ml-0.5 text-primary/70" />
+                              </button>
                             ) : (
-                              <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDraftIdForAttach(draft.id);
+                                  setActiveAttachScope('individual');
+                                  setIsAttachFilesModalOpen(true);
+                                }}
+                                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer transition-colors"
+                                title="Click to attach files to this email"
+                              >
                                 <Paperclip className="w-3 h-3 text-muted-foreground/60" /> No files
-                              </span>
+                              </button>
                             )}
                           </div>
 
@@ -1457,8 +1507,9 @@ export default function UnifiedEmailWorkspace() {
         selectedDraftIds={Array.from(selectedDraftIds)}
         currentDraftId={activeDraftIdForAttach}
         initialScope={activeAttachScope}
-        onAttachmentsApplied={(updatedDrafts) => {
-          setDrafts(updatedDrafts);
+        onAttachmentsApplied={(updatedDrafts, appliedDocs) => {
+          if (updatedDrafts) setDrafts(updatedDrafts);
+          if (appliedDocs && activeAttachScope === 'all') setCampaignAttachments(appliedDocs);
           fetchWorkspace(true);
         }}
       />

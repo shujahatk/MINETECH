@@ -1026,14 +1026,18 @@ export default function PersonalizedEmailEditorModal({
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {activeAttachedDocs.map((doc) => (
-                              <div
-                                key={doc.id}
-                                className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 text-xs flex items-center gap-2 font-medium"
+                              <button
+                                key={doc.id || doc.name}
+                                type="button"
+                                onClick={() => setPreviewDoc(doc)}
+                                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs flex items-center gap-2 font-medium transition-colors cursor-pointer group"
+                                title="Click to view and preview this attached document"
                               >
-                                <Paperclip className="w-3.5 h-3.5 text-primary" />
-                                <span>{doc.name}</span>
+                                <Paperclip className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
+                                <span className="hover:underline">{doc.name || doc.fileName}</span>
                                 <span className="text-[11px] text-slate-500 font-normal">({doc.fileSize})</span>
-                              </div>
+                                <Eye className="w-3 h-3 text-slate-400 group-hover:text-primary ml-0.5" />
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -1379,12 +1383,25 @@ export default function PersonalizedEmailEditorModal({
                   {previewDoc.fileName} &bull; {previewDoc.fileSize}
                 </p>
               </div>
-              <button
-                onClick={() => setPreviewDoc(null)}
-                className="p-1 rounded text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {previewDoc.url && (
+                  <a
+                    href={previewDoc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-primary hover:underline px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Open in New Tab
+                  </a>
+                )}
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-1 rounded text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 bg-muted/20 p-4 overflow-hidden flex items-center justify-center">
