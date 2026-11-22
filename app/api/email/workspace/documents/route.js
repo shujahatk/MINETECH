@@ -74,6 +74,29 @@ export async function POST(request) {
       const base64Data = buffer.toString('base64');
       const fileSizeMb = (buffer.length / (1024 * 1024)).toFixed(2) + ' MB';
 
+      // Synchronize file to Supabase Storage bucket 'email-attachments'
+      let storageUrl = '';
+      let storagePath = '';
+      try {
+        const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        storagePath = `uploads/${Date.now()}_${sanitizedFileName}`;
+        const { data: uploadData, error: uploadErr } = await supabaseAdmin.storage
+          .from('email-attachments')
+          .upload(storagePath, buffer, {
+            contentType: file.type || 'application/pdf',
+            upsert: true,
+          });
+
+        if (!uploadErr && uploadData) {
+          const { data: pubData } = supabaseAdmin.storage
+            .from('email-attachments')
+            .getPublicUrl(storagePath);
+          storageUrl = pubData?.publicUrl || '';
+        }
+      } catch (storageEx) {
+        console.warn('[documents POST] Storage upload warning:', storageEx.message);
+      }
+
       docData = {
         name,
         fileName: file.name,
@@ -82,6 +105,8 @@ export async function POST(request) {
         category,
         description,
         dataBase64: base64Data,
+        url: storageUrl,
+        storagePath,
       };
     } else {
       docData = await request.json();

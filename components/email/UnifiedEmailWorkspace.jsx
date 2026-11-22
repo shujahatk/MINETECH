@@ -85,8 +85,8 @@ export default function UnifiedEmailWorkspace() {
   const fileInputRef = useRef(null);
 
   // Load active workspace on mount
-  const fetchWorkspace = async () => {
-    setLoading(true);
+  const fetchWorkspace = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/email/workspace');
       const data = await res.json();
@@ -94,19 +94,19 @@ export default function UnifiedEmailWorkspace() {
         setActiveBatch(data.batch);
         setDrafts(data.drafts || []);
         setMetrics(data.metrics || {});
-        // Default select all drafts that are ready
+        // Default select all drafts that are ready if user has not made custom selection
         const readyIds = new Set(
           (data.drafts || [])
             .filter((d) => d.approval_status === 'approved' && d.match_status === 'matched')
             .map((d) => d.id)
         );
-        setSelectedDraftIds(readyIds);
+        setSelectedDraftIds((prev) => (prev && prev.size > 0 ? prev : readyIds));
       }
     } catch (err) {
       console.error('Failed to load workspace:', err);
       toast.error('Failed to load email workspace');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -1145,7 +1145,7 @@ export default function UnifiedEmailWorkspace() {
           onNavigate={(nextIdx) => setEditingDraftIndex(nextIdx)}
           onSaveDraft={(updatedDrafts) => {
             setDrafts(updatedDrafts);
-            fetchWorkspace();
+            fetchWorkspace(true);
           }}
         />
       )}
@@ -1158,7 +1158,7 @@ export default function UnifiedEmailWorkspace() {
         batchId={activeBatch?.id}
         onCampaignCreated={(campId) => {
           setCreatedCampaignId(campId);
-          fetchWorkspace();
+          fetchWorkspace(true);
         }}
       />
 
@@ -1169,7 +1169,7 @@ export default function UnifiedEmailWorkspace() {
           onClose={() => setRematchDraft(null)}
           draft={rematchDraft}
           onMatched={() => {
-            fetchWorkspace();
+            fetchWorkspace(true);
             setRematchDraft(null);
           }}
         />
@@ -1184,7 +1184,7 @@ export default function UnifiedEmailWorkspace() {
         selectedDraftIds={Array.from(selectedDraftIds)}
         onSignatureApplied={(updatedDrafts) => {
           setDrafts(updatedDrafts);
-          fetchWorkspace();
+          fetchWorkspace(true);
         }}
       />
 
@@ -1197,7 +1197,7 @@ export default function UnifiedEmailWorkspace() {
         selectedDraftIds={Array.from(selectedDraftIds)}
         onAttachmentsApplied={(updatedDrafts) => {
           setDrafts(updatedDrafts);
-          fetchWorkspace();
+          fetchWorkspace(true);
         }}
       />
 

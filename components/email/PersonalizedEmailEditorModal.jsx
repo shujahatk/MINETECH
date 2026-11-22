@@ -153,14 +153,14 @@ export default function PersonalizedEmailEditorModal({
         .then((d) => {
           if (d.success && d.signatures) setSignatures(d.signatures);
         })
-        .catch(() => {});
+        .catch(() => { });
 
       fetch('/api/email/workspace/documents')
         .then((r) => r.json())
         .then((d) => {
           if (d.success && d.documents) setDocuments(d.documents);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [isOpen]);
 
@@ -248,7 +248,7 @@ export default function PersonalizedEmailEditorModal({
         setIsFormatFixOpen(true);
         return;
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Fallback: reconstruct locally
     const clean = bodyText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
@@ -692,11 +692,10 @@ export default function PersonalizedEmailEditorModal({
                       <div
                         key={idx}
                         onClick={() => toggleContactSelection(contact)}
-                        className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-start justify-between ${
-                          isSelected
-                            ? 'border-primary/60 bg-primary/10 text-foreground font-medium'
-                            : 'border-border bg-card text-muted-foreground hover:border-border/80'
-                        }`}
+                        className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all flex items-start justify-between ${isSelected
+                          ? 'border-primary/60 bg-primary/10 text-foreground font-medium'
+                          : 'border-border bg-card text-muted-foreground hover:border-border/80'
+                          }`}
                       >
                         <div className="space-y-0.5">
                           <div className="flex items-center gap-1.5 font-medium text-foreground">
@@ -715,9 +714,8 @@ export default function PersonalizedEmailEditorModal({
 
                         <div className="flex flex-col items-end gap-1">
                           <div
-                            className={`w-4 h-4 rounded border flex items-center justify-center ${
-                              isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
-                            }`}
+                            className={`w-4 h-4 rounded border flex items-center justify-center ${isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+                              }`}
                           >
                             {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
                           </div>
@@ -790,11 +788,10 @@ export default function PersonalizedEmailEditorModal({
                   <button
                     type="button"
                     onClick={() => setActiveTab('editor')}
-                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
-                      activeTab === 'editor'
-                        ? 'bg-primary text-primary-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'editor'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                     Edit Email
@@ -803,11 +800,10 @@ export default function PersonalizedEmailEditorModal({
                   <button
                     type="button"
                     onClick={() => setActiveTab('preview')}
-                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
-                      activeTab === 'preview'
-                        ? 'bg-primary text-primary-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'preview'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
                   >
                     <Eye className="w-3.5 h-3.5" />
                     Realistic Outgoing Email Preview
@@ -816,11 +812,10 @@ export default function PersonalizedEmailEditorModal({
                   <button
                     type="button"
                     onClick={() => setActiveTab('compare')}
-                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${
-                      activeTab === 'compare'
-                        ? 'bg-primary text-primary-foreground shadow-xs'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
+                    className={`px-3 py-1.5 text-xs rounded-md font-medium transition-colors flex items-center gap-1.5 ${activeTab === 'compare'
+                      ? 'bg-primary text-primary-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                      }`}
                   >
                     <FileText className="w-3.5 h-3.5" />
                     Compare with Raw PDF
@@ -893,11 +888,10 @@ export default function PersonalizedEmailEditorModal({
                         variant="outline"
                         size="sm"
                         onClick={handleOpenFormatFix}
-                        className={`h-6 text-[11px] px-2.5 flex items-center gap-1 ${
-                          hasLineWraps
-                            ? 'border-amber-500/50 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 font-semibold'
-                            : 'border-border text-muted-foreground hover:text-foreground'
-                        }`}
+                        className={`h-6 text-[11px] px-2.5 flex items-center gap-1 ${hasLineWraps
+                          ? 'border-amber-500/50 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 font-semibold'
+                          : 'border-border text-muted-foreground hover:text-foreground'
+                          }`}
                         title="Reconstruct continuous sentences from PDF layout wrapping while strictly preserving 100% of all words"
                       >
                         <Sparkles className="w-3 h-3 text-amber-500" />
