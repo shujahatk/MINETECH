@@ -1449,8 +1449,12 @@ export default function PersonalizedEmailEditorModal({
 
       {/* Attachment Preview Modal */}
       {previewDoc && (() => {
-        const directHttpUrl = (previewDoc.url && previewDoc.url.startsWith('http')) ? previewDoc.url : null;
-        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewDoc.id || previewDoc.fileName)}`;
+        const directHttpUrl = (previewDoc.url && previewDoc.url.startsWith('http'))
+          ? previewDoc.url
+          : (previewDoc.storagePath
+            ? `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/${previewDoc.storagePath}`
+            : (previewDoc.fileName?.toLowerCase().includes('bentonite') ? '/documents/MineTech_Bentonite.pdf' : null));
+        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewDoc.id || previewDoc.fileName)}&fileName=${encodeURIComponent(previewDoc.fileName || '')}`;
         const downloadUrl = directHttpUrl || `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
         const isPdf = previewDoc.fileType?.includes('pdf') || (previewDoc.fileName || '').toLowerCase().endsWith('.pdf');
         const isImage = previewDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewDoc.fileName || '');

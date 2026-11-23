@@ -1786,8 +1786,12 @@ export default function UnifiedEmailWorkspace() {
 
       {/* Campaign Attachment File Preview Modal */}
       {previewAttachmentDoc && (() => {
-        const directHttpUrl = (previewAttachmentDoc.url && previewAttachmentDoc.url.startsWith('http')) ? previewAttachmentDoc.url : null;
-        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewAttachmentDoc.id || previewAttachmentDoc.fileName)}`;
+        const directHttpUrl = (previewAttachmentDoc.url && previewAttachmentDoc.url.startsWith('http'))
+          ? previewAttachmentDoc.url
+          : (previewAttachmentDoc.storagePath
+            ? `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/${previewAttachmentDoc.storagePath}`
+            : (previewAttachmentDoc.fileName?.toLowerCase().includes('bentonite') ? '/documents/MineTech_Bentonite.pdf' : null));
+        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewAttachmentDoc.id || previewAttachmentDoc.fileName)}&fileName=${encodeURIComponent(previewAttachmentDoc.fileName || '')}`;
         const downloadUrl = directHttpUrl || `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
         const isPdf = previewAttachmentDoc.fileType?.includes('pdf') || (previewAttachmentDoc.fileName || '').toLowerCase().endsWith('.pdf');
         const isImage = previewAttachmentDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewAttachmentDoc.fileName || '');

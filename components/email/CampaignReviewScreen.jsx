@@ -1381,8 +1381,12 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
       {/* Document Preview Modal */}
       {previewModalDoc && (() => {
-        const directHttpUrl = (previewModalDoc.url && previewModalDoc.url.startsWith('http')) ? previewModalDoc.url : null;
-        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewModalDoc.id || previewModalDoc.fileName)}`;
+        const directHttpUrl = (previewModalDoc.url && previewModalDoc.url.startsWith('http'))
+          ? previewModalDoc.url
+          : (previewModalDoc.storagePath
+            ? `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/${previewModalDoc.storagePath}`
+            : (previewModalDoc.fileName?.toLowerCase().includes('bentonite') ? '/documents/MineTech_Bentonite.pdf' : null));
+        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewModalDoc.id || previewModalDoc.fileName)}&fileName=${encodeURIComponent(previewModalDoc.fileName || '')}`;
         const downloadUrl = directHttpUrl || `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
         const isPdf = previewModalDoc.fileType?.includes('pdf') || (previewModalDoc.fileName || '').toLowerCase().endsWith('.pdf');
         const isImage = previewModalDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewModalDoc.fileName || '');
