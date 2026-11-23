@@ -122,8 +122,8 @@ export default function PersonalizedEmailEditorModal({
   // Initial load
   useEffect(() => {
     if (draft) {
-      setSubject(draft.edited_subject || draft.extracted_subject || '');
-      setBodyText(draft.edited_body_plain || draft.extracted_body_plain || '');
+      setSubject(draft.edited_subject || draft.extracted_subject || draft.subject || '');
+      setBodyText(draft.edited_body_plain || draft.extracted_body_plain || draft.body_plain || '');
       setApprovalStatus(draft.approval_status || 'needs_review');
       setIsModifiedAfterApproval(Boolean(draft.content_modified_after_approval));
 

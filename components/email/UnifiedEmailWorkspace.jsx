@@ -1414,10 +1414,10 @@ export default function UnifiedEmailWorkspace() {
                       <td className="py-3.5 px-4 max-w-md">
                         <div className="space-y-1">
                           <p className="font-medium text-foreground truncate">
-                            {draft.edited_subject || draft.extracted_subject || '(No subject line)'}
+                            {draft.edited_subject || draft.extracted_subject || draft.subject || '(No subject line)'}
                           </p>
                           <p className="text-[11px] text-muted-foreground line-clamp-1">
-                            {draft.edited_body_plain || draft.extracted_body_plain}
+                            {draft.edited_body_plain || draft.extracted_body_plain || draft.body_plain}
                           </p>
                         </div>
                       </td>
