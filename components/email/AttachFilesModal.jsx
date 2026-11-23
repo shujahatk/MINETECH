@@ -344,8 +344,8 @@ export default function AttachFilesModal({
         isIndividual
           ? `Attached ${selectedDocs.length} file(s) to this email!`
           : isSelected
-          ? `Attached ${selectedDocs.length} file(s) to all ${totalTargetCount} selected emails!`
-          : `Attached ${selectedDocs.length} file(s) across all ${totalTargetCount} emails in workspace!`
+            ? `Attached ${selectedDocs.length} file(s) to all ${totalTargetCount} selected emails!`
+            : `Attached ${selectedDocs.length} file(s) across all ${totalTargetCount} emails in workspace!`
       );
 
       onAttachmentsApplied?.(data.drafts, selectedDocs);
@@ -406,7 +406,7 @@ export default function AttachFilesModal({
     if (filterType === 'pdf') return type.includes('pdf') || name.endsWith('.pdf');
     if (filterType === 'office') {
       return type.includes('word') || type.includes('sheet') || type.includes('excel') ||
-             name.endsWith('.doc') || name.endsWith('.docx') || name.endsWith('.xls') || name.endsWith('.xlsx');
+        name.endsWith('.doc') || name.endsWith('.docx') || name.endsWith('.xls') || name.endsWith('.xlsx');
     }
     if (filterType === 'images') {
       return type.includes('image') || name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.jpeg');
@@ -451,11 +451,10 @@ export default function AttachFilesModal({
             <button
               type="button"
               onClick={() => setActiveTab('attach')}
-              className={`px-3.5 py-2 font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
-                activeTab === 'attach'
-                  ? 'border-primary text-primary font-semibold'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              className={`px-3.5 py-2 font-medium border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'attach'
+                ? 'border-primary text-primary font-semibold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
             >
               <Paperclip className="w-3.5 h-3.5" />
               Attach Files ({selectedDocs.length} chosen)
@@ -463,11 +462,10 @@ export default function AttachFilesModal({
             <button
               type="button"
               onClick={() => setActiveTab('library')}
-              className={`px-3.5 py-2 font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
-                activeTab === 'library'
-                  ? 'border-primary text-primary font-semibold'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
+              className={`px-3.5 py-2 font-medium border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'library'
+                ? 'border-primary text-primary font-semibold'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+                }`}
             >
               <FolderOpen className="w-3.5 h-3.5" />
               Manage Library ({documents.length} files)
@@ -507,11 +505,10 @@ export default function AttachFilesModal({
                   {/* A. Individual Email */}
                   <label
                     onClick={() => setAttachmentScope('individual')}
-                    className={`p-3 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${
-                      attachmentScope === 'individual'
-                        ? 'border-primary bg-primary/10 text-foreground shadow-xs font-medium'
-                        : 'border-border bg-card text-muted-foreground hover:border-border/80'
-                    }`}
+                    className={`p-3 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${attachmentScope === 'individual'
+                      ? 'border-primary bg-primary/10 text-foreground shadow-xs font-medium'
+                      : 'border-border bg-card text-muted-foreground hover:border-border/80'
+                      }`}
                   >
                     <div className="flex items-start gap-2">
                       <input
@@ -535,11 +532,10 @@ export default function AttachFilesModal({
                   {/* B. Selected Emails */}
                   <label
                     onClick={() => setAttachmentScope('selected')}
-                    className={`p-3 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${
-                      attachmentScope === 'selected'
-                        ? 'border-primary bg-primary/10 text-foreground shadow-xs font-medium'
-                        : 'border-border bg-card text-muted-foreground hover:border-border/80'
-                    }`}
+                    className={`p-3 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${attachmentScope === 'selected'
+                      ? 'border-primary bg-primary/10 text-foreground shadow-xs font-medium'
+                      : 'border-border bg-card text-muted-foreground hover:border-border/80'
+                      }`}
                   >
                     <div className="flex items-start gap-2">
                       <input
@@ -566,11 +562,10 @@ export default function AttachFilesModal({
                   {/* C. All Emails in Workspace */}
                   <label
                     onClick={() => setAttachmentScope('all')}
-                    className={`p-3 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${
-                      attachmentScope === 'all'
-                        ? 'border-primary bg-primary/10 text-foreground shadow-xs font-medium'
-                        : 'border-border bg-card text-muted-foreground hover:border-border/80'
-                    }`}
+                    className={`p-3 rounded-lg border cursor-pointer flex flex-col justify-between transition-all ${attachmentScope === 'all'
+                      ? 'border-primary bg-primary/10 text-foreground shadow-xs font-medium'
+                      : 'border-border bg-card text-muted-foreground hover:border-border/80'
+                      }`}
                   >
                     <div className="flex items-start gap-2">
                       <input
@@ -615,11 +610,10 @@ export default function AttachFilesModal({
                           key={doc.id}
                           type="button"
                           onClick={() => handleQuickAttachRecent(doc)}
-                          className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-2 border transition-all ${
-                            isSelected
-                              ? 'bg-primary text-primary-foreground border-primary font-medium shadow-xs'
-                              : 'bg-card text-foreground border-border hover:border-primary/60'
-                          }`}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs flex items-center gap-2 border transition-all ${isSelected
+                            ? 'bg-primary text-primary-foreground border-primary font-medium shadow-xs'
+                            : 'bg-card text-foreground border-border hover:border-primary/60'
+                            }`}
                         >
                           {getFileIcon(doc)}
                           <span className="truncate max-w-[180px]">{doc.name || doc.fileName}</span>
@@ -648,11 +642,10 @@ export default function AttachFilesModal({
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex items-center justify-center gap-3 ${
-                    isDragging
-                      ? 'border-primary bg-primary/10 scale-[1.005]'
-                      : 'border-border hover:border-primary/70 bg-muted/20 hover:bg-muted/40'
-                  }`}
+                  className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-all flex items-center justify-center gap-3 ${isDragging
+                    ? 'border-primary bg-primary/10 scale-[1.005]'
+                    : 'border-border hover:border-primary/70 bg-muted/20 hover:bg-muted/40'
+                    }`}
                 >
                   <input
                     ref={fileInputRef}
@@ -799,11 +792,10 @@ export default function AttachFilesModal({
                         key={t}
                         type="button"
                         onClick={() => setFilterType(t)}
-                        className={`px-2.5 py-1 rounded text-[11px] font-medium border capitalize ${
-                          filterType === t
-                            ? 'bg-primary text-primary-foreground border-primary'
-                            : 'bg-card text-muted-foreground border-border hover:bg-muted/40'
-                        }`}
+                        className={`px-2.5 py-1 rounded text-[11px] font-medium border capitalize ${filterType === t
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-card text-muted-foreground border-border hover:bg-muted/40'
+                          }`}
                       >
                         {t === 'all' ? 'All' : t}
                       </button>
@@ -823,11 +815,10 @@ export default function AttachFilesModal({
                       <div
                         key={doc.id}
                         onClick={() => toggleDocSelection(doc)}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between ${
-                          isSelected
-                            ? 'border-primary bg-primary/10 shadow-xs'
-                            : 'border-border bg-card hover:border-primary/50 hover:bg-muted/30'
-                        }`}
+                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all flex flex-col justify-between ${isSelected
+                          ? 'border-primary bg-primary/10 shadow-xs'
+                          : 'border-border bg-card hover:border-primary/50 hover:bg-muted/30'
+                          }`}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-start gap-2.5 min-w-0">
@@ -867,11 +858,10 @@ export default function AttachFilesModal({
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                             <div
-                              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                                isSelected
-                                  ? 'bg-primary border-primary text-primary-foreground'
-                                  : 'border-border bg-background'
-                              }`}
+                              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : 'border-border bg-background'
+                                }`}
                             >
                               {isSelected && <Check className="w-3.5 h-3.5 stroke-[2.5]" />}
                             </div>
