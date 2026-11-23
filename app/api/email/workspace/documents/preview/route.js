@@ -136,9 +136,13 @@ export async function GET(request) {
 
       debugInfo = {
         cleanId,
+        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+        serviceKeyStart: process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) : 'none',
+        anonKeyStart: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.slice(0, 10) : 'none',
         sRowsCount: sRows ? sRows.length : 0,
+        sRowsIds: (sRows || []).map(r => r.id),
         sErr: sErr ? sErr.message : null,
-        hasSettingsRow: !!settingsRow,
+        settingsRowId: settingsRow?.id,
         customDocsCount: settingsRow?.stats?.custom_documents?.length || 0,
         customDocIds: (settingsRow?.stats?.custom_documents || []).map((d) => d?.id),
       };
