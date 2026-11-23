@@ -125,18 +125,27 @@ export async function GET(request) {
     try {
       const { data: sRows } = await supabaseAdmin
         .from('email_campaigns')
-        .select('stats')
-        .filter('stats->>is_workspace_settings', 'eq', 'true')
+        .select('id, stats')
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(10);
 
-      if (sRows && sRows.length > 0 && Array.isArray(sRows[0].stats?.custom_documents)) {
-        doc = sRows[0].stats.custom_documents.find((d) => {
+      const settingsRow = (sRows || []).find(
+        (r) => r.stats?.is_workspace_settings === true || r.stats?.is_workspace_settings === 'true'
+      );
+
+      if (settingsRow && Array.isArray(settingsRow.stats?.custom_documents)) {
+        doc = settingsRow.stats.custom_documents.find((d) => {
           if (!d) return false;
           const dId = (d.id || '').toLowerCase();
           const dFile = (d.fileName || '').toLowerCase();
           const dName = (d.name || '').toLowerCase();
-          return dId === cleanId || dFile === cleanId || dName === cleanId;
+          return (
+            dId === cleanId ||
+            dFile === cleanId ||
+            dName === cleanId ||
+            cleanId.includes(dId) ||
+            dId.includes(cleanId)
+          );
         });
       }
     } catch (e) {
@@ -154,7 +163,13 @@ export async function GET(request) {
         const dId = (d.id || '').toLowerCase();
         const dFile = (d.fileName || '').toLowerCase();
         const dName = (d.name || '').toLowerCase();
-        return dId === cleanId || dFile === cleanId || dName === cleanId;
+        return (
+          dId === cleanId ||
+          dFile === cleanId ||
+          dName === cleanId ||
+          cleanId.includes(dId) ||
+          dId.includes(cleanId)
+        );
       });
     }
 
@@ -164,12 +179,11 @@ export async function GET(request) {
         const { data: batches } = await supabaseAdmin
           .from('email_campaigns')
           .select('stats')
-          .filter('stats->>is_personalized_workspace', 'eq', 'true')
           .order('created_at', { ascending: false })
-          .limit(1);
+          .limit(5);
 
-        if (batches && batches.length > 0) {
-          const campAtts = batches[0].stats?.campaign_attachments || [];
+        for (const batch of batches || []) {
+          const campAtts = batch.stats?.campaign_attachments || [];
           const foundCamp = campAtts.find((a) => {
             if (!a) return false;
             const aId = (a.id || '').toLowerCase();
@@ -179,8 +193,11 @@ export async function GET(request) {
           });
           if (foundCamp) {
             doc = foundCamp;
-          } else if (Array.isArray(batches[0].stats?.drafts)) {
-            for (const draft of batches[0].stats.drafts) {
+            break;
+          }
+
+          if (Array.isArray(batch.stats?.drafts)) {
+            for (const draft of batch.stats.drafts) {
               const found = (draft.assigned_attachments || []).find((a) => {
                 if (!a) return false;
                 const aId = (a.id || '').toLowerCase();
@@ -194,6 +211,7 @@ export async function GET(request) {
               }
             }
           }
+          if (doc) break;
         }
       } catch (batchErr) {
         console.warn('[preview] Batch lookup warning:', batchErr.message);
@@ -223,34 +241,33 @@ export async function GET(request) {
       storagePath = doc.url.split('/email-attachments/')[1];
     }
 
-    // Dynamic bucket search if storagePath is missing or hardcoded
-    if (!storagePath) {
+    // Strategy 1: Immediate direct fetch from public URL if doc.url is full HTTP URL
+    if (doc.url && doc.url.startsWith('http')) {
       try {
-        const cleanTarget = (fileName || id).toLowerCase().replace(/[^a-z0-9]/g, '');
-        const { data: files } = await supabaseAdmin.storage
-          .from('email-attachments')
-          .list('uploads', { limit: 100 });
-        if (files && files.length > 0) {
-          const matches = files.filter((f) => {
-            const cleanF = f.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return cleanF.includes(cleanTarget) || cleanTarget.includes(cleanF.replace(/^\d+/, ''));
-          });
-          if (matches.length > 0) {
-            matches.sort((a, b) => b.name.localeCompare(a.name));
-            storagePath = `uploads/${matches[0].name}`;
-          }
+        const fetchRes = await fetch(doc.url);
+        if (fetchRes.ok) {
+          buffer = Buffer.from(await fetchRes.arrayBuffer());
         }
-      } catch (listErr) {
-        console.warn('[preview] storage list fallback warning:', listErr.message);
+      } catch (fErr) {
+        console.warn('[preview] doc.url fetch warning:', fErr.message);
       }
     }
 
-    if (!storagePath && (id.startsWith('uploads/') || id.startsWith('campaigns/') || id.startsWith('audit-docs/'))) {
-      storagePath = id;
+    // Strategy 2: Supabase Storage direct public CDN fetch using storagePath
+    if (!buffer && storagePath) {
+      try {
+        const publicUrl = `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/${storagePath}`;
+        const fetchRes = await fetch(publicUrl);
+        if (fetchRes.ok) {
+          buffer = Buffer.from(await fetchRes.arrayBuffer());
+        }
+      } catch (pErr) {
+        console.warn('[preview] publicUrl fetch warning:', pErr.message);
+      }
     }
 
-    // Strategy A: Direct Supabase Storage download if storagePath exists
-    if (storagePath) {
+    // Strategy 3: Supabase Storage API download
+    if (!buffer && storagePath) {
       try {
         const { data: blob, error: downloadErr } = await supabaseAdmin.storage
           .from('email-attachments')
@@ -264,21 +281,38 @@ export async function GET(request) {
       }
     }
 
-    // Strategy B: Public Supabase URL direct fetch if storagePath or doc.url exists
-    if (!buffer && (storagePath || (doc.url && doc.url.startsWith('http')))) {
-      const publicUrl = doc.url && doc.url.startsWith('http')
-        ? doc.url
-        : supabaseAdmin.storage.from('email-attachments').getPublicUrl(storagePath)?.data?.publicUrl;
+    // Strategy 4: Dynamic search in Supabase Storage uploads bucket
+    if (!buffer) {
+      try {
+        const cleanTarget = (fileName || id).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const { data: files } = await supabaseAdmin.storage
+          .from('email-attachments')
+          .list('uploads', { limit: 100 });
 
-      if (publicUrl) {
-        try {
-          const fetchRes = await fetch(publicUrl);
-          if (fetchRes.ok) {
-            buffer = Buffer.from(await fetchRes.arrayBuffer());
+        if (files && files.length > 0) {
+          const matches = files.filter((f) => {
+            const cleanF = f.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return (
+              cleanF.includes(cleanTarget) ||
+              cleanTarget.includes(cleanF.replace(/^\d+/, '')) ||
+              (cleanTarget.includes('bentonite') && cleanF.includes('bentonite')) ||
+              (cleanTarget.includes('company') && cleanF.includes('company')) ||
+              (cleanTarget.includes('bleaching') && cleanF.includes('bleaching'))
+            );
+          });
+
+          if (matches.length > 0) {
+            matches.sort((a, b) => b.name.localeCompare(a.name));
+            const bestFile = matches[0].name;
+            const publicUrl = `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/uploads/${bestFile}`;
+            const fetchRes = await fetch(publicUrl);
+            if (fetchRes.ok) {
+              buffer = Buffer.from(await fetchRes.arrayBuffer());
+            }
           }
-        } catch (fErr) {
-          console.warn('[preview] URL fetch warning:', fErr.message);
         }
+      } catch (listErr) {
+        console.warn('[preview] storage list fallback warning:', listErr.message);
       }
     }
 
@@ -359,8 +393,9 @@ export async function GET(request) {
         'Content-Type': mimeType,
         'Content-Length': buffer.length.toString(),
         'Content-Disposition': `${disposition}; filename="${safeAsciiName}"`,
-        'Cache-Control': 'private, max-age=3600',
+        'Cache-Control': 'public, max-age=3600',
         'X-Content-Type-Options': 'nosniff',
+        'Access-Control-Allow-Origin': '*',
       },
     });
   } catch (err) {

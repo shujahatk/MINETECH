@@ -1381,7 +1381,9 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
 
       {/* Document Preview Modal */}
       {previewModalDoc && (() => {
-        const previewUrl = `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewModalDoc.id || previewModalDoc.fileName)}`;
+        const directHttpUrl = (previewModalDoc.url && previewModalDoc.url.startsWith('http')) ? previewModalDoc.url : null;
+        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewModalDoc.id || previewModalDoc.fileName)}`;
+        const downloadUrl = directHttpUrl || `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
         const isPdf = previewModalDoc.fileType?.includes('pdf') || (previewModalDoc.fileName || '').toLowerCase().endsWith('.pdf');
         const isImage = previewModalDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewModalDoc.fileName || '');
 
@@ -1409,8 +1411,10 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                     Open in New Tab
                   </a>
                   <a
-                    href={`${previewUrl}&download=1`}
+                    href={downloadUrl}
                     download={previewModalDoc.fileName || 'document.pdf'}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md bg-muted/50 border border-border font-medium"
                     title="Download document to computer"
                   >

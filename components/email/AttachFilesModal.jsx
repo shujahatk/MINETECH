@@ -1266,7 +1266,9 @@ export default function AttachFilesModal({
 
       {/* Document Preview Modal */}
       {previewDoc && (() => {
-        const previewUrl = `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewDoc.id || previewDoc.fileName)}`;
+        const directHttpUrl = (previewDoc.url && previewDoc.url.startsWith('http')) ? previewDoc.url : null;
+        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewDoc.id || previewDoc.fileName)}`;
+        const downloadUrl = directHttpUrl || `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
         const isPdf = previewDoc.fileType?.includes('pdf') || (previewDoc.fileName || '').toLowerCase().endsWith('.pdf');
         const isImage = previewDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewDoc.fileName || '');
 
@@ -1297,8 +1299,10 @@ export default function AttachFilesModal({
                     Open in New Tab
                   </a>
                   <a
-                    href={`${previewUrl}&download=1`}
+                    href={downloadUrl}
                     download={previewDoc.fileName || 'document.pdf'}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md bg-muted/50 border border-border font-medium"
                     title="Download document to computer"
                   >

@@ -1786,7 +1786,9 @@ export default function UnifiedEmailWorkspace() {
 
       {/* Campaign Attachment File Preview Modal */}
       {previewAttachmentDoc && (() => {
-        const previewUrl = `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewAttachmentDoc.id || previewAttachmentDoc.fileName)}`;
+        const directHttpUrl = (previewAttachmentDoc.url && previewAttachmentDoc.url.startsWith('http')) ? previewAttachmentDoc.url : null;
+        const previewUrl = directHttpUrl || `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewAttachmentDoc.id || previewAttachmentDoc.fileName)}`;
+        const downloadUrl = directHttpUrl || `${previewUrl}${previewUrl.includes('?') ? '&' : '?'}download=1`;
         const isPdf = previewAttachmentDoc.fileType?.includes('pdf') || (previewAttachmentDoc.fileName || '').toLowerCase().endsWith('.pdf');
         const isImage = previewAttachmentDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewAttachmentDoc.fileName || '');
 
@@ -1817,8 +1819,10 @@ export default function UnifiedEmailWorkspace() {
                     Open in New Tab
                   </a>
                   <a
-                    href={`${previewUrl}&download=1`}
+                    href={downloadUrl}
                     download={previewAttachmentDoc.fileName || 'document.pdf'}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md bg-muted/50 border border-border font-medium"
                     title="Download document to computer"
                   >
