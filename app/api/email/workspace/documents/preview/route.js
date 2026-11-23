@@ -136,14 +136,10 @@ export async function GET(request) {
 
       debugInfo = {
         cleanId,
-        supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-        serviceKeyStart: process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) : 'none',
-        anonKeyStart: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.slice(0, 10) : 'none',
-        sRowsCount: sRows ? sRows.length : 0,
-        sRowsIds: (sRows || []).map(r => r.id),
-        sErr: sErr ? sErr.message : null,
         settingsRowId: settingsRow?.id,
-        customDocsCount: settingsRow?.stats?.custom_documents?.length || 0,
+        statsKeys: Object.keys(settingsRow?.stats || {}),
+        rawStatsCustomDocs: settingsRow?.stats?.custom_documents,
+        customDocsCount: Array.isArray(settingsRow?.stats?.custom_documents) ? settingsRow.stats.custom_documents.length : 'not_array',
         customDocIds: (settingsRow?.stats?.custom_documents || []).map((d) => d?.id),
       };
 
@@ -306,6 +302,7 @@ export async function GET(request) {
           .list('uploads', { limit: 100 });
 
         if (files && files.length > 0) {
+          const idDigits = (id.match(/\d{6,}/) || [''])[0];
           const matches = files.filter((f) => {
             const cleanF = f.name.toLowerCase().replace(/[^a-z0-9]/g, '');
             return (
@@ -313,13 +310,16 @@ export async function GET(request) {
               cleanTarget.includes(cleanF.replace(/^\d+/, '')) ||
               (cleanTarget.includes('bentonite') && cleanF.includes('bentonite')) ||
               (cleanTarget.includes('company') && cleanF.includes('company')) ||
-              (cleanTarget.includes('bleaching') && cleanF.includes('bleaching'))
+              (cleanTarget.includes('bleaching') && cleanF.includes('bleaching')) ||
+              (idDigits && idDigits.length >= 6 && f.name.startsWith(idDigits.slice(0, 6)))
             );
           });
 
-          if (matches.length > 0) {
-            matches.sort((a, b) => b.name.localeCompare(a.name));
-            const bestFile = matches[0].name;
+          // If still no direct matches and ID indicates a custom upload, use the newest file in uploads
+          const candidateFiles = matches.length > 0 ? matches : (id.startsWith('custom-') ? files : []);
+          if (candidateFiles.length > 0) {
+            candidateFiles.sort((a, b) => b.name.localeCompare(a.name));
+            const bestFile = candidateFiles[0].name;
             const publicUrl = `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/uploads/${bestFile}`;
             const fetchRes = await fetch(publicUrl);
             if (fetchRes.ok) {
