@@ -264,6 +264,19 @@ export default function AttachFilesModal({
       const isSelected = scope === 'selected';
       const isIndividual = scope === 'individual' && currentDraftId;
 
+      // Sanitize selected attachments to lightweight associations (~150 bytes each)
+      // Eliminates multi-megabyte base64 duplication and completely prevents statement timeout!
+      const lightweightAttachments = selectedDocs.map((d) => ({
+        id: d.id,
+        name: d.name,
+        fileName: d.fileName,
+        fileSize: d.fileSize,
+        fileType: d.fileType,
+        url: d.url || '',
+        storagePath: d.storagePath || '',
+        isCustom: Boolean(d.isCustom),
+      }));
+
       // Handle Campaign Recipients scope if campaignId is provided
       if (campaignId) {
         const targetRecipientIds = isAll
@@ -277,7 +290,7 @@ export default function AttachFilesModal({
             action: 'bulk_attachments',
             applyToAll: isAll,
             recipientIds: targetRecipientIds,
-            attachments: selectedDocs,
+            attachments: lightweightAttachments,
             mode: attachMode,
           }),
         });
@@ -289,13 +302,13 @@ export default function AttachFilesModal({
 
         toast.success(
           isIndividual
-            ? `Attached ${selectedDocs.length} file(s) to this recipient!`
+            ? `Attached ${lightweightAttachments.length} file(s) to this recipient!`
             : isSelected
-            ? `Attached ${selectedDocs.length} file(s) to ${selectedDraftIds.length} selected recipients!`
-            : `Attached ${selectedDocs.length} file(s) to all campaign recipients!`
+            ? `Attached ${lightweightAttachments.length} file(s) to ${selectedDraftIds.length} selected recipients!`
+            : `Attached ${lightweightAttachments.length} file(s) to all campaign recipients!`
         );
 
-        onAttachmentsApplied?.(data, selectedDocs);
+        onAttachmentsApplied?.(data, lightweightAttachments);
         setIsConfirmAllOpen(false);
         onClose();
         return;
@@ -313,7 +326,7 @@ export default function AttachFilesModal({
           action: 'bulk_attachments',
           applyToAll: isAll,
           draftIds: targetDraftIds,
-          attachments: selectedDocs,
+          attachments: lightweightAttachments,
           mode: attachMode,
         }),
       });
@@ -1154,73 +1167,103 @@ export default function AttachFilesModal({
       )}
 
       {/* Document Preview Modal */}
-      {previewDoc && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <Card className="w-full max-w-3xl bg-card border-border text-foreground shadow-dialog flex flex-col h-[80vh] overflow-hidden rounded-xl">
-            <div className="p-4 px-6 border-b border-border bg-muted/20 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                {getFileIcon(previewDoc)}
-                <div>
-                  <h4 className="text-sm font-semibold text-foreground truncate">
-                    {previewDoc.name || previewDoc.fileName}
-                  </h4>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {previewDoc.fileName} &bull; {previewDoc.fileSize}
-                  </p>
+      {previewDoc && (() => {
+        const previewUrl = `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewDoc.id || previewDoc.fileName)}`;
+        const isPdf = previewDoc.fileType?.includes('pdf') || (previewDoc.fileName || '').toLowerCase().endsWith('.pdf');
+        const isImage = previewDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewDoc.fileName || '');
+
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <Card className="w-full max-w-4xl bg-card border-border text-foreground shadow-dialog flex flex-col h-[85vh] overflow-hidden rounded-xl">
+              <div className="p-4 px-6 border-b border-border bg-muted/20 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  {getFileIcon(previewDoc)}
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground truncate max-w-md">
+                      {previewDoc.name || previewDoc.fileName}
+                    </h4>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {previewDoc.fileName} &bull; {previewDoc.fileSize}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {previewDoc.url && (
+                <div className="flex items-center gap-2">
                   <a
-                    href={previewDoc.url}
+                    href={previewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-primary hover:underline px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                    title="Open document in a new tab"
                   >
-                    <ExternalLink className="w-3 h-3" />
+                    <ExternalLink className="w-3.5 h-3.5" />
                     Open in New Tab
                   </a>
-                )}
-                <button
-                  onClick={() => setPreviewDoc(null)}
-                  className="p-1 rounded text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                  <a
+                    href={`${previewUrl}&download=1`}
+                    download={previewDoc.fileName || 'document.pdf'}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md bg-muted/50 border border-border font-medium"
+                    title="Download document to computer"
+                  >
+                    Download
+                  </a>
+                  <button
+                    onClick={() => setPreviewDoc(null)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-1"
+                    title="Close preview"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="flex-1 bg-muted/20 p-4 overflow-hidden flex items-center justify-center">
-              {previewDoc.dataBase64 ? (
-                previewDoc.fileType?.includes('image') ? (
+              <div className="flex-1 bg-muted/10 p-2 overflow-hidden flex items-center justify-center">
+                {isImage ? (
                   <img
-                    src={`data:${previewDoc.fileType || 'image/png'};base64,${previewDoc.dataBase64}`}
+                    src={previewUrl}
                     alt={previewDoc.name}
                     className="max-h-full max-w-full object-contain rounded shadow"
                   />
-                ) : (
+                ) : isPdf ? (
                   <iframe
-                    src={`data:application/pdf;base64,${previewDoc.dataBase64}#toolbar=0`}
+                    src={previewUrl}
                     title={previewDoc.name}
-                    className="w-full h-full rounded border border-border bg-white"
+                    className="w-full h-full rounded-lg border border-border bg-white"
                   />
-                )
-              ) : previewDoc.url ? (
-                <iframe
-                  src={previewDoc.url}
-                  title={previewDoc.name}
-                  className="w-full h-full rounded border border-border bg-white"
-                />
-              ) : (
-                <div className="text-center p-6 text-muted-foreground space-y-2">
-                  <FileText className="w-10 h-10 mx-auto text-muted-foreground/40" />
-                  <p className="text-xs">Document preview not stored locally.</p>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
+                ) : (
+                  <div className="text-center p-8 space-y-4">
+                    <div className="p-4 rounded-full bg-primary/10 text-primary w-fit mx-auto">
+                      {getFileIcon(previewDoc)}
+                    </div>
+                    <div>
+                      <h4 className="text-base font-semibold text-foreground">{previewDoc.name || previewDoc.fileName}</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This format ({previewDoc.fileType || 'Document'}) cannot be displayed directly inline.
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 flex items-center gap-1.5"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open in Viewer
+                      </a>
+                      <a
+                        href={`${previewUrl}&download=1`}
+                        download={previewDoc.fileName}
+                        className="px-4 py-2 rounded-lg bg-muted text-foreground border border-border text-xs font-semibold hover:bg-muted/80"
+                      >
+                        Download File
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }

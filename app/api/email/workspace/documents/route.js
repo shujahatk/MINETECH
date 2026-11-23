@@ -52,6 +52,7 @@ export async function GET(request) {
     }
 
     const enrichedDocs = documents.map((doc) => {
+      const { dataBase64, ...lightweightDoc } = doc;
       const matchingDrafts = activeBatchDrafts.filter(
         (d) =>
           Array.isArray(d.assigned_attachments) &&
@@ -61,7 +62,7 @@ export async function GET(request) {
       );
 
       return {
-        ...doc,
+        ...lightweightDoc,
         usage: {
           activeDraftsCount: matchingDrafts.length,
           companies: matchingDrafts.map(
@@ -163,9 +164,10 @@ export async function POST(request) {
         fileType: file.type || 'application/pdf',
         category,
         description,
-        dataBase64: base64Data,
         url: storageUrl,
         storagePath,
+        uploadedBy: auth?.user?.email || 'rauf@mine-tech.be',
+        createdAt: new Date().toISOString(),
       };
     } else {
       const body = await request.json();

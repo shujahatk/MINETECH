@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import { supabaseAdmin } from '@/lib/supabase';
 import { formatBodyHtml } from '@/lib/services/personalizedEmailExtractor';
+import { toLightweightAttachment } from '@/lib/services/documentLibraryService';
 
 export const dynamic = 'force-dynamic';
 
@@ -197,9 +198,12 @@ export async function PATCH(request, { params }) {
       });
     }
 
-    // 4. Bulk Assign Attachments to selected or all campaign recipients
+    // 4. Bulk Assign Attachments to selected or all campaign recipients (Lightweight & Chunked)
     else if (action === 'bulk_attachments') {
       const { recipientIds, attachments = [], mode = 'append', applyToAll = false } = body;
+      const sanitizedNew = (Array.isArray(attachments) ? attachments : [])
+        .map(toLightweightAttachment)
+        .filter(Boolean);
 
       let query = supabaseAdmin
         .from('email_recipients')
@@ -213,25 +217,33 @@ export async function PATCH(request, { params }) {
       const { data: targetRecipients, error: fetchErr } = await query;
       if (fetchErr) throw fetchErr;
 
-      for (const rec of targetRecipients || []) {
-        const tokens = rec.tokens || {};
-        let updatedAtts = attachments;
-        if (mode === 'append' && Array.isArray(tokens.attachments)) {
-          const existingNames = new Set(tokens.attachments.map((a) => a.fileName || a.name || a.id));
-          const toAdd = attachments.filter((a) => !existingNames.has(a.fileName || a.name || a.id));
-          updatedAtts = [...tokens.attachments, ...toAdd];
-        }
+      const recList = targetRecipients || [];
+      const CHUNK_SIZE = 25;
+      for (let i = 0; i < recList.length; i += CHUNK_SIZE) {
+        const chunk = recList.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map((rec) => {
+            const tokens = rec.tokens || {};
+            let updatedAtts = sanitizedNew;
+            if (mode === 'append' && Array.isArray(tokens.attachments)) {
+              const existingLightweight = tokens.attachments.map(toLightweightAttachment).filter(Boolean);
+              const existingNames = new Set(existingLightweight.map((a) => a.fileName || a.name || a.id));
+              const toAdd = sanitizedNew.filter((a) => !existingNames.has(a.fileName || a.name || a.id));
+              updatedAtts = [...existingLightweight, ...toAdd];
+            }
 
-        tokens.attachments = updatedAtts;
-        await supabaseAdmin
-          .from('email_recipients')
-          .update({ tokens, updated_at: nowIso })
-          .eq('id', rec.id);
+            tokens.attachments = updatedAtts;
+            return supabaseAdmin
+              .from('email_recipients')
+              .update({ tokens, updated_at: nowIso })
+              .eq('id', rec.id);
+          })
+        );
       }
 
       return NextResponse.json({
         success: true,
-        message: `Attachments updated for ${(targetRecipients || []).length} recipient(s).`,
+        message: `Attachments updated for ${recList.length} recipient(s).`,
       });
     }
 

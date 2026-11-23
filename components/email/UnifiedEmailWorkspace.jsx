@@ -1645,48 +1645,105 @@ export default function UnifiedEmailWorkspace() {
       )}
 
       {/* Campaign Attachment File Preview Modal */}
-      {previewAttachmentDoc && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-background/80 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-card border border-border rounded-xl shadow-dialog w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">
-                  {previewAttachmentDoc.fileName || previewAttachmentDoc.name}
-                </span>
-                <span className="text-xs text-muted-foreground font-mono">
-                  ({previewAttachmentDoc.fileSize})
-                </span>
-              </div>
-              <button
-                onClick={() => setPreviewAttachmentDoc(null)}
-                className="p-1 rounded text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4 flex-1 overflow-auto flex items-center justify-center min-h-[400px] bg-muted/10">
-              {previewAttachmentDoc.url ? (
-                <iframe
-                  src={previewAttachmentDoc.url}
-                  className="w-full h-[650px] rounded border border-border"
-                  title="Document Preview"
-                />
-              ) : (
-                <div className="text-center p-8 space-y-2">
-                  <Paperclip className="w-12 h-12 text-primary mx-auto" />
-                  <p className="text-sm font-medium text-foreground">
-                    {previewAttachmentDoc.fileName || previewAttachmentDoc.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Document stored in campaign assets and ready for outgoing MIME attachment.
-                  </p>
+      {previewAttachmentDoc && (() => {
+        const previewUrl = `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewAttachmentDoc.id || previewAttachmentDoc.fileName)}`;
+        const isPdf = previewAttachmentDoc.fileType?.includes('pdf') || (previewAttachmentDoc.fileName || '').toLowerCase().endsWith('.pdf');
+        const isImage = previewAttachmentDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewAttachmentDoc.fileName || '');
+
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <Card className="w-full max-w-4xl bg-card border-border text-foreground shadow-dialog flex flex-col h-[85vh] overflow-hidden rounded-xl">
+              <div className="flex items-center justify-between p-4 px-6 border-b border-border bg-muted/20">
+                <div className="flex items-center gap-2.5">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground truncate max-w-md">
+                      {previewAttachmentDoc.fileName || previewAttachmentDoc.name}
+                    </h4>
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {previewAttachmentDoc.fileName} {previewAttachmentDoc.fileSize ? `• ${previewAttachmentDoc.fileSize}` : ''}
+                    </p>
+                  </div>
                 </div>
-              )}
-            </div>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                    title="Open document in a new tab"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Open in New Tab
+                  </a>
+                  <a
+                    href={`${previewUrl}&download=1`}
+                    download={previewAttachmentDoc.fileName || 'document.pdf'}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md bg-muted/50 border border-border font-medium"
+                    title="Download document to computer"
+                  >
+                    Download
+                  </a>
+                  <button
+                    onClick={() => setPreviewAttachmentDoc(null)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-1"
+                    title="Close preview"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 bg-muted/10 p-2 overflow-hidden flex items-center justify-center">
+                {isImage ? (
+                  <img
+                    src={previewUrl}
+                    alt={previewAttachmentDoc.name || previewAttachmentDoc.fileName}
+                    className="max-h-full max-w-full object-contain rounded shadow"
+                  />
+                ) : isPdf ? (
+                  <iframe
+                    src={previewUrl}
+                    title={previewAttachmentDoc.name || previewAttachmentDoc.fileName}
+                    className="w-full h-full rounded-lg border border-border bg-white"
+                  />
+                ) : (
+                  <div className="text-center p-8 space-y-4">
+                    <div className="p-4 rounded-full bg-primary/10 text-primary w-fit mx-auto">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-semibold text-foreground">
+                        {previewAttachmentDoc.fileName || previewAttachmentDoc.name}
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This format ({previewAttachmentDoc.fileType || 'Document'}) cannot be displayed directly inline.
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 flex items-center gap-1.5"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open in Viewer
+                      </a>
+                      <a
+                        href={`${previewUrl}&download=1`}
+                        download={previewAttachmentDoc.fileName || 'document'}
+                        className="px-4 py-2 rounded-lg bg-muted text-foreground border border-border text-xs font-semibold hover:bg-muted/80"
+                      >
+                        Download File
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

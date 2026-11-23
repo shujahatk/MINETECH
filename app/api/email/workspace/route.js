@@ -16,6 +16,7 @@ import {
   getActiveGmailSignature,
   OFFICIAL_GMAIL_SIGNATURE_HTML
 } from '@/lib/services/gmailSignatureService';
+import { toLightweightAttachment } from '@/lib/services/documentLibraryService';
 
 export const dynamic = 'force-dynamic';
 
@@ -479,14 +480,16 @@ export async function PATCH(request) {
       const mode = body.mode || 'append'; // Default to safe 'append'
       const newAttachments = Array.isArray(attachments) ? attachments : [];
 
-      // Deduplicate new attachments against themselves first
+      // Deduplicate new attachments and strictly convert to lightweight associations (~150 bytes each)
+      // Eliminates multi-megabyte base64 duplication and completely prevents PostgreSQL statement timeouts!
       const seenKeys = new Set();
       const uniqueNewAttachments = [];
       for (const att of newAttachments) {
-        const key = att.id || att.fileName || att.name;
+        const lightweight = toLightweightAttachment(att);
+        const key = lightweight?.id || lightweight?.fileName || lightweight?.name;
         if (key && !seenKeys.has(key)) {
           seenKeys.add(key);
-          uniqueNewAttachments.push(att);
+          uniqueNewAttachments.push(lightweight);
         }
       }
 
@@ -496,8 +499,9 @@ export async function PATCH(request) {
           updatedCount++;
           let updatedAtts = uniqueNewAttachments;
           if (mode === 'append' && Array.isArray(d.assigned_attachments)) {
+            const existingLightweight = d.assigned_attachments.map(toLightweightAttachment).filter(Boolean);
             const existingKeys = new Set(
-              d.assigned_attachments.map((a) => a.id || a.fileName || a.name)
+              existingLightweight.map((a) => a.id || a.fileName || a.name)
             );
             const toAdd = uniqueNewAttachments.filter(
               (a) =>
@@ -505,7 +509,7 @@ export async function PATCH(request) {
                 !existingKeys.has(a.fileName) &&
                 !existingKeys.has(a.name)
             );
-            updatedAtts = [...d.assigned_attachments, ...toAdd];
+            updatedAtts = [...existingLightweight, ...toAdd];
           }
 
           return {
@@ -516,6 +520,10 @@ export async function PATCH(request) {
         }
         return d;
       });
+
+      if (applyToAll) {
+        targetBatch.stats.campaign_attachments = uniqueNewAttachments;
+      }
 
       // Record attached documents in persistent recently_used_doc_ids
       try {
@@ -614,10 +622,18 @@ export async function PATCH(request) {
       });
     }
 
+    // Ensure all drafts have lightweight attachment associations (no base64 blobs in database)
+    const sanitizedDrafts = drafts.map((d) => ({
+      ...d,
+      assigned_attachments: Array.isArray(d.assigned_attachments)
+        ? d.assigned_attachments.map(toLightweightAttachment).filter(Boolean)
+        : [],
+    }));
+
     // Save updated batch stats back to Supabase
     const updatedStats = {
       ...targetBatch.stats,
-      drafts,
+      drafts: sanitizedDrafts,
       updated_at: nowIso,
     };
 

@@ -1348,70 +1348,102 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
       />
 
       {/* Document Preview Modal */}
-      {previewModalDoc && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <Card className="w-full max-w-3xl bg-card border-border text-foreground shadow-dialog flex flex-col h-[80vh] overflow-hidden rounded-xl">
-            <div className="p-4 px-6 border-b border-border bg-muted/20 flex items-center justify-between">
-              <div>
-                <h4 className="text-sm font-semibold text-foreground truncate">
-                  {previewModalDoc.name || previewModalDoc.fileName}
-                </h4>
-                <p className="text-xs text-muted-foreground font-mono">
-                  {previewModalDoc.fileName} &bull; {previewModalDoc.fileSize || 'Attachment'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                {previewModalDoc.url && (
+      {previewModalDoc && (() => {
+        const previewUrl = `/api/email/workspace/documents/preview?id=${encodeURIComponent(previewModalDoc.id || previewModalDoc.fileName)}`;
+        const isPdf = previewModalDoc.fileType?.includes('pdf') || (previewModalDoc.fileName || '').toLowerCase().endsWith('.pdf');
+        const isImage = previewModalDoc.fileType?.includes('image') || /\.(png|jpe?g|webp|gif|svg)$/i.test(previewModalDoc.fileName || '');
+
+        return (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <Card className="w-full max-w-4xl bg-card border-border text-foreground shadow-dialog flex flex-col h-[85vh] overflow-hidden rounded-xl">
+              <div className="p-4 px-6 border-b border-border bg-muted/20 flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground truncate max-w-md">
+                    {previewModalDoc.name || previewModalDoc.fileName}
+                  </h4>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {previewModalDoc.fileName} &bull; {previewModalDoc.fileSize || 'Attachment'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
                   <a
-                    href={previewModalDoc.url}
+                    href={previewUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-primary hover:underline px-2.5 py-1 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                    className="flex items-center gap-1.5 text-xs text-primary hover:underline px-3 py-1.5 rounded-md bg-primary/10 border border-primary/20 font-medium"
+                    title="Open document in a new tab"
                   >
-                    <ExternalLink className="w-3 h-3" />
+                    <ExternalLink className="w-3.5 h-3.5" />
                     Open in New Tab
                   </a>
-                )}
-                <button
-                  onClick={() => setPreviewModalDoc(null)}
-                  className="p-1 rounded text-muted-foreground hover:text-foreground"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                  <a
+                    href={`${previewUrl}&download=1`}
+                    download={previewModalDoc.fileName || 'document.pdf'}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-md bg-muted/50 border border-border font-medium"
+                    title="Download document to computer"
+                  >
+                    Download
+                  </a>
+                  <button
+                    onClick={() => setPreviewModalDoc(null)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors ml-1"
+                    title="Close preview"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <div className="flex-1 bg-muted/20 p-4 overflow-hidden flex items-center justify-center">
-              {previewModalDoc.dataBase64 ? (
-                previewModalDoc.fileType?.includes('image') ? (
+              <div className="flex-1 bg-muted/10 p-2 overflow-hidden flex items-center justify-center">
+                {isImage ? (
                   <img
-                    src={`data:${previewModalDoc.fileType || 'image/png'};base64,${previewModalDoc.dataBase64}`}
-                    alt={previewModalDoc.name}
+                    src={previewUrl}
+                    alt={previewModalDoc.name || previewModalDoc.fileName}
                     className="max-h-full max-w-full object-contain rounded shadow"
                   />
-                ) : (
+                ) : isPdf ? (
                   <iframe
-                    src={`data:application/pdf;base64,${previewModalDoc.dataBase64}#toolbar=0`}
-                    title={previewModalDoc.name}
-                    className="w-full h-full rounded border border-border bg-white"
+                    src={previewUrl}
+                    title={previewModalDoc.name || previewModalDoc.fileName}
+                    className="w-full h-full rounded-lg border border-border bg-white"
                   />
-                )
-              ) : previewModalDoc.url ? (
-                <iframe
-                  src={previewModalDoc.url}
-                  title={previewModalDoc.name}
-                  className="w-full h-full rounded border border-border bg-white"
-                />
-              ) : (
-                <div className="text-center p-6 text-muted-foreground space-y-2">
-                  <FileText className="w-10 h-10 mx-auto text-muted-foreground/40" />
-                  <p className="text-xs">Document preview not stored locally.</p>
-                </div>
-              )}
-            </div>
-          </Card>
-        </div>
-      )}
+                ) : (
+                  <div className="text-center p-8 space-y-4">
+                    <div className="p-4 rounded-full bg-primary/10 text-primary w-fit mx-auto">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-semibold text-foreground">
+                        {previewModalDoc.fileName || previewModalDoc.name}
+                      </h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        This format ({previewModalDoc.fileType || 'Document'}) cannot be displayed directly inline.
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center gap-3">
+                      <a
+                        href={previewUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 flex items-center gap-1.5"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open in Viewer
+                      </a>
+                      <a
+                        href={`${previewUrl}&download=1`}
+                        download={previewModalDoc.fileName || 'document'}
+                        className="px-4 py-2 rounded-lg bg-muted text-foreground border border-border text-xs font-semibold hover:bg-muted/80"
+                      >
+                        Download File
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
     </div>
   );
 }
