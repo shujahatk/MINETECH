@@ -109,9 +109,27 @@ export async function GET(request) {
     const effectiveSigHtml = configuredSig?.bodyHtml || activeGmailSig?.signatureHtml || OFFICIAL_GMAIL_SIGNATURE_HTML;
     const effectiveSigName = configuredSig?.senderName || activeGmailSig?.displayName || 'Abdullah Rauf';
     const effectiveSigEmail = configuredSig?.senderEmail || activeGmailSig?.sendAsEmail || 'rauf@mine-tech.be';
-    const campaignAttachments = Array.isArray(batchRecord.stats?.campaign_attachments)
+    let campaignAttachments = Array.isArray(batchRecord.stats?.campaign_attachments)
       ? batchRecord.stats.campaign_attachments
       : [];
+
+    // Fallback: If campaign_attachments is empty, aggregate unique attachments from active drafts
+    if (campaignAttachments.length === 0 && Array.isArray(batchRecord.stats?.drafts)) {
+      const seen = new Set();
+      const derived = [];
+      for (const d of batchRecord.stats.drafts) {
+        for (const a of d.assigned_attachments || []) {
+          const k = a.id || a.fileName || a.name;
+          if (k && !seen.has(k)) {
+            seen.add(k);
+            derived.push(a);
+          }
+        }
+      }
+      if (derived.length > 0) {
+        campaignAttachments = derived;
+      }
+    }
 
     let needsBatchSave = false;
     const rawDrafts = batchRecord.stats.drafts || [];
@@ -470,71 +488,111 @@ export async function PATCH(request) {
       });
     }
 
-    // 5. Bulk Assign Attachments (to individual, selected, or all emails)
-    else if (action === 'bulk_attachments') {
+    // 5. Bulk Assign or Detach Attachments (to individual, selected, or all emails)
+    else if (action === 'bulk_attachments' || action === 'detach_attachment') {
       const applyToAll = Boolean(body.applyToAll) || draftIds === 'all' || (!draftIds && !draftId);
       const targetIdList = Array.isArray(draftIds)
         ? draftIds
         : (draftId ? [draftId] : (body.draftId ? [body.draftId] : []));
       const targetIds = applyToAll ? null : new Set(targetIdList);
-      const mode = body.mode || 'append'; // Default to safe 'append'
+      const mode = action === 'detach_attachment' ? 'detach' : (body.mode || 'append');
       const newAttachments = Array.isArray(attachments) ? attachments : [];
 
-      // Deduplicate new attachments and strictly convert to lightweight associations (~150 bytes each)
-      // Eliminates multi-megabyte base64 duplication and completely prevents PostgreSQL statement timeouts!
-      const seenKeys = new Set();
-      const uniqueNewAttachments = [];
-      for (const att of newAttachments) {
-        const lightweight = toLightweightAttachment(att);
-        const key = lightweight?.id || lightweight?.fileName || lightweight?.name;
-        if (key && !seenKeys.has(key)) {
-          seenKeys.add(key);
-          uniqueNewAttachments.push(lightweight);
-        }
-      }
+      if (mode === 'detach') {
+        const rawToDetach = body.attachmentId
+          ? [body.attachmentId]
+          : (Array.isArray(body.attachments) ? body.attachments : [body.attachment]);
+        const detachKeys = new Set(
+          rawToDetach
+            .filter(Boolean)
+            .map((a) => (typeof a === 'object' ? (a.id || a.fileName || a.name) : a))
+        );
+        const isRemoveAll = detachKeys.size === 0 || detachKeys.has('all') || detachKeys.has('clear');
 
-      let updatedCount = 0;
-      drafts = drafts.map((d) => {
-        if (!targetIds || targetIds.has(d.id)) {
-          updatedCount++;
-          let updatedAtts = uniqueNewAttachments;
-          if (mode === 'append' && Array.isArray(d.assigned_attachments)) {
-            const existingLightweight = d.assigned_attachments.map(toLightweightAttachment).filter(Boolean);
-            const existingKeys = new Set(
-              existingLightweight.map((a) => a.id || a.fileName || a.name)
-            );
-            const toAdd = uniqueNewAttachments.filter(
-              (a) =>
-                !existingKeys.has(a.id) &&
-                !existingKeys.has(a.fileName) &&
-                !existingKeys.has(a.name)
-            );
-            updatedAtts = [...existingLightweight, ...toAdd];
+        let updatedCount = 0;
+        drafts = drafts.map((d) => {
+          if (!targetIds || targetIds.has(d.id)) {
+            updatedCount++;
+            const remaining = isRemoveAll
+              ? []
+              : (d.assigned_attachments || []).filter((a) => {
+                  const k = a.id || a.fileName || a.name;
+                  return !detachKeys.has(k) && !detachKeys.has(a.id) && !detachKeys.has(a.fileName);
+                });
+
+            return {
+              ...d,
+              assigned_attachments: remaining,
+              updated_at: nowIso,
+            };
           }
+          return d;
+        });
 
-          return {
-            ...d,
-            assigned_attachments: updatedAtts,
-            updated_at: nowIso,
-          };
+        if (applyToAll && Array.isArray(targetBatch.stats.campaign_attachments)) {
+          targetBatch.stats.campaign_attachments = isRemoveAll
+            ? []
+            : targetBatch.stats.campaign_attachments.filter((a) => {
+                const k = a.id || a.fileName || a.name;
+                return !detachKeys.has(k) && !detachKeys.has(a.id) && !detachKeys.has(a.fileName);
+              });
         }
-        return d;
-      });
-
-      if (applyToAll) {
-        targetBatch.stats.campaign_attachments = uniqueNewAttachments;
-      }
-
-      // Record attached documents in persistent recently_used_doc_ids
-      try {
-        const { recordRecentlyUsedDocAsync } = await import('@/lib/services/documentLibraryService');
-        for (const att of uniqueNewAttachments) {
-          if (att?.id) {
-            await recordRecentlyUsedDocAsync(att.id);
+      } else {
+        // Append or Replace mode
+        const seenKeys = new Set();
+        const uniqueNewAttachments = [];
+        for (const att of newAttachments) {
+          const lightweight = toLightweightAttachment(att);
+          const key = lightweight?.id || lightweight?.fileName || lightweight?.name;
+          if (key && !seenKeys.has(key)) {
+            seenKeys.add(key);
+            uniqueNewAttachments.push(lightweight);
           }
         }
-      } catch (recErr) {
-        console.warn('[bulk_attachments] Could not record recently used doc:', recErr.message);
+
+        let updatedCount = 0;
+        drafts = drafts.map((d) => {
+          if (!targetIds || targetIds.has(d.id)) {
+            updatedCount++;
+            let updatedAtts = uniqueNewAttachments;
+            if (mode === 'append' && Array.isArray(d.assigned_attachments)) {
+              const existingLightweight = d.assigned_attachments.map(toLightweightAttachment).filter(Boolean);
+              const existingKeys = new Set(
+                existingLightweight.map((a) => a.id || a.fileName || a.name)
+              );
+              const toAdd = uniqueNewAttachments.filter(
+                (a) =>
+                  !existingKeys.has(a.id) &&
+                  !existingKeys.has(a.fileName) &&
+                  !existingKeys.has(a.name)
+              );
+              updatedAtts = [...existingLightweight, ...toAdd];
+            }
+
+            return {
+              ...d,
+              assigned_attachments: updatedAtts,
+              updated_at: nowIso,
+            };
+          }
+          return d;
+        });
+
+        if (applyToAll) {
+          targetBatch.stats.campaign_attachments = uniqueNewAttachments;
+        }
+
+        // Record attached documents in persistent recently_used_doc_ids
+        try {
+          const { recordRecentlyUsedDocAsync } = await import('@/lib/services/documentLibraryService');
+          for (const att of uniqueNewAttachments) {
+            if (att?.id) {
+              await recordRecentlyUsedDocAsync(att.id);
+            }
+          }
+        } catch (recErr) {
+          console.warn('[bulk_attachments] Could not record recently used doc:', recErr.message);
+        }
       }
     }
 

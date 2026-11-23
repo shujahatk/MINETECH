@@ -34,7 +34,27 @@ export async function GET(request) {
     if (error) throw error;
 
     const record = rows && rows.length > 0 ? rows[0] : null;
-    const attachments = record?.stats?.campaign_attachments || [];
+    let attachments = Array.isArray(record?.stats?.campaign_attachments)
+      ? record.stats.campaign_attachments
+      : [];
+
+    // Fallback: If campaign_attachments is empty, aggregate unique attachments from active drafts
+    if (attachments.length === 0 && Array.isArray(record?.stats?.drafts)) {
+      const seen = new Set();
+      const derived = [];
+      for (const d of record.stats.drafts) {
+        for (const a of d.assigned_attachments || []) {
+          const k = a.id || a.fileName || a.name;
+          if (k && !seen.has(k)) {
+            seen.add(k);
+            derived.push(a);
+          }
+        }
+      }
+      if (derived.length > 0) {
+        attachments = derived;
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -274,33 +294,43 @@ export async function DELETE(request) {
       ? targetRecord.stats.campaign_attachments
       : [];
 
-    const fileToDelete = currentAttachments.find(
-      (a) => a.id === attachmentId || a.fileName === attachmentId
-    );
+    const isRemoveAll = attachmentId === 'all' || attachmentId === 'clear';
 
-    // Remove from storage if path exists
-    if (fileToDelete?.storagePath) {
-      try {
-        await supabaseAdmin.storage
-          .from('email-attachments')
-          .remove([fileToDelete.storagePath]);
-      } catch (stgErr) {
-        console.warn('[campaign-attachments DELETE] Storage remove warning:', stgErr.message);
+    // Remove from storage if specific file path exists
+    if (!isRemoveAll) {
+      const fileToDelete = currentAttachments.find(
+        (a) => a.id === attachmentId || a.fileName === attachmentId || a.name === attachmentId
+      );
+      if (fileToDelete?.storagePath) {
+        try {
+          await supabaseAdmin.storage
+            .from('email-attachments')
+            .remove([fileToDelete.storagePath]);
+        } catch (stgErr) {
+          console.warn('[campaign-attachments DELETE] Storage remove warning:', stgErr.message);
+        }
       }
     }
 
-    const remainingAttachments = currentAttachments.filter(
-      (a) => a.id !== attachmentId && a.fileName !== attachmentId
-    );
+    const remainingAttachments = isRemoveAll
+      ? []
+      : currentAttachments.filter(
+          (a) => a.id !== attachmentId && a.fileName !== attachmentId && a.name !== attachmentId
+        );
 
     // 2. AUTOMATICALLY REMOVE FROM EVERY EMAIL DRAFT
     const nowIso = new Date().toISOString();
     let updatedDrafts = [];
     if (Array.isArray(targetRecord.stats?.drafts)) {
       updatedDrafts = targetRecord.stats.drafts.map((draft) => {
+        const remainingDraftAtts = isRemoveAll
+          ? []
+          : (draft.assigned_attachments || []).filter(
+              (a) => a.id !== attachmentId && a.fileName !== attachmentId && a.name !== attachmentId
+            );
         return {
           ...draft,
-          assigned_attachments: remainingAttachments,
+          assigned_attachments: remainingDraftAtts,
           updated_at: nowIso,
         };
       });

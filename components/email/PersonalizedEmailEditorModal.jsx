@@ -33,7 +33,8 @@ import {
   ShieldCheck,
   Calendar,
   Lock,
-  FolderOpen
+  FolderOpen,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,6 +101,7 @@ export default function PersonalizedEmailEditorModal({
   const [wordCountCheck, setWordCountCheck] = useState({ orig: 0, fixed: 0, match: true });
 
   const [documents, setDocuments] = useState([]);
+  const [currentAttachments, setCurrentAttachments] = useState([]);
   const [attachedDocIds, setAttachedDocIds] = useState([]);
   const [showDocLibrary, setShowDocLibrary] = useState(false);
 
@@ -141,8 +143,9 @@ export default function PersonalizedEmailEditorModal({
       setSelectedSignatureId(draft.assigned_signature_id || 'sig-gmail-synced');
 
       // Attachments
-      const existingAttachmentIds = (draft.assigned_attachments || []).map((a) => a.id || a);
-      setAttachedDocIds(existingAttachmentIds);
+      const atts = Array.isArray(draft.assigned_attachments) ? draft.assigned_attachments : [];
+      setCurrentAttachments(atts);
+      setAttachedDocIds(atts.map((a) => a.id || a.fileName || a));
     }
   }, [draft]);
 
@@ -227,12 +230,23 @@ export default function PersonalizedEmailEditorModal({
     return false;
   }, [bodyText]);
 
-  const activeAttachedDocs = useMemo(() => {
-    if (Array.isArray(draft?.assigned_attachments) && draft.assigned_attachments.length > 0) {
-      return draft.assigned_attachments;
-    }
-    return documents.filter((d) => attachedDocIds.includes(d.id));
-  }, [draft?.assigned_attachments, documents, attachedDocIds]);
+  const activeAttachedDocs = currentAttachments;
+
+  // Handle removing single attachment from this draft
+  const handleRemoveAttachment = (idOrName) => {
+    setCurrentAttachments((prev) =>
+      prev.filter((a) => a.id !== idOrName && a.fileName !== idOrName && a.name !== idOrName)
+    );
+    setAttachedDocIds((prev) => prev.filter((id) => id !== idOrName));
+    toast.success('File removed from this email draft.');
+  };
+
+  // Handle removing all attachments from this draft
+  const handleRemoveAllAttachments = () => {
+    setCurrentAttachments([]);
+    setAttachedDocIds([]);
+    toast.success('All files removed from this email draft.');
+  };
 
   // Open Preview of Paragraph Reconstruction
   const handleOpenFormatFix = async () => {
@@ -400,6 +414,7 @@ export default function PersonalizedEmailEditorModal({
       toast.success(`Attached "${file.name}" to email!`);
       const newDoc = data.document;
       setDocuments((prev) => [newDoc, ...prev]);
+      setCurrentAttachments((prev) => [...prev, newDoc]);
       setAttachedDocIds((prev) => [...prev, newDoc.id]);
     } catch (err) {
       toast.error(err.message || 'Failed to upload attachment');
@@ -441,7 +456,16 @@ export default function PersonalizedEmailEditorModal({
         finalSigId = `sig-custom-${Date.now()}`;
       }
 
-      const activeAttachments = documents.filter((d) => attachedDocIds.includes(d.id));
+      const activeAttachments = currentAttachments.map((a) => ({
+        id: a.id,
+        name: a.name,
+        fileName: a.fileName || a.name,
+        fileSize: a.fileSize || '1.0 MB',
+        fileType: a.fileType || 'application/pdf',
+        url: a.url || '',
+        storagePath: a.storagePath || '',
+        isCustom: Boolean(a.isCustom),
+      }));
 
       const updatedContacts = selectedContacts.map((c) => ({
         ...c,
@@ -1019,25 +1043,47 @@ export default function PersonalizedEmailEditorModal({
                       )}
 
                       {/* Attached Documents */}
-                      {activeAttachedDocs.length > 0 && (
+                      {currentAttachments.length > 0 && (
                         <div className="pt-6 mt-6 border-t border-slate-200">
-                          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider block mb-2">
-                            Attachments ({activeAttachedDocs.length}):
-                          </span>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                              Attachments ({currentAttachments.length}):
+                            </span>
+                            <button
+                              type="button"
+                              onClick={handleRemoveAllAttachments}
+                              className="text-[11px] text-rose-500 hover:text-rose-700 hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Remove All Files
+                            </button>
+                          </div>
                           <div className="flex flex-wrap gap-2">
-                            {activeAttachedDocs.map((doc) => (
-                              <button
-                                key={doc.id || doc.name}
-                                type="button"
-                                onClick={() => setPreviewDoc(doc)}
-                                className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-800 text-xs flex items-center gap-2 font-medium transition-colors cursor-pointer group"
-                                title="Click to view and preview this attached document"
+                            {currentAttachments.map((doc) => (
+                              <div
+                                key={doc.id || doc.fileName || doc.name}
+                                className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-300 text-slate-800 text-xs flex items-center gap-2 font-medium"
                               >
-                                <Paperclip className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
-                                <span className="hover:underline">{doc.name || doc.fileName}</span>
-                                <span className="text-[11px] text-slate-500 font-normal">({doc.fileSize})</span>
-                                <Eye className="w-3 h-3 text-slate-400 group-hover:text-primary ml-0.5" />
-                              </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewDoc(doc)}
+                                  className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-pointer group"
+                                  title="Click to view and preview this attached document"
+                                >
+                                  <Paperclip className="w-3.5 h-3.5 text-primary group-hover:scale-110 transition-transform" />
+                                  <span className="hover:underline">{doc.name || doc.fileName}</span>
+                                  <span className="text-[11px] text-slate-500 font-normal">({doc.fileSize || '1.0 MB'})</span>
+                                  <Eye className="w-3 h-3 text-slate-400 group-hover:text-primary ml-0.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveAttachment(doc.id || doc.fileName || doc.name)}
+                                  className="text-slate-400 hover:text-rose-600 hover:bg-rose-100 p-0.5 rounded transition-colors cursor-pointer ml-1"
+                                  title="Remove this file from draft"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -1203,22 +1249,44 @@ export default function PersonalizedEmailEditorModal({
               <div>
                 <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <Paperclip className="w-3.5 h-3.5 text-primary" />
-                  Campaign Attachments ({activeAttachedDocs.length} attached)
+                  Campaign Attachments ({currentAttachments.length} attached)
                 </span>
                 <p className="text-[11px] text-muted-foreground">
                   Files attached at the campaign level and automatically delivered with this email.
                 </p>
               </div>
 
-              <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                Auto-Attached to All Emails
-              </Badge>
+              <div className="flex items-center gap-2">
+                {currentAttachments.length > 0 && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRemoveAllAttachments}
+                    className="h-7 text-xs border-rose-500/40 text-rose-500 hover:bg-rose-500/10 px-2 gap-1 cursor-pointer"
+                    title="Remove all files from this email"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Remove All Files</span>
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsAttachModalOpen(true)}
+                  className="h-7 text-xs border-primary/30 text-primary hover:bg-primary/10 px-2.5 gap-1 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Attach Files</span>
+                </Button>
+              </div>
             </div>
 
             {/* List of currently attached documents */}
-            {activeAttachedDocs.length > 0 ? (
+            {currentAttachments.length > 0 ? (
               <div className="flex flex-wrap gap-2 pt-1">
-                {activeAttachedDocs.map((doc) => {
+                {currentAttachments.map((doc) => {
                   const type = (doc.fileType || '').toLowerCase();
                   const name = (doc.fileName || doc.name || '').toLowerCase();
                   const isPdf = type.includes('pdf') || name.endsWith('.pdf');
@@ -1235,10 +1303,18 @@ export default function PersonalizedEmailEditorModal({
                       <button
                         type="button"
                         onClick={() => setPreviewDoc(doc)}
-                        className="text-muted-foreground hover:text-primary ml-1"
+                        className="text-muted-foreground hover:text-primary ml-1 cursor-pointer"
                         title="Preview attachment"
                       >
                         <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(doc.id || doc.fileName || doc.name)}
+                        className="text-muted-foreground hover:text-rose-500 ml-0.5 p-0.5 rounded hover:bg-rose-500/10 transition-colors cursor-pointer"
+                        title="Remove file from this draft"
+                      >
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   );
@@ -1362,7 +1438,8 @@ export default function PersonalizedEmailEditorModal({
         selectedDraftIds={[draft.id]}
         onAttachmentsApplied={(updatedDrafts, appliedDocs) => {
           if (appliedDocs) {
-            setAttachedDocIds(appliedDocs.map((d) => d.id));
+            setCurrentAttachments(appliedDocs);
+            setAttachedDocIds(appliedDocs.map((d) => d.id || d.fileName || d));
           }
           if (updatedDrafts) {
             onSaveDraft?.(updatedDrafts);

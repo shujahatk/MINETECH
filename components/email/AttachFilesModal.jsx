@@ -304,8 +304,8 @@ export default function AttachFilesModal({
           isIndividual
             ? `Attached ${lightweightAttachments.length} file(s) to this recipient!`
             : isSelected
-            ? `Attached ${lightweightAttachments.length} file(s) to ${selectedDraftIds.length} selected recipients!`
-            : `Attached ${lightweightAttachments.length} file(s) to all campaign recipients!`
+              ? `Attached ${lightweightAttachments.length} file(s) to ${selectedDraftIds.length} selected recipients!`
+              : `Attached ${lightweightAttachments.length} file(s) to all campaign recipients!`
         );
 
         onAttachmentsApplied?.(data, lightweightAttachments);
@@ -353,6 +353,88 @@ export default function AttachFilesModal({
       onClose();
     } catch (err) {
       toast.error(err.message || 'Error applying attachments');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Detach all attachments from specified scope
+  const executeDetachAttachments = async (scope) => {
+    setLoading(true);
+    try {
+      const isAll = scope === 'all';
+      const isSelected = scope === 'selected';
+      const isIndividual = scope === 'individual' && currentDraftId;
+
+      if (campaignId) {
+        const targetRecipientIds = isAll
+          ? undefined
+          : (isIndividual ? [currentDraftId] : (selectedDraftIds && selectedDraftIds.length > 0 ? selectedDraftIds : undefined));
+
+        const res = await fetch(`/api/email/campaigns/${campaignId}/recipients`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'bulk_attachments',
+            applyToAll: isAll,
+            recipientIds: targetRecipientIds,
+            attachments: [],
+            mode: 'replace',
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || 'Failed to remove attachments');
+        }
+
+        toast.success(
+          isIndividual
+            ? 'Removed all attachments from this recipient.'
+            : isSelected
+              ? `Removed all attachments from ${selectedDraftIds.length} selected recipients.`
+              : 'Removed all attachments from all campaign recipients.'
+        );
+
+        onAttachmentsApplied?.(data, []);
+        onClose();
+        return;
+      }
+
+      // Workspace batch detachment
+      const targetDraftIds = isAll
+        ? 'all'
+        : (isIndividual ? [currentDraftId] : selectedDraftIds);
+
+      const res = await fetch('/api/email/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulk_attachments',
+          applyToAll: isAll,
+          draftIds: targetDraftIds,
+          attachments: [],
+          mode: 'replace',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove attachments');
+      }
+
+      toast.success(
+        isIndividual
+          ? 'Removed all attachments from this email.'
+          : isSelected
+            ? `Removed all attachments from ${selectedDraftIds.length} selected emails.`
+            : 'Removed all attachments from all emails in workspace.'
+      );
+
+      onAttachmentsApplied?.(data.drafts, []);
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Error removing attachments');
     } finally {
       setLoading(false);
     }
@@ -1022,17 +1104,43 @@ export default function AttachFilesModal({
             </Button>
 
             {currentDraftId ? (
-              <Button
-                size="sm"
-                onClick={() => executeApplyAttachments('individual')}
-                disabled={loading || selectedDocs.length === 0}
-                className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 gap-1.5"
-              >
-                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
-                Attach to This Recipient ({selectedDocs.length})
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => executeDetachAttachments('individual')}
+                  disabled={loading}
+                  className="text-xs border-rose-500/40 text-rose-500 hover:bg-rose-500/10 font-medium px-3 gap-1.5"
+                  title="Remove all attached files from this email"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Detach All from This Email
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => executeApplyAttachments('individual')}
+                  disabled={loading || selectedDocs.length === 0}
+                  className="text-xs bg-primary text-primary-foreground hover:bg-primary/90 font-medium px-4 gap-1.5"
+                >
+                  {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Paperclip className="w-3.5 h-3.5" />}
+                  Attach to This Recipient ({selectedDocs.length})
+                </Button>
+              </>
             ) : (
               <>
+                {/* Option 0: Detach from Selected / All */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => executeDetachAttachments(selectedDraftIds?.length > 0 ? 'selected' : 'all')}
+                  disabled={loading}
+                  className="text-xs border-rose-500/40 text-rose-500 hover:bg-rose-500/10 font-medium px-3 gap-1.5"
+                  title={selectedDraftIds?.length > 0 ? `Remove all attachments from ${selectedDraftIds.length} selected emails` : 'Remove all attachments from all emails in workspace'}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  {selectedDraftIds?.length > 0 ? `Detach All from Selected (${selectedDraftIds.length})` : 'Detach All from All Emails'}
+                </Button>
+
                 {/* Option 2: Attach to Selected Recipients */}
                 <Button
                   variant="outline"

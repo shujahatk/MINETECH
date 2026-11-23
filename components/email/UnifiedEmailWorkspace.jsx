@@ -191,6 +191,110 @@ export default function UnifiedEmailWorkspace() {
     }
   };
 
+  // Handle Detaching attachment from a single draft (1-click direct removal)
+  const handleDetachFromDraft = async (draftId, attachmentId = null) => {
+    try {
+      const targetDraft = drafts.find((d) => d.id === draftId);
+      const remainingAtts = attachmentId
+        ? (targetDraft?.assigned_attachments || []).filter((a) => a.id !== attachmentId && a.fileName !== attachmentId && a.name !== attachmentId)
+        : [];
+
+      // Optimistic update
+      setDrafts((prev) =>
+        prev.map((d) => (d.id === draftId ? { ...d, assigned_attachments: remainingAtts } : d))
+      );
+
+      const res = await fetch('/api/email/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulk_attachments',
+          draftIds: [draftId],
+          mode: 'replace',
+          attachments: remainingAtts,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove attachment');
+      }
+      toast.success(attachmentId ? 'Attachment removed from email.' : 'All attachments removed from this email.');
+      if (data.drafts) setDrafts(data.drafts);
+    } catch (err) {
+      toast.error(err.message || 'Error removing attachment');
+      fetchWorkspace(true);
+    }
+  };
+
+  // Handle Bulk Detaching attachments from all selected drafts
+  const handleBulkDetachSelected = async () => {
+    if (selectedDraftIds.size === 0) return;
+    const count = selectedDraftIds.size;
+    if (!confirm(`Remove all attached files from the ${count} selected email(s)?`)) return;
+
+    try {
+      const res = await fetch('/api/email/workspace', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'bulk_attachments',
+          draftIds: Array.from(selectedDraftIds),
+          mode: 'replace',
+          attachments: [],
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove attachments');
+      }
+      toast.success(`Attachments removed from ${count} selected email(s).`);
+      if (data.drafts) setDrafts(data.drafts);
+      fetchWorkspace(true);
+    } catch (err) {
+      toast.error(err.message || 'Error removing attachments');
+    }
+  };
+
+  // Handle removing all campaign attachments workspace-wide
+  const handleRemoveAllCampaignAttachments = async () => {
+    if (!confirm('Remove all campaign attachments? All files will be detached from all emails in this workspace.')) {
+      return;
+    }
+
+    try {
+      const batchParam = activeBatch?.id ? `&batchId=${activeBatch.id}` : '';
+      const res = await fetch(`/api/email/workspace/campaign-attachments?id=all${batchParam}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to remove all files');
+      }
+      toast.success('All campaign files removed and detached from all emails.');
+      setCampaignAttachments([]);
+      if (data.drafts) setDrafts(data.drafts);
+      fetchWorkspace(true);
+    } catch (err) {
+      toast.error(err.message || 'Error removing campaign files');
+    }
+  };
+
+  // Aggregate campaign attachments and any draft attachments so all active files are visible & removable
+  const allUniqueCampaignAttachments = useMemo(() => {
+    const map = new Map();
+    (campaignAttachments || []).forEach((a) => {
+      const k = a.id || a.fileName || a.name;
+      if (k) map.set(k, a);
+    });
+    (drafts || []).forEach((d) => {
+      (d.assigned_attachments || []).forEach((a) => {
+        const k = a.id || a.fileName || a.name;
+        if (k && !map.has(k)) map.set(k, a);
+      });
+    });
+    return Array.from(map.values());
+  }, [campaignAttachments, drafts]);
+
   useEffect(() => {
     fetchWorkspace();
   }, []);
@@ -855,13 +959,13 @@ export default function UnifiedEmailWorkspace() {
                     <Badge
                       variant="outline"
                       className={`text-[10px] h-5 font-semibold ${
-                        campaignAttachments.length > 0
+                        allUniqueCampaignAttachments.length > 0
                           ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
                           : 'bg-muted text-muted-foreground'
                       }`}
                     >
-                      {campaignAttachments.length > 0
-                        ? `${campaignAttachments.length} file${campaignAttachments.length > 1 ? 's' : ''} attached`
+                      {allUniqueCampaignAttachments.length > 0
+                        ? `${allUniqueCampaignAttachments.length} file${allUniqueCampaignAttachments.length > 1 ? 's' : ''} attached`
                         : '0 files'}
                     </Badge>
                   </h3>
@@ -871,7 +975,19 @@ export default function UnifiedEmailWorkspace() {
                 </div>
               </div>
 
-              <div>
+              <div className="flex items-center gap-1.5">
+                {allUniqueCampaignAttachments.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleRemoveAllCampaignAttachments}
+                    className="h-8 text-xs border-rose-500/40 text-rose-500 hover:bg-rose-500/10 gap-1"
+                    title="Remove all files from all emails in this campaign"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove All</span>
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -890,7 +1006,7 @@ export default function UnifiedEmailWorkspace() {
 
             {/* Uploaded Campaign Files List */}
             <div className="mt-3 space-y-2">
-              {campaignAttachments.length === 0 ? (
+              {allUniqueCampaignAttachments.length === 0 ? (
                 <div
                   onClick={() => {
                     setActiveAttachScope(selectedDraftIds.size > 0 ? 'selected' : 'all');
@@ -907,7 +1023,7 @@ export default function UnifiedEmailWorkspace() {
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
-                  {campaignAttachments.map((att) => {
+                  {allUniqueCampaignAttachments.map((att) => {
                     const isDeleting = deletingAttachmentId === att.id;
                     const fileName = att.fileName || att.name;
                     const isPdf = (att.fileType || '').includes('pdf') || fileName.toLowerCase().endsWith('.pdf');
@@ -930,7 +1046,7 @@ export default function UnifiedEmailWorkspace() {
                           <button
                             type="button"
                             onClick={() => setPreviewAttachmentDoc(att)}
-                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                             title="Preview file"
                           >
                             <Eye className="w-3.5 h-3.5" />
@@ -939,8 +1055,8 @@ export default function UnifiedEmailWorkspace() {
                             type="button"
                             disabled={isDeleting}
                             onClick={() => handleDeleteCampaignAttachment(att.id, fileName)}
-                            className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                            title="Remove from campaign (detaches from all emails)"
+                            className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                            title="Remove file from campaign (detaches from all emails)"
                           >
                             {isDeleting ? (
                               <Loader2 className="w-3.5 h-3.5 animate-spin text-rose-500" />
@@ -1132,6 +1248,17 @@ export default function UnifiedEmailWorkspace() {
             <Button
               variant="outline"
               size="sm"
+              onClick={handleBulkDetachSelected}
+              className="h-8 text-xs border-rose-500/40 text-rose-500 hover:bg-rose-500/10"
+              title="Remove all attachments from selected emails"
+            >
+              <X className="w-3.5 h-3.5 mr-1" />
+              Remove Files ({selectedDraftIds.size})
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setIsSignatureModalOpen(true)}
               className="h-8 text-xs border-border hover:bg-muted/40 text-foreground"
             >
@@ -1300,25 +1427,38 @@ export default function UnifiedEmailWorkspace() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {attachmentsCount > 0 ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (draft.assigned_attachments?.[0]) {
-                                    setPreviewAttachmentDoc(draft.assigned_attachments[0]);
-                                  } else {
-                                    setActiveDraftIdForAttach(draft.id);
-                                    setActiveAttachScope('individual');
-                                    setIsAttachFilesModalOpen(true);
-                                  }
-                                }}
-                                className="px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
-                                title={(draft.assigned_attachments || []).map((a) => a.fileName || a.name).join(', ')}
-                              >
-                                <Paperclip className="w-2.5 h-2.5 shrink-0" />
-                                <span>{attachmentsCount} File{attachmentsCount > 1 ? 's' : ''}</span>
-                                <Eye className="w-2.5 h-2.5 ml-0.5 text-primary/70" />
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (draft.assigned_attachments?.[0]) {
+                                      setPreviewAttachmentDoc(draft.assigned_attachments[0]);
+                                    } else {
+                                      setActiveDraftIdForAttach(draft.id);
+                                      setActiveAttachScope('individual');
+                                      setIsAttachFilesModalOpen(true);
+                                    }
+                                  }}
+                                  className="px-2 py-0.5 rounded bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-[10px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                                  title={(draft.assigned_attachments || []).map((a) => a.fileName || a.name).join(', ')}
+                                >
+                                  <Paperclip className="w-2.5 h-2.5 shrink-0" />
+                                  <span>{attachmentsCount} File{attachmentsCount > 1 ? 's' : ''}</span>
+                                  <Eye className="w-2.5 h-2.5 ml-0.5 text-primary/70" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDetachFromDraft(draft.id);
+                                  }}
+                                  className="p-1 rounded text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                  title="Remove files from this email"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 type="button"

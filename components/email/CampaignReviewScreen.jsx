@@ -219,6 +219,40 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
     }
   };
 
+  // Handle detaching attachment from recipient in campaign review
+  const handleDetachRecipientAttachment = async (index) => {
+    const nextAtts = previewAttachments.filter((_, idx) => idx !== index);
+    setPreviewAttachments(nextAtts);
+
+    if (previewIndex !== null && recipients[previewIndex]) {
+      try {
+        const currentRec = recipients[previewIndex];
+        const res = await fetch(`/api/email/campaigns/${campaignId}/recipients`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update_recipient',
+            recipientId: currentRec.id,
+            updates: {
+              attachments: nextAtts,
+            },
+          }),
+        });
+        const data = await res.json();
+        if (data.success && data.recipient) {
+          setRecipients((prev) => {
+            const next = [...prev];
+            next[previewIndex] = data.recipient;
+            return next;
+          });
+          toast.success('File removed from this email.');
+        }
+      } catch (_) {
+        toast.error('Failed to detach file');
+      }
+    }
+  };
+
   // Reconstruct continuous paragraphs in preview modal
   const handleQuickFormatFixInPreview = () => {
     if (!previewBody) return;
@@ -980,16 +1014,14 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                             {att.fileSize && <span className="text-[10px] text-muted-foreground">({att.fileSize})</span>}
                             <Eye className="w-2.5 h-2.5 text-primary/70 ml-0.5" />
                           </button>
-                          {isEditingInPreview && (
-                            <button
-                              type="button"
-                              onClick={() => setPreviewAttachments((prev) => prev.filter((_, idx) => idx !== i))}
-                              className="text-muted-foreground hover:text-rose-500 ml-1 transition-colors"
-                              title="Detach file from this email (preserves original in Library)"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleDetachRecipientAttachment(i)}
+                            className="text-muted-foreground hover:text-rose-500 ml-1 transition-colors p-0.5 rounded hover:bg-rose-500/10 cursor-pointer"
+                            title="Detach file from this email (preserves original in Library)"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </span>
                       ))}
                     </div>
@@ -1103,8 +1135,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setPreviewAttachments((prev) => prev.filter((_, i) => i !== idx))}
-                              className="text-muted-foreground hover:text-rose-500 ml-1 transition-colors"
+                              onClick={() => handleDetachRecipientAttachment(idx)}
+                              className="text-muted-foreground hover:text-rose-500 ml-1 transition-colors p-0.5 rounded hover:bg-rose-500/10 cursor-pointer"
                               title="Detach file from this email (preserves original in Library)"
                             >
                               <X className="w-3.5 h-3.5" />
