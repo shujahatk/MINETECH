@@ -120,8 +120,33 @@ export async function GET(request) {
 
     const cleanId = id.toLowerCase();
 
+    // 0. Direct lookup in workspace_settings custom documents (Fastest, avoids cache delays or deletion false-positives)
+    let doc = null;
+    try {
+      const { data: sRows } = await supabaseAdmin
+        .from('email_campaigns')
+        .select('stats')
+        .filter('stats->>is_workspace_settings', 'eq', 'true')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (sRows && sRows.length > 0 && Array.isArray(sRows[0].stats?.custom_documents)) {
+        doc = sRows[0].stats.custom_documents.find((d) => {
+          if (!d) return false;
+          const dId = (d.id || '').toLowerCase();
+          const dFile = (d.fileName || '').toLowerCase();
+          const dName = (d.name || '').toLowerCase();
+          return dId === cleanId || dFile === cleanId || dName === cleanId;
+        });
+      }
+    } catch (e) {
+      console.warn('[preview] workspace_settings lookup warning:', e.message);
+    }
+
     // 1. Find document in library
-    let doc = await getDocumentByIdAsync(id);
+    if (!doc) {
+      doc = await getDocumentByIdAsync(id);
+    }
     if (!doc) {
       const allDocs = await getAllDocumentsAsync();
       doc = allDocs.find((d) => {
@@ -133,7 +158,7 @@ export async function GET(request) {
       });
     }
 
-    // 2. If not found in library, search active workspace batch drafts
+    // 2. If not found in library, search active workspace batch drafts or campaign_attachments
     if (!doc) {
       try {
         const { data: batches } = await supabaseAdmin
@@ -143,18 +168,30 @@ export async function GET(request) {
           .order('created_at', { ascending: false })
           .limit(1);
 
-        if (batches && batches.length > 0 && Array.isArray(batches[0].stats?.drafts)) {
-          for (const draft of batches[0].stats.drafts) {
-            const found = (draft.assigned_attachments || []).find((a) => {
-              if (!a) return false;
-              const aId = (a.id || '').toLowerCase();
-              const aFile = (a.fileName || '').toLowerCase();
-              const aName = (a.name || '').toLowerCase();
-              return aId === cleanId || aFile === cleanId || aName === cleanId;
-            });
-            if (found) {
-              doc = found;
-              break;
+        if (batches && batches.length > 0) {
+          const campAtts = batches[0].stats?.campaign_attachments || [];
+          const foundCamp = campAtts.find((a) => {
+            if (!a) return false;
+            const aId = (a.id || '').toLowerCase();
+            const aFile = (a.fileName || '').toLowerCase();
+            const aName = (a.name || '').toLowerCase();
+            return aId === cleanId || aFile === cleanId || aName === cleanId;
+          });
+          if (foundCamp) {
+            doc = foundCamp;
+          } else if (Array.isArray(batches[0].stats?.drafts)) {
+            for (const draft of batches[0].stats.drafts) {
+              const found = (draft.assigned_attachments || []).find((a) => {
+                if (!a) return false;
+                const aId = (a.id || '').toLowerCase();
+                const aFile = (a.fileName || '').toLowerCase();
+                const aName = (a.name || '').toLowerCase();
+                return aId === cleanId || aFile === cleanId || aName === cleanId;
+              });
+              if (found) {
+                doc = found;
+                break;
+              }
             }
           }
         }
@@ -185,15 +222,31 @@ export async function GET(request) {
     if (!storagePath && doc.url && doc.url.includes('/email-attachments/')) {
       storagePath = doc.url.split('/email-attachments/')[1];
     }
+
+    // Dynamic bucket search if storagePath is missing or hardcoded
     if (!storagePath) {
-      const lowerFile = fileName.toLowerCase();
-      if (lowerFile.includes('bentonite')) {
-        storagePath = 'uploads/1795387064609_MineTech_Bentonite.pdf';
-      } else if (lowerFile.includes('company')) {
-        storagePath = 'uploads/1795387239813_MineTech_Company.pdf';
-      } else if (id.startsWith('uploads/') || id.startsWith('campaigns/') || id.startsWith('audit-docs/')) {
-        storagePath = id;
+      try {
+        const cleanTarget = (fileName || id).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const { data: files } = await supabaseAdmin.storage
+          .from('email-attachments')
+          .list('uploads', { limit: 100 });
+        if (files && files.length > 0) {
+          const matches = files.filter((f) => {
+            const cleanF = f.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            return cleanF.includes(cleanTarget) || cleanTarget.includes(cleanF.replace(/^\d+/, ''));
+          });
+          if (matches.length > 0) {
+            matches.sort((a, b) => b.name.localeCompare(a.name));
+            storagePath = `uploads/${matches[0].name}`;
+          }
+        }
+      } catch (listErr) {
+        console.warn('[preview] storage list fallback warning:', listErr.message);
       }
+    }
+
+    if (!storagePath && (id.startsWith('uploads/') || id.startsWith('campaigns/') || id.startsWith('audit-docs/'))) {
+      storagePath = id;
     }
 
     // Strategy A: Direct Supabase Storage download if storagePath exists
