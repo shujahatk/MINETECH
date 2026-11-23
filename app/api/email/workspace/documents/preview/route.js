@@ -122,8 +122,9 @@ export async function GET(request) {
 
     // 0. Direct lookup in workspace_settings custom documents (Fastest, avoids cache delays or deletion false-positives)
     let doc = null;
+    let debugInfo = { cleanId };
     try {
-      const { data: sRows } = await supabaseAdmin
+      const { data: sRows, error: sErr } = await supabaseAdmin
         .from('email_campaigns')
         .select('id, stats')
         .order('created_at', { ascending: false })
@@ -132,6 +133,15 @@ export async function GET(request) {
       const settingsRow = (sRows || []).find(
         (r) => r.stats?.is_workspace_settings === true || r.stats?.is_workspace_settings === 'true'
       );
+
+      debugInfo = {
+        cleanId,
+        sRowsCount: sRows ? sRows.length : 0,
+        sErr: sErr ? sErr.message : null,
+        hasSettingsRow: !!settingsRow,
+        customDocsCount: settingsRow?.stats?.custom_documents?.length || 0,
+        customDocIds: (settingsRow?.stats?.custom_documents || []).map((d) => d?.id),
+      };
 
       if (settingsRow && Array.isArray(settingsRow.stats?.custom_documents)) {
         doc = settingsRow.stats.custom_documents.find((d) => {
@@ -148,7 +158,9 @@ export async function GET(request) {
           );
         });
       }
+      debugInfo.docFoundInStep0 = !!doc;
     } catch (e) {
+      debugInfo.step0Exception = e.message;
       console.warn('[preview] workspace_settings lookup warning:', e.message);
     }
 
@@ -393,9 +405,10 @@ export async function GET(request) {
         'Content-Type': mimeType,
         'Content-Length': buffer.length.toString(),
         'Content-Disposition': `${disposition}; filename="${safeAsciiName}"`,
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'no-store, max-age=0',
         'X-Content-Type-Options': 'nosniff',
         'Access-Control-Allow-Origin': '*',
+        'X-Debug-Preview': JSON.stringify(debugInfo || {}),
       },
     });
   } catch (err) {
