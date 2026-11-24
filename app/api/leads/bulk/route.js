@@ -65,6 +65,55 @@ export async function POST(request) {
       return NextResponse.json({ success: true, action, status, affected: count ?? ids.length, leadIds: ids });
     }
 
+    if (action === 'set_role' || action === 'role' || action === 'classification' || action === 'set_classification') {
+      const rawRole = String(body.role || body.classification || '').trim();
+      let targetRole = 'Unassigned';
+      if (['Buyer', 'Seller', 'Buyer & Seller', 'Unassigned'].includes(rawRole)) {
+        targetRole = rawRole;
+      } else if (rawRole === 'Unclassified') {
+        targetRole = 'Unassigned';
+      } else {
+        return NextResponse.json({ success: false, message: 'Invalid lead role' }, { status: 400 });
+      }
+
+      // Fetch existing custom_fields to safely merge
+      const { data: existingRows, error: fetchErr } = await supabaseAdmin
+        .from('leads')
+        .select('id, custom_fields')
+        .in('id', ids);
+
+      if (fetchErr) throw fetchErr;
+
+      const now = new Date().toISOString();
+      const updates = (existingRows || []).map((row) => {
+        const cf = row.custom_fields || {};
+        return supabaseAdmin
+          .from('leads')
+          .update({
+            custom_fields: {
+              ...cf,
+              classification: targetRole,
+              lead_role: targetRole,
+              leadRole: targetRole,
+            },
+            updated_at: now,
+          })
+          .eq('id', row.id);
+      });
+
+      await Promise.all(updates);
+
+      return NextResponse.json({
+        success: true,
+        action,
+        role: targetRole,
+        classification: targetRole,
+        affected: existingRows?.length || ids.length,
+        leadIds: ids,
+        message: `Assigned Lead Role "${targetRole}" to ${existingRows?.length || ids.length} lead(s)`,
+      });
+    }
+
     return NextResponse.json({ success: false, message: 'Unsupported bulk action' }, { status: 400 });
   } catch (err) {
     console.error('[POST /api/leads/bulk]', err);

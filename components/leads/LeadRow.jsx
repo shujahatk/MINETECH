@@ -1,12 +1,51 @@
 'use client';
 import React, { memo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import StatusBadge from '@/components/ui/StatusBadge';
 import TemperatureBadge from '@/components/leads/TemperatureBadge';
 import { dayDiff, formatShortDate, initials, statusLabel, timeAgo } from '@/lib/leads/format';
 
 const MUTED_DASH = <span className="text-muted-foreground/50">—</span>;
+
+export function LeadRoleBadge({ role = 'Unassigned', onChange, disabled = false, size = 'sm' }) {
+  const normalized = ['Buyer', 'Seller', 'Buyer & Seller'].includes(role)
+    ? role
+    : 'Unassigned';
+
+  const colorStyles = {
+    Buyer: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30 hover:border-blue-500/50',
+    Seller: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 hover:border-purple-500/50',
+    'Buyer & Seller': 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/30 hover:border-teal-500/50',
+    Unassigned: 'bg-muted/70 text-muted-foreground border-border hover:border-muted-foreground/30',
+  };
+
+  if (!onChange) {
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold border ${colorStyles[normalized]}`}>
+        {normalized}
+      </span>
+    );
+  }
+
+  return (
+    <div className="relative inline-flex items-center" onClick={(e) => e.stopPropagation()}>
+      <select
+        value={normalized}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className={`appearance-none cursor-pointer rounded px-2 py-0.5 pr-5 text-[11px] font-semibold border outline-none transition-colors ${colorStyles[normalized]} bg-transparent focus:ring-1 focus:ring-primary/50`}
+        aria-label="Change Lead Role"
+      >
+        <option value="Buyer" className="bg-popover text-foreground">Buyer</option>
+        <option value="Seller" className="bg-popover text-foreground">Seller</option>
+        <option value="Buyer & Seller" className="bg-popover text-foreground">Buyer & Seller</option>
+        <option value="Unassigned" className="bg-popover text-foreground">Unassigned</option>
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-1 h-3 w-3 text-current opacity-60" />
+    </div>
+  );
+}
 
 function NextAction({ lead, today }) {
   const diff = dayDiff(lead.nextActionDate, today);
@@ -32,7 +71,7 @@ function NextAction({ lead, today }) {
   );
 }
 
-function LeadRowImpl({ lead, selected, isActive = false, today, onToggle, onOpen }) {
+function LeadRowImpl({ lead, selected, isActive = false, today, onToggle, onOpen, onRoleChange }) {
   const id = lead.id;
 
   // Row states: open-in-drawer (strongest) > checked > hover. Both get a 2px leading accent so the
@@ -81,26 +120,18 @@ function LeadRowImpl({ lead, selected, isActive = false, today, onToggle, onOpen
         </div>
       </td>
 
-      <td className="max-w-[220px] border-b border-border/60 px-3 py-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div className="truncate text-[13px] text-foreground font-medium">{lead.company || MUTED_DASH}</div>
-          {lead.classification === 'Buyer' ? (
-            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-              Buyer
-            </span>
-          ) : lead.classification === 'Seller' ? (
-            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-              Seller
-            </span>
-          ) : (
-            <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground border border-border">
-              Unclassified
-            </span>
-          )}
-        </div>
+      <td className="max-w-[200px] border-b border-border/60 px-3 py-2">
+        <div className="truncate text-[13px] text-foreground font-medium">{lead.company || MUTED_DASH}</div>
       </td>
 
-      <td className="hidden max-w-[220px] border-b border-border/60 px-3 py-2 md:table-cell">
+      <td className="whitespace-nowrap border-b border-border/60 px-3 py-2" onClick={(e) => e.stopPropagation()}>
+        <LeadRoleBadge
+          role={lead.classification || lead.leadRole}
+          onChange={(newRole) => onRoleChange?.(lead.id, newRole)}
+        />
+      </td>
+
+      <td className="hidden max-w-[200px] border-b border-border/60 px-3 py-2 md:table-cell">
         <div className="truncate text-xs text-muted-foreground">{lead.email || '—'}</div>
       </td>
 

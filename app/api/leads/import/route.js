@@ -27,7 +27,13 @@ export async function POST(request) {
     }
 
     const defaultTags = formData.get('tags') ? formData.get('tags').split(',').map((t) => t.trim()).filter(Boolean) : [];
-    const defaultClassification = (formData.get('defaultClassification') || formData.get('classification') || 'Unclassified').trim();
+    const defaultClassification = (
+      formData.get('defaultClassification') ||
+      formData.get('classification') ||
+      formData.get('leadRole') ||
+      formData.get('role') ||
+      'Unassigned'
+    ).trim();
 
     const rows = [];
 
@@ -262,13 +268,22 @@ export async function POST(request) {
         ''
       ).toLowerCase().trim();
 
-      let rowClassification = 'Unclassified';
-      if (rawRole.includes('buyer') || rawRole.includes('client') || rawRole.includes('customer') || rawRole.includes('purchaser')) {
+      let rowClassification = 'Unassigned';
+      if (
+        (rawRole.includes('buyer') && (rawRole.includes('seller') || rawRole.includes('producer') || rawRole.includes('supplier'))) ||
+        rawRole.includes('both') ||
+        rawRole.includes('buyer & seller') ||
+        rawRole.includes('buyer and seller')
+      ) {
+        rowClassification = 'Buyer & Seller';
+      } else if (rawRole.includes('buyer') || rawRole.includes('client') || rawRole.includes('customer') || rawRole.includes('purchaser')) {
         rowClassification = 'Buyer';
       } else if (rawRole.includes('seller') || rawRole.includes('producer') || rawRole.includes('processor') || rawRole.includes('supplier') || rawRole.includes('vendor') || rawRole.includes('mine')) {
         rowClassification = 'Seller';
-      } else if (['Buyer', 'Seller', 'Unclassified'].includes(defaultClassification)) {
+      } else if (['Buyer', 'Seller', 'Buyer & Seller'].includes(defaultClassification)) {
         rowClassification = defaultClassification;
+      } else {
+        rowClassification = 'Unassigned';
       }
 
       leadsToScore.push({
@@ -362,6 +377,9 @@ export async function POST(request) {
         assigned_to: l.assigned_to,
         score: l.score || l.scoring?.compositeScore || 75,
         custom_fields: {
+          classification: l.classification || 'Unassigned',
+          lead_role: l.classification || 'Unassigned',
+          leadRole: l.classification || 'Unassigned',
           ...(l.custom_fields || {}),
           scoring: l.scoring || {
             fitScore: l.score || 80,

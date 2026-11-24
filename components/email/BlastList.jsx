@@ -61,6 +61,9 @@ export default function BlastList() {
   // Delete Confirmation Modal State
   const [campaignToDelete, setCampaignToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [deleteOption, setDeleteOption] = useState('only_campaign'); // 'only_campaign' | 'campaign_and_leads'
+  const [deletionImpact, setDeletionImpact] = useState(null);
+  const [impactLoading, setImpactLoading] = useState(false);
 
   // AI preview modal state
   const [selectedPreviewCampaign, setSelectedPreviewCampaign] = useState(null);
@@ -135,21 +138,57 @@ export default function BlastList() {
     }
   };
 
+  const openDeleteModal = async (camp) => {
+    setCampaignToDelete(camp);
+    setDeleteOption('only_campaign'); // Option A selected by default
+    setDeletionImpact(null);
+    setImpactLoading(true);
+    const campId = camp.id || camp._id;
+    try {
+      const res = await fetch(`/api/email/campaigns/${campId}?action=deletion_impact`);
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setDeletionImpact(json.data);
+      } else {
+        const totalFallback = camp.stats?.totalRecipients || camp.stats?.total || 0;
+        setDeletionImpact({
+          totalAssociated: totalFallback,
+          exclusiveCount: totalFallback,
+          sharedCount: 0,
+          protectedCount: 0,
+          eligibleForDeletionCount: totalFallback,
+        });
+      }
+    } catch (e) {
+      const totalFallback = camp.stats?.totalRecipients || camp.stats?.total || 0;
+      setDeletionImpact({
+        totalAssociated: totalFallback,
+        exclusiveCount: totalFallback,
+        sharedCount: 0,
+        protectedCount: 0,
+        eligibleForDeletionCount: totalFallback,
+      });
+    } finally {
+      setImpactLoading(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!campaignToDelete) return;
     const campId = campaignToDelete.id || campaignToDelete._id;
     setDeleting(true);
 
-    // Optimistically remove campaign immediately from state
-    setCampaigns((prev) => prev.filter((c) => (c.id || c._id) !== campId));
-
     try {
       const res = await fetch(`/api/email/campaigns/${campId}`, {
         method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deleteAssociatedLeads: deleteOption === 'campaign_and_leads',
+        }),
       });
       const json = await res.json();
       if (res.ok && json.success) {
-        toast.success(json.message || 'Campaign deleted from database');
+        toast.success(json.message || 'Campaign successfully deleted');
         setCampaignToDelete(null);
         await fetchCampaigns();
       } else {
@@ -608,7 +647,7 @@ export default function BlastList() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setCampaignToDelete(camp)}
+                      onClick={() => openDeleteModal(camp)}
                       className="h-7 w-7 p-0 text-muted-foreground hover:text-danger hover:bg-danger/10 transition"
                       title="Delete Campaign"
                     >
@@ -622,13 +661,13 @@ export default function BlastList() {
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation Dialog with Dynamic Lead Controls */}
       {campaignToDelete && (
         <ModalFrame
-          title="Delete Campaign"
+          title="Delete Campaign & Lead Controls"
           onClose={() => setCampaignToDelete(null)}
         >
-          <div className="p-5 space-y-4 max-w-md bg-card border border-border rounded-xl">
+          <div className="p-5 space-y-4 max-w-lg bg-card border border-border rounded-xl">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-danger/10 border border-danger/20 flex items-center justify-center text-danger shrink-0 mt-0.5">
                 <AlertTriangle className="w-5 h-5" />
@@ -638,21 +677,102 @@ export default function BlastList() {
                   Confirm Deletion of &ldquo;{campaignToDelete.name}&rdquo;
                 </h3>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Are you sure you want to permanently delete this campaign? This will remove the campaign record and its queued/sent recipient dispatch entries from Supabase.
+                  Decide whether CRM leads associated with this campaign should also be deleted or retained.
                 </p>
-                {(campaignToDelete.stats?.sent || 0) > 0 ? (
-                  <div className="p-2.5 rounded-lg bg-danger/10 border border-danger/20 text-xs text-danger mt-2 space-y-1">
-                    <p className="font-semibold">⚠️ Previously Dispatched Campaign ({campaignToDelete.stats.sent} sent):</p>
-                    <p className="text-[11px] leading-relaxed">
-                      This campaign has already sent emails. Deleting it will permanently remove the campaign and its recipient logs. All CRM leads and contact records will remain 100% intact.
-                    </p>
-                  </div>
+              </div>
+            </div>
+
+            {/* Dynamic Lead Counts Summary */}
+            <div className="p-3.5 rounded-xl bg-muted/40 border border-border space-y-2 text-xs">
+              <div className="font-semibold text-foreground flex items-center justify-between">
+                <span>Associated CRM Leads</span>
+                {impactLoading ? (
+                  <span className="text-[11px] text-muted-foreground animate-pulse">Calculating live metrics…</span>
                 ) : (
-                  <p className="text-[11px] text-muted-foreground italic pt-1">
-                    Associated leads and CRM records will remain completely intact.
-                  </p>
+                  <span className="font-mono text-primary font-bold">
+                    {deletionImpact?.totalAssociated ?? 0} Total
+                  </span>
                 )}
               </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
+                <div className="p-2.5 rounded-lg bg-background/70 border border-border/70">
+                  <span className="text-muted-foreground block text-[10px] uppercase tracking-wider">Exclusive to Campaign</span>
+                  <span className="font-semibold text-foreground text-xs">
+                    {impactLoading ? '…' : `${deletionImpact?.exclusiveCount ?? 0} leads`}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-background/70 border border-border/70">
+                  <span className="text-muted-foreground block text-[10px] uppercase tracking-wider">Shared with Other Campaigns</span>
+                  <span className="font-semibold text-blue-600 dark:text-blue-400 text-xs">
+                    {impactLoading ? '…' : `${deletionImpact?.sharedCount ?? 0} leads (Protected)`}
+                  </span>
+                </div>
+              </div>
+
+              {!impactLoading && deletionImpact?.protectedCount > 0 && (
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 pt-0.5 font-medium">
+                  🛡️ {deletionImpact.protectedCount} exclusive lead(s) have active deals or messages and will remain protected in the CRM.
+                </p>
+              )}
+            </div>
+
+            {/* Options Selection */}
+            <div className="space-y-2.5 pt-1">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  deleteOption === 'only_campaign'
+                    ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
+                    : 'border-border bg-card hover:bg-muted/30'
+                }`}
+                onClick={() => setDeleteOption('only_campaign')}
+              >
+                <input
+                  type="radio"
+                  name="deleteOption"
+                  value="only_campaign"
+                  checked={deleteOption === 'only_campaign'}
+                  onChange={() => setDeleteOption('only_campaign')}
+                  className="mt-1 text-primary focus:ring-primary"
+                />
+                <div className="space-y-0.5 text-xs">
+                  <div className="font-semibold text-foreground flex items-center gap-2">
+                    Option A — Delete Campaign Only
+                    <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Default & Recommended
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Delete the selected campaign and its recipient queues. <strong>Retain all {deletionImpact?.totalAssociated ?? 0} associated leads</strong> in the CRM with contact info, assigned roles, notes, and communication history 100% intact.
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  deleteOption === 'campaign_and_leads'
+                    ? 'border-danger bg-danger/5 ring-1 ring-danger/40'
+                    : 'border-border bg-card hover:bg-muted/30'
+                }`}
+                onClick={() => setDeleteOption('campaign_and_leads')}
+              >
+                <input
+                  type="radio"
+                  name="deleteOption"
+                  value="campaign_and_leads"
+                  checked={deleteOption === 'campaign_and_leads'}
+                  onChange={() => setDeleteOption('campaign_and_leads')}
+                  className="mt-1 text-danger focus:ring-danger"
+                />
+                <div className="space-y-0.5 text-xs">
+                  <div className="font-semibold text-foreground">
+                    Option B — Delete Campaign and Associated Leads
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-relaxed">
+                    Delete the selected campaign and delete eligible leads associated exclusively with it (<strong>{deletionImpact?.eligibleForDeletionCount ?? 0} leads</strong>). Preserve {deletionImpact?.sharedCount ?? 0} leads associated with other campaigns and any protected deal contacts.
+                  </p>
+                </div>
+              </label>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
@@ -668,12 +788,12 @@ export default function BlastList() {
               <Button
                 variant="destructive"
                 size="sm"
-                disabled={deleting}
+                disabled={deleting || impactLoading}
                 onClick={confirmDelete}
                 className="bg-danger hover:bg-danger/90 text-danger-foreground h-8 text-xs gap-1.5 font-medium"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                {deleting ? 'Deleting...' : 'Delete Campaign'}
+                {deleting ? 'Deleting...' : deleteOption === 'campaign_and_leads' ? 'Delete Campaign & Leads' : 'Delete Campaign Only'}
               </Button>
             </div>
           </div>

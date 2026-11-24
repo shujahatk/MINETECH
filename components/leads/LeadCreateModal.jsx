@@ -44,6 +44,7 @@ export default function LeadCreateModal({ onClose, onSuccess }) {
     productGrade: 'Perfometa – Calcined Kaolin, Metakaolin',
     industry: 'Ceramics',
     application: 'Sanitaryware',
+    leadRole: 'Unassigned',
     status: 'NEW',
     sampleStatus: 'Requirements Not Yet Received',
     trialStatus: 'Trial Discussed',
@@ -99,6 +100,9 @@ export default function LeadCreateModal({ onClose, onSuccess }) {
       productGrade: formData.productGrade,
       industry: formData.industry,
       application: formData.application,
+      leadRole: formData.leadRole,
+      classification: formData.leadRole,
+      role: formData.leadRole,
       status: formData.status,
       sampleStatus: formData.sampleStatus,
       trialStatus: formData.trialStatus,
@@ -322,8 +326,23 @@ export default function LeadCreateModal({ onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Pipeline Stage & Priority */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Lead Role, Pipeline Stage & Priority */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Lead Role</label>
+              <select
+                name="leadRole"
+                value={formData.leadRole}
+                onChange={handleChange}
+                className="w-full h-9 text-xs rounded-xl border border-border bg-background text-foreground px-2.5 font-semibold focus:outline-none focus:border-primary cursor-pointer"
+              >
+                <option value="Unassigned">Unassigned</option>
+                <option value="Buyer">Buyer</option>
+                <option value="Seller">Seller</option>
+                <option value="Buyer & Seller">Buyer & Seller</option>
+              </select>
+            </div>
+
             <div>
               <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Initial Pipeline Stage</label>
               <select

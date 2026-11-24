@@ -11,7 +11,7 @@ import { invalidateLeadsCache } from '@/components/leads/useLeads';
 export default function LeadImportModal({ onClose, onImported, onSuccess }) {
   const [file, setFile] = useState(null);
   const [tags, setTags] = useState('Outbound List, High-Value');
-  const [defaultClassification, setDefaultClassification] = useState('Unclassified');
+  const [defaultClassification, setDefaultClassification] = useState('Unassigned');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
@@ -166,20 +166,21 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
               />
             </div>
 
-            {/* Lead Classification Selector */}
+            {/* Lead Role / Classification Selector */}
             <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Lead Classification</label>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">Lead Role</label>
               <select
                 value={defaultClassification}
                 onChange={(e) => setDefaultClassification(e.target.value)}
-                className="w-full bg-muted/20 border border-border text-xs text-foreground h-9 rounded-xl px-2.5 focus:outline-none focus:border-primary"
+                className="w-full bg-muted/20 border border-border text-xs text-foreground h-9 rounded-xl px-2.5 focus:outline-none focus:border-primary cursor-pointer"
               >
-                <option value="Unclassified">Auto-detect from CSV / Unclassified</option>
+                <option value="Unassigned">Unassigned (Default - detect from CSV if present)</option>
                 <option value="Buyer">Classify all as Buyer (Purchaser / Consumer)</option>
                 <option value="Seller">Classify all as Seller (Supplier / Producer / Mine)</option>
+                <option value="Buyer & Seller">Classify all as Buyer & Seller (Dual Operations)</option>
               </select>
               <p className="text-[10px] text-muted-foreground mt-1">
-                CSV columns like &quot;Role&quot;, &quot;Type&quot;, &quot;Classification&quot;, or &quot;Buyer/Seller&quot; will be automatically detected and mapped.
+                CSV columns like &quot;Lead Role&quot;, &quot;Role&quot;, &quot;Type&quot;, &quot;Classification&quot;, or &quot;Buyer/Seller&quot; will be automatically detected and mapped.
               </p>
             </div>
 

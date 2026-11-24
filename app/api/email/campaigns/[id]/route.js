@@ -4,6 +4,7 @@ import {
   getCampaignById,
   updateCampaign,
   deleteCampaign,
+  getCampaignDeletionImpact,
   duplicateCampaign,
   archiveCampaign,
   launchCampaign,
@@ -22,6 +23,15 @@ export async function GET(request, { params }) {
 
   try {
     const { id } = params;
+    const url = new URL(request.url);
+    if (url.searchParams.get('action') === 'deletion_impact' || url.searchParams.get('impact') === 'true') {
+      const impact = await getCampaignDeletionImpact(id);
+      return NextResponse.json({
+        success: true,
+        data: impact,
+      });
+    }
+
     const result = await getCampaignById(id);
     if (!result) {
       return NextResponse.json(
@@ -77,12 +87,23 @@ export async function DELETE(request, { params }) {
 
   try {
     const { id } = params;
-    const result = await deleteCampaign(id);
+    const body = await request.json().catch(() => ({}));
+    const url = new URL(request.url);
+    const deleteLeadsParam = url.searchParams.get('deleteLeads');
+    const deleteAssociatedLeads =
+      body.deleteAssociatedLeads === true ||
+      body.deleteLeads === true ||
+      deleteLeadsParam === 'true';
+
+    const result = await deleteCampaign(id, { deleteAssociatedLeads });
 
     return NextResponse.json({
       success: true,
       message: result.message,
       deletedId: id,
+      totalAssociated: result.totalAssociated,
+      deletedExclusiveCount: result.deletedExclusiveCount,
+      retainedSharedCount: result.retainedSharedCount,
     });
   } catch (err) {
     console.error('[Campaign DELETE Error]:', err);

@@ -406,6 +406,46 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
     }
   };
 
+  const handleBulkRole = async (role) => {
+    if (!role || selected.size === 0) return;
+    const ids = [...selected];
+    setBusy('role');
+    try {
+      const res = await fetch('/api/leads/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_role', leadIds: ids, role }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.success === false) throw new Error(json.message || 'Role update failed');
+      ids.forEach((id) => patchLead(id, { classification: role, leadRole: role, role }));
+      setSelected(new Set());
+      toast.success(json.message || `Assigned "${role}" to ${ids.length} lead${ids.length === 1 ? '' : 's'}`);
+    } catch (err) {
+      toast.error(err.message || 'Could not update lead roles');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleRoleChange = async (leadId, newRole) => {
+    try {
+      patchLead(leadId, { classification: newRole, leadRole: newRole, role: newRole });
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ classification: newRole, leadRole: newRole }),
+      });
+      if (!res.ok) {
+        throw new Error('Failed to update lead role');
+      }
+      toast.success(`Role updated to ${newRole}`);
+    } catch (err) {
+      refetch();
+      toast.error(err.message || 'Could not update role');
+    }
+  };
+
   const handleBulkAnalyze = async () => {
     setBusy('analyze');
     try {
@@ -565,6 +605,13 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
           {selected.size} selected
         </span>
         <div className="flex flex-wrap items-center gap-2">
+          <FilterSelect label="Lead Role" value="" onChange={handleBulkRole}>
+            <option value="">Set Lead Role…</option>
+            <option value="Buyer">Buyer</option>
+            <option value="Seller">Seller</option>
+            <option value="Buyer & Seller">Buyer & Seller</option>
+            <option value="Unassigned">Unassigned</option>
+          </FilterSelect>
           <FilterSelect label="Move to stage" value="" onChange={handleBulkStatus}>
             <option value="">Move to stage…</option>
             {STATUS_OPTIONS.map((s) => (
@@ -766,9 +813,10 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
       <div className="flex items-center gap-1.5 border-b border-border pb-1 overflow-x-auto">
         {[
           { id: 'ALL', label: 'All Leads', count: classificationCounts?.all ?? total },
-          { id: 'Buyer', label: 'Buyers', count: classificationCounts?.buyers ?? 0, color: 'text-emerald-600 dark:text-emerald-400' },
-          { id: 'Seller', label: 'Sellers', count: classificationCounts?.sellers ?? 0, color: 'text-blue-600 dark:text-blue-400' },
-          { id: 'Unclassified', label: 'Unclassified', count: classificationCounts?.unclassified ?? 0 },
+          { id: 'Buyer', label: 'Buyers', count: classificationCounts?.buyers ?? 0, color: 'text-blue-600 dark:text-blue-400' },
+          { id: 'Seller', label: 'Sellers', count: classificationCounts?.sellers ?? 0, color: 'text-purple-600 dark:text-purple-400' },
+          { id: 'Buyer & Seller', label: 'Buyer & Seller', count: classificationCounts?.buyer_and_sellers ?? 0, color: 'text-teal-600 dark:text-teal-400' },
+          { id: 'Unassigned', label: 'Unassigned', count: classificationCounts?.unassigned ?? 0, color: 'text-muted-foreground' },
           { id: 'campaigns', label: 'Campaigns', isCampaignTab: true },
         ].map((tab) => {
           const isActive = tab.isCampaignTab
@@ -854,6 +902,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
                   </th>
                   <SortHeader label="Lead" column="name" sort={sort} onSort={toggleSort} />
                   <SortHeader label="Company" column="company" sort={sort} onSort={toggleSort} />
+                  <PlainHeader>Lead Role</PlainHeader>
                   <PlainHeader className="hidden md:table-cell">Email</PlainHeader>
                   <SortHeader label="Status" column="status" sort={sort} onSort={toggleSort} />
                   <SortHeader label="Priority" column="score" sort={sort} onSort={toggleSort} />
@@ -876,6 +925,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
                       today={today}
                       onToggle={toggleOne}
                       onOpen={openLead}
+                      onRoleChange={handleRoleChange}
                     />
                   ))
                 )}

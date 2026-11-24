@@ -44,6 +44,7 @@ import {
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import TemperatureBadge from '@/components/leads/TemperatureBadge';
+import { LeadRoleBadge } from '@/components/leads/LeadRow';
 import { deriveTemperature } from '@/lib/leads/temperature';
 import { dayDiff, formatDateTime, formatShortDate, initials, localDateString, statusLabel, timeAgo } from '@/lib/leads/format';
 import { Button } from '@/components/ui/button';
@@ -153,6 +154,7 @@ function OverviewTab({
   copiedEmail,
   onCopyEmail,
   onOpenTab,
+  onRoleChange,
 }) {
   const today = localDateString();
   const diff = dayDiff(nextActionDate, today);
@@ -217,18 +219,11 @@ function OverviewTab({
 
       <Section title="Pipeline" icon={Layers}>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
-          <OverviewField label="Classification">
-            <span
-              className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
-                lead.classification === 'Buyer'
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                  : lead.classification === 'Seller'
-                  ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
-                  : 'bg-muted text-muted-foreground border border-border'
-              }`}
-            >
-              {lead.classification || 'Unclassified'}
-            </span>
+          <OverviewField label="Lead Role">
+            <LeadRoleBadge
+              role={lead.classification || lead.leadRole}
+              onChange={onRoleChange}
+            />
           </OverviewField>
           <OverviewField label="Status">
             <StatusBadge status={stage} label={statusLabel(stage)} size="sm" />
@@ -844,6 +839,11 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
     saveOpportunityChanges({ status: newStage });
   };
 
+  const handleRoleDirectChange = (newRole) => {
+    setLead((prev) => ({ ...prev, classification: newRole, leadRole: newRole, role: newRole }));
+    saveOpportunityChanges({ classification: newRole, leadRole: newRole });
+  };
+
   const handleOpportunityStatusChange = (newOppStatus) => {
     setOpportunityStatus(newOppStatus);
     saveOpportunityChanges({ opportunityStatus: newOppStatus });
@@ -1211,6 +1211,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
               copiedEmail={copiedEmail}
               onCopyEmail={() => copyToClipboard(lead.email, 'email')}
               onOpenTab={setActiveTab}
+              onRoleChange={handleRoleDirectChange}
             />
           )}
 
