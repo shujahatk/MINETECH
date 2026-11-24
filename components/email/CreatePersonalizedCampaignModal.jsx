@@ -98,9 +98,12 @@ export default function CreatePersonalizedCampaignModal({
   };
 
   const handleOpenReview = () => {
-    if (createdCampaignId) {
-      router.push(`/email/blasts/${createdCampaignId}`);
+    const targetId = createdCampaignId || selectedDrafts.find((d) => d.campaign_id)?.campaign_id;
+    if (targetId) {
+      router.push(`/email/blasts/${targetId}`);
       onClose();
+    } else {
+      toast.error('Campaign ID not available. Please try refreshing.');
     }
   };
 

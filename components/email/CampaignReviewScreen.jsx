@@ -88,7 +88,39 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
       // Fetch recipient records
       const recRes = await fetch(`/api/email/campaigns/${campaignId}/recipients`);
       const recData = await recRes.json();
-      const recList = recData.recipients || [];
+      let recList = recData.recipients || [];
+
+      // Check if this was opened with a workspace batch ID that has an active campaign draft
+      if (recList.length === 0 && camp.stats?.is_personalized_workspace) {
+        const linkedCampId = Array.isArray(camp.stats?.drafts)
+          ? camp.stats.drafts.find((d) => d.campaign_id)?.campaign_id
+          : null;
+
+        if (linkedCampId && linkedCampId !== campaignId) {
+          router.replace(`/email/blasts/${linkedCampId}`);
+          return;
+        }
+
+        // If no linked campaign yet, construct fallback recipient view from batch drafts
+        if (Array.isArray(camp.stats?.drafts) && camp.stats.drafts.length > 0) {
+          recList = camp.stats.drafts.map((d, idx) => ({
+            id: d.id || `draft-${idx}`,
+            email: d.selected_contacts?.[0]?.email || d.matched_lead?.email || '',
+            tokens: {
+              company_name: d.extracted_company || d.matched_lead?.company_name || 'Target Account',
+              contact_name: d.selected_contacts?.[0]?.name || d.matched_lead?.contact_name || '',
+              custom_subject: d.edited_subject || d.extracted_subject || camp.name || '(No subject)',
+              custom_body_plain: d.edited_body_plain || d.extracted_body_plain || '',
+              custom_body_html: d.edited_body_html || d.extracted_body_html || '',
+              signature_html: d.assigned_signature_html || '',
+              attachments: d.assigned_attachments || camp.stats?.campaign_attachments || [],
+              approval_status: d.approval_status || 'needs_review',
+              user_approved: d.user_approved,
+            },
+          }));
+        }
+      }
+
       setRecipients(recList);
 
       // Default select all approved recipients

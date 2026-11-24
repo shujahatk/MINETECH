@@ -104,6 +104,10 @@ export default function UnifiedEmailWorkspace() {
       if (data.success) {
         setActiveBatch(data.batch);
         setDrafts(data.drafts || []);
+        const existingCampId = (data.drafts || []).find((d) => d.campaign_id)?.campaign_id;
+        if (existingCampId) {
+          setCreatedCampaignId((prev) => prev || existingCampId);
+        }
         setMetrics(data.metrics || {});
         setCampaignAttachments(data.campaignAttachments || data.batch?.campaignAttachments || []);
         setConfiguredSignature(data.configuredSignature || null);
@@ -679,16 +683,20 @@ export default function UnifiedEmailWorkspace() {
             Upload PDF / Document
           </Button>
 
-          {(createdCampaignId || activeBatch?.id) && (
-            <Button
-              size="sm"
-              onClick={() => router.push(`/email/blasts/${createdCampaignId || activeBatch?.id}`)}
-              className="bg-card hover:bg-muted/40 text-primary border border-primary/40 font-semibold text-xs h-9"
-            >
-              <Eye className="w-3.5 h-3.5 mr-1.5 text-primary" />
-              View Campaign
-            </Button>
-          )}
+          {(() => {
+            const activeCampaignId = createdCampaignId || drafts.find((d) => d.campaign_id)?.campaign_id;
+            if (!activeCampaignId) return null;
+            return (
+              <Button
+                size="sm"
+                onClick={() => router.push(`/email/blasts/${activeCampaignId}`)}
+                className="bg-card hover:bg-muted/40 text-primary border border-primary/40 font-semibold text-xs h-9"
+              >
+                <Eye className="w-3.5 h-3.5 mr-1.5 text-primary" />
+                View Campaign
+              </Button>
+            );
+          })()}
 
           <Button
             size="sm"
