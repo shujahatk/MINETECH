@@ -95,11 +95,10 @@ function FilterSelect({ label, value, onChange, children }) {
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`h-8 max-w-[11rem] cursor-pointer appearance-none rounded-lg border bg-card pl-2.5 pr-7 text-xs font-medium outline-none transition-colors hover:border-muted-foreground/40 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 ${
-          active
-            ? 'border-primary/40 bg-primary/5 text-foreground'
-            : 'border-border text-muted-foreground hover:text-foreground'
-        }`}
+        className={`h-8 max-w-[11rem] cursor-pointer appearance-none rounded-lg border bg-card pl-2.5 pr-7 text-xs font-medium outline-none transition-colors hover:border-muted-foreground/40 focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/15 ${active
+          ? 'border-primary/40 bg-primary/5 text-foreground'
+          : 'border-border text-muted-foreground hover:text-foreground'
+          }`}
       >
         {children}
       </select>
@@ -123,9 +122,8 @@ function SortHeader({ label, column, sort, onSort, className = '' }) {
       <button
         type="button"
         onClick={() => onSort(column)}
-        className={`-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-          active ? 'text-foreground' : 'text-muted-foreground'
-        }`}
+        className={`-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-[11px] font-semibold uppercase tracking-wide transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? 'text-foreground' : 'text-muted-foreground'
+          }`}
       >
         {label}
         <Icon className={`h-3 w-3 ${active ? 'opacity-100' : 'opacity-40'}`} aria-hidden="true" />
@@ -522,9 +520,8 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
               type="button"
               aria-pressed={on}
               onClick={() => setFilter('temperature', t.id)}
-              className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                on ? 'bg-card text-foreground shadow-subtle ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
-              }`}
+              className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${on ? 'bg-card text-foreground shadow-subtle ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
+                }`}
             >
               {t.dot && <span className={`h-1.5 w-1.5 rounded-full ${t.dot}`} aria-hidden="true" />}
               {t.label}
@@ -643,9 +640,8 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
 
   const paginationBar = !showEmpty ? (
     <div
-      className={`flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground ${
-        isBoard ? '' : 'border-t border-border bg-muted/20 px-3 py-2'
-      }`}
+      className={`flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground ${isBoard ? '' : 'border-t border-border bg-muted/20 px-3 py-2'
+        }`}
     >
       <span className="tabular-nums">
         {showSkeleton ? (
@@ -711,14 +707,14 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
   const emptyTitle = filters.campaign
     ? `No leads found in campaign "${activeCampaignObj?.name || 'Selected Campaign'}"`
     : hasFilters
-    ? (isBoard ? 'No opportunities match your filters' : 'No leads match your filters')
-    : (isBoard ? 'No opportunities yet' : 'No leads yet');
+      ? (isBoard ? 'No opportunities match your filters' : 'No leads match your filters')
+      : (isBoard ? 'No opportunities yet' : 'No leads yet');
 
   const emptyDescription = filters.campaign
     ? 'This campaign does not have any recipient leads assigned in the database yet.'
     : hasFilters
-    ? 'Try removing a filter or searching for something else.'
-    : (isBoard ? 'Import a CSV or add your first lead.' : 'Import a CSV or add your first lead to get started.');
+      ? 'Try removing a filter or searching for something else.'
+      : (isBoard ? 'Import a CSV or add your first lead.' : 'Import a CSV or add your first lead to get started.');
 
   const emptyAction = filters.campaign ? (
     <div className="flex items-center gap-2">
@@ -769,9 +765,8 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
                     setViewMode(id);
                     setPage(1);
                   }}
-                  className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-                    viewMode === id ? 'bg-card text-foreground shadow-subtle ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${viewMode === id ? 'bg-card text-foreground shadow-subtle ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
                   {label}
@@ -835,11 +830,10 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
                   setFilter('classification', tab.id === 'ALL' ? '' : tab.id);
                 }
               }}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
-                isActive
-                  ? 'bg-primary/10 text-primary border border-primary/25 shadow-subtle'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent'
-              }`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${isActive
+                ? 'bg-primary/10 text-primary border border-primary/25 shadow-subtle'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50 border border-transparent'
+                }`}
             >
               <span>{tab.label}</span>
               {typeof tab.count === 'number' && (

@@ -165,7 +165,7 @@ export async function POST(request) {
       const website = (row[columnMap.website] || row.Website || row.website || '').trim();
       const supplierType = (row[columnMap.supplier_type] || row['Supplier type'] || row.Type || row.lead_type || row['Lead Type'] || 'Producer / Processor').trim();
       const industry = (row[columnMap.niche] || row[columnMap.industry] || row.Industry || row.industry || supplierType || 'Industrial Minerals').trim();
-      
+
       const locationNote = (row[columnMap.location_note] || row['Location / origin note'] || row.Location || '').trim();
       let city = (row[columnMap.city] || row.city || row.City || '').trim();
       let country = (row[columnMap.country] || row.country || row.Country || '').trim();

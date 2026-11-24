@@ -411,7 +411,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
   const [tagInput, setTagInput] = useState('');
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'opportunity' | 'intelligence' | 'conversation_intel' | 'company' | 'contacts' | 'timeline' | 'notes'
   const loadedTabsRef = React.useRef({ intelligence: false, conversation_intel: false });
-  
+
   // Editable Opportunity State
   const [stage, setStage] = useState('NEW');
   const [opportunityStatus, setOpportunityStatus] = useState('ACTIVE');
@@ -1027,7 +1027,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
   return (
     <ModalFrame drawer title="Opportunity & Company Dossier" onClose={onClose}>
       <div className="flex min-h-full flex-col bg-card text-foreground">
-        
+
         {/* 1 + 2. Sticky header: identity, state, primary actions, tabs */}
         <div className="sticky top-0 z-20 border-b border-border bg-card">
           <div className="space-y-3 px-5 pb-3 pt-4">
@@ -1161,9 +1161,8 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
                   role="tab"
                   aria-selected={on}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md px-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 ${
-                    on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`relative inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-md px-2.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 ${on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   {TabIcon && <TabIcon className={`h-3.5 w-3.5 ${on ? 'text-primary' : ''}`} aria-hidden="true" />}
                   <span>{tab.label}</span>
@@ -1185,7 +1184,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
 
         {/* 3. Drawer Body */}
         <div className="flex-1 space-y-3 bg-muted/20 p-4">
-          
+
           {/* TAB 0: OVERVIEW (default) */}
           {activeTab === 'overview' && (
             <OverviewTab
@@ -1218,7 +1217,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
           {/* TAB 1: OPPORTUNITY & MINERAL SPECS */}
           {activeTab === 'opportunity' && (
             <div className="space-y-4">
-              
+
               {/* Opportunity Status & Pipeline Stage Overview */}
               <Card className="p-4 space-y-3.5 bg-card border-border shadow-subtle">
                 <div className="flex items-center justify-between border-b border-border pb-2.5">
@@ -1376,7 +1375,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
 
               {/* 6 & 7. TECHNICAL EVALUATION & TRIAL SUB-STATUSES */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
+
                 {/* 6. Sample / Technical Status */}
                 <Card className={`p-4 space-y-2 border transition-all ${stage === 'TECHNICAL_EVALUATION' ? 'bg-primary/5 border-primary/40' : 'bg-card border-border'}`}>
                   <div className="flex items-center justify-between">
@@ -1908,13 +1907,12 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
                           Opt-Out / DNC
                         </span>
                       ) : (
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          conversationIntel?.supplierIntent === 'positive'
-                            ? 'bg-primary/10 text-primary border-primary/30'
-                            : conversationIntel?.supplierIntent === 'negative'
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${conversationIntel?.supplierIntent === 'positive'
+                          ? 'bg-primary/10 text-primary border-primary/30'
+                          : conversationIntel?.supplierIntent === 'negative'
                             ? 'bg-destructive/10 text-destructive border-destructive/30'
                             : 'bg-muted text-muted-foreground border-border'
-                        }`}>
+                          }`}>
                           Intent: {conversationIntel?.supplierIntent ? conversationIntel.supplierIntent.toUpperCase() : 'NEUTRAL'}
                         </span>
                       )}
@@ -2392,7 +2390,7 @@ export default function LeadDrawer({ leadId, initialLead = null, onClose, onUpda
           {/* TAB 5: NOTES & NEXT ACTION */}
           {activeTab === 'notes' && (
             <div className="space-y-4">
-              
+
               {/* 12. Next Action System */}
               <Card className="p-4 space-y-3 bg-card border-border shadow-subtle">
                 <span className="field-label block">
