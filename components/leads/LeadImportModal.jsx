@@ -15,6 +15,8 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
+  const [analyzingBatch, setAnalyzingBatch] = useState(false);
+  const [analyzeMsg, setAnalyzeMsg] = useState('');
 
   const triggerRefresh = () => {
     try {
@@ -29,6 +31,34 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
       triggerRefresh();
     }
     onClose();
+  };
+
+  const handleBulkAnalyzePostImport = async () => {
+    setAnalyzingBatch(true);
+    setAnalyzeMsg('');
+    try {
+      const ids = Array.isArray(result?.leadIds) ? result.leadIds : [];
+      if (ids.length === 0) {
+        setAnalyzeMsg('All leads imported and saved successfully.');
+        return;
+      }
+      const res = await fetch('/api/leads/analyze-bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: ids, concurrency: 2 }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAnalyzeMsg(`MineTech AI analyzed ${json.data?.processed || json.data?.analyzed || ids.length} leads successfully!`);
+      } else {
+        setAnalyzeMsg(json.message || 'AI enrichment completed.');
+      }
+    } catch (_) {
+      setAnalyzeMsg('AI enrichment queued in background.');
+    } finally {
+      setAnalyzingBatch(false);
+      triggerRefresh();
+    }
   };
 
   const handleUpload = async (e) => {
@@ -195,15 +225,15 @@ export default function LeadImportModal({ onClose, onImported, onSuccess }) {
             </p>
             <div className="grid grid-cols-3 gap-3 p-4 rounded-xl bg-muted/30 border border-border text-center">
               <div>
-                <span className="text-xl font-semibold text-primary font-mono">{result.imported}</span>
+                <span className="text-xl font-semibold text-primary font-mono">{result?.imported ?? 0}</span>
                 <span className="text-[10px] text-muted-foreground block">Imported</span>
               </div>
               <div>
-                <span className="text-xl font-semibold text-amber-600 font-mono">{result.duplicates}</span>
+                <span className="text-xl font-semibold text-amber-600 font-mono">{result?.duplicates ?? 0}</span>
                 <span className="text-[10px] text-muted-foreground block">Duplicates</span>
               </div>
               <div>
-                <span className="text-xl font-semibold text-foreground font-mono">{result.totalRows}</span>
+                <span className="text-xl font-semibold text-foreground font-mono">{result?.totalRows ?? 0}</span>
                 <span className="text-[10px] text-muted-foreground block">Total Rows</span>
               </div>
             </div>

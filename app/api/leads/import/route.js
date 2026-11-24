@@ -411,6 +411,7 @@ export async function POST(request) {
         imported: importedCount,
         duplicates: duplicateRows,
         invalidRows,
+        leadIds: (insertedData || []).map((l) => l.id),
       },
     });
   } catch (err) {

@@ -966,11 +966,10 @@ export default function UnifiedEmailWorkspace() {
                     Campaign Attachments
                     <Badge
                       variant="outline"
-                      className={`text-[10px] h-5 font-semibold ${
-                        allUniqueCampaignAttachments.length > 0
-                          ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                          : 'bg-muted text-muted-foreground'
-                      }`}
+                      className={`text-[10px] h-5 font-semibold ${allUniqueCampaignAttachments.length > 0
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                        : 'bg-muted text-muted-foreground'
+                        }`}
                     >
                       {allUniqueCampaignAttachments.length > 0
                         ? `${allUniqueCampaignAttachments.length} file${allUniqueCampaignAttachments.length > 1 ? 's' : ''} attached`
