@@ -342,6 +342,7 @@ export async function POST(request) {
 
     // 3. Insert Scored Leads into Supabase
     let importedCount = 0;
+    let insertedLeadIds = [];
     if (scoredLeads.length > 0) {
       const recordsToInsert = scoredLeads.map((l) => ({
         first_name: l.first_name,
@@ -386,6 +387,7 @@ export async function POST(request) {
       }
 
       importedCount = insertedData ? insertedData.length : recordsToInsert.length;
+      insertedLeadIds = (insertedData || []).map((l) => l.id);
 
       // 4. Record Real-Time Activity Log in Supabase
       await supabaseAdmin
@@ -411,7 +413,7 @@ export async function POST(request) {
         imported: importedCount,
         duplicates: duplicateRows,
         invalidRows,
-        leadIds: (insertedData || []).map((l) => l.id),
+        leadIds: insertedLeadIds,
       },
     });
   } catch (err) {
