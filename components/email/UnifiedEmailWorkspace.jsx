@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Upload,
   FileText,
@@ -32,7 +32,8 @@ import {
   FileSignature,
   Eye,
   Plus,
-  FolderOpen
+  FolderOpen,
+  Radio
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,9 +45,24 @@ import CreatePersonalizedCampaignModal from './CreatePersonalizedCampaignModal';
 import RematchCompanyModal from './RematchCompanyModal';
 import CustomSignatureModal from './CustomSignatureModal';
 import AttachFilesModal from './AttachFilesModal';
+import CampaignHubView from './CampaignHubView';
 
 export default function UnifiedEmailWorkspace() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const [workspaceView, setWorkspaceView] = useState(() => {
+    return searchParams?.get('view') === 'campaigns' ? 'campaigns' : 'studio';
+  });
+
+  useEffect(() => {
+    const v = searchParams?.get('view');
+    if (v === 'campaigns') {
+      setWorkspaceView('campaigns');
+    } else if (v === 'studio') {
+      setWorkspaceView('studio');
+    }
+  }, [searchParams]);
+
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [activeBatch, setActiveBatch] = useState(null);
@@ -616,7 +632,63 @@ export default function UnifiedEmailWorkspace() {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Top Banner & Header — Native MineTech Design System */}
+      {/* Top Segmented Workspace Navigation */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/80">
+        <div className="inline-flex items-center gap-1.5 p-1 rounded-xl bg-muted/40 border border-border">
+          <button
+            type="button"
+            onClick={() => {
+              setWorkspaceView('studio');
+              router.replace('/email/workspace');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              workspaceView === 'studio'
+                ? 'bg-card text-foreground shadow-xs border border-border/80'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span>Email Studio</span>
+            {drafts.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-primary/20 text-primary font-mono">
+                {drafts.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setWorkspaceView('campaigns');
+              router.replace('/email/workspace?view=campaigns');
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              workspaceView === 'campaigns'
+                ? 'bg-card text-foreground shadow-xs border border-border/80'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5 text-primary" />
+            <span>Campaign Hub & History</span>
+          </button>
+        </div>
+      </div>
+
+      {workspaceView === 'campaigns' ? (
+        <CampaignHubView
+          onOpenStudio={() => {
+            setWorkspaceView('studio');
+            router.replace('/email/workspace');
+          }}
+          onOpenCreateModal={() => {
+            setWorkspaceView('studio');
+            setIsUploadOpen(true);
+            router.replace('/email/workspace');
+          }}
+        />
+      ) : (
+        <>
+          {/* Top Banner & Header — Native MineTech Design System */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-card p-6 rounded-2xl border border-border shadow-card">
         <div className="space-y-1.5">
           <div className="flex items-center gap-2.5">
@@ -1587,6 +1659,8 @@ export default function UnifiedEmailWorkspace() {
           </div>
         )}
       </Card>
+        </>
+      )}
 
       {/* Editor Modal */}
       {editingDraftIndex !== null && drafts[editingDraftIndex] && (

@@ -1,5 +1,5 @@
-import BlastList from '@/components/email/BlastList';
+import { redirect } from 'next/navigation';
 
 export default function BlastsPage() {
-  return <BlastList />;
+  redirect('/email/workspace?view=campaigns');
 }

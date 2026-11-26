@@ -40,7 +40,6 @@ const sections = [
       ['Dashboard', '/dashboard', LayoutDashboard],
       ['Leads & CRM', '/leads', Users],
       ['Email Workspace', '/email/workspace', Sparkles],
-      ['Campaigns', '/email/blasts', Radio],
       ['Inbox', '/email/inbox', Inbox],
     ],
   },

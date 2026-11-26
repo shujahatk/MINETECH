@@ -407,20 +407,24 @@ export async function POST(request) {
       importedCount = insertedData ? insertedData.length : recordsToInsert.length;
       insertedLeadIds = (insertedData || []).map((l) => l.id);
 
-      // 4. Record Real-Time Activity Log in Supabase
-      await supabaseAdmin
-        .from('activity_logs')
-        .insert({
-          user_id: assignedUserId,
-          type: 'LEADS_CSV_IMPORTED',
-          description: `Imported and AI-scored ${importedCount} leads via CSV. High-priority queue updated.`,
-          metadata: {
-            totalRows: rows.length,
-            imported: importedCount,
-            duplicates: duplicateRows,
-            invalidRows,
-          },
-        });
+      // 4. Record Real-Time Activity Log in Supabase (non-blocking)
+      try {
+        await supabaseAdmin
+          .from('activity_logs')
+          .insert({
+            user_id: assignedUserId,
+            type: 'LEADS_CSV_IMPORTED',
+            description: `Imported and AI-scored ${importedCount} leads via CSV. High-priority queue updated.`,
+            metadata: {
+              totalRows: rows.length,
+              imported: importedCount,
+              duplicates: duplicateRows,
+              invalidRows,
+            },
+          });
+      } catch (logErr) {
+        console.warn('[CSV Import Activity Log Non-fatal]:', logErr);
+      }
     }
 
     return NextResponse.json({

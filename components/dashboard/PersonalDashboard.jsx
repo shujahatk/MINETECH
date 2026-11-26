@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Target,
   Send,
@@ -38,7 +39,6 @@ import { deriveTemperature } from '@/lib/leads/temperature';
 // Heavy modals/drawer are code-split and only load when opened.
 const LeadDrawer = dynamic(() => import('@/components/leads/LeadDrawer'), { ssr: false });
 const LeadImportModal = dynamic(() => import('@/components/leads/LeadImportModal'), { ssr: false });
-const BlastWizard = dynamic(() => import('@/components/email/BlastWizard'), { ssr: false });
 
 // Pipeline statuses grouped into five readable buckets for the donut. Totals come straight from
 // /api/analytics (the same per-status counts the Analytics screen uses); nothing is estimated.
@@ -69,6 +69,7 @@ const greetingFor = (date) => {
 };
 
 export default function PersonalDashboard() {
+  const router = useRouter();
   const [data, setData] = useState(null);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -174,7 +175,7 @@ export default function PersonalDashboard() {
             <Upload className="h-3.5 w-3.5" />
             <span>Import leads</span>
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setModal('campaign')} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => router.push('/email/workspace')} className="gap-1.5">
             <Plus className="h-3.5 w-3.5" />
             <span>New campaign</span>
           </Button>
@@ -415,7 +416,7 @@ export default function PersonalDashboard() {
                 description="Active, queued and paused campaigns"
                 icon={Radio}
                 action={
-                  <Link href="/email/blasts" className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80">
+                  <Link href="/email/workspace?view=campaigns" className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80">
                     <span>Manage campaigns</span>
                     <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
@@ -427,7 +428,7 @@ export default function PersonalDashboard() {
                     title="No active campaigns"
                     description="Create a campaign to send personalised outreach to a targeted list."
                     action={
-                      <Button variant="outline" size="sm" onClick={() => setModal('campaign')}>
+                      <Button variant="outline" size="sm" onClick={() => router.push('/email/workspace')}>
                         Create campaign
                       </Button>
                     }
@@ -552,15 +553,6 @@ export default function PersonalDashboard() {
         <LeadDrawer leadId={selectedLeadId} onClose={() => setSelectedLeadId(null)} onUpdated={fetchDashboard} />
       )}
       {modal === 'import' && <LeadImportModal onClose={() => setModal(null)} onImported={fetchDashboard} />}
-      {modal === 'campaign' && (
-        <BlastWizard
-          onClose={() => setModal(null)}
-          onCreated={() => {
-            setModal(null);
-            fetchDashboard();
-          }}
-        />
-      )}
     </div>
   );
 }

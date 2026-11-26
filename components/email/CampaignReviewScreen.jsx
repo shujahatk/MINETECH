@@ -514,8 +514,8 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
         <AlertTriangle className="w-10 h-10 text-rose-500 mx-auto" />
         <h3 className="text-lg font-bold text-foreground">Campaign Not Found</h3>
         <p className="text-xs text-muted-foreground">The requested campaign does not exist or was removed.</p>
-        <Button onClick={onBack || (() => router.push('/email/blasts'))} className="mt-2 text-xs">
-          Return to Campaigns
+        <Button onClick={onBack || (() => router.push('/email/workspace?view=campaigns'))} className="mt-2 text-xs">
+          Return to Email Workspace
         </Button>
       </div>
     );
@@ -532,7 +532,7 @@ export default function CampaignReviewScreen({ campaignId, onBack }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={onBack || (() => router.push('/email/blasts'))}
+              onClick={onBack || (() => router.push('/email/workspace?view=campaigns'))}
               className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-muted -ml-2"
             >
               <ArrowLeft className="w-4 h-4 mr-1.5" />
