@@ -1,18 +1,12 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
 import { requireAuth } from '@/lib/middleware/authGuard';
+import { normalizeLeadRole } from '@/lib/services/leadClassificationService';
 
 export const dynamic = 'force-dynamic';
 
 function getLeadClassification(lead) {
-  const cf = lead?.custom_fields || {};
-  const c = lead?.classification || cf.classification;
-  if (c === 'Buyer' || c === 'Seller') return c;
-  if (c === 'Unclassified') return 'Unclassified';
-  const st = (cf.supplier_type || cf.company_type || '').toLowerCase();
-  if (st.includes('buyer') || st.includes('client') || st.includes('customer') || st.includes('purchaser')) return 'Buyer';
-  if (st.includes('producer') || st.includes('processor') || st.includes('supplier') || st.includes('vendor') || st.includes('mine')) return 'Seller';
-  return 'Unclassified';
+  return normalizeLeadRole(lead);
 }
 
 function escapeCsvField(val) {

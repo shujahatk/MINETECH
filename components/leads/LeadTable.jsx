@@ -269,6 +269,36 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
     sortDir: sort.dir,
   });
 
+  // Authoritative classification counts with live-data fallback
+  const displayClassificationCounts = useMemo(() => {
+    if (
+      classificationCounts &&
+      typeof classificationCounts.buyers === 'number' &&
+      (classificationCounts.buyers > 0 || classificationCounts.sellers > 0 || classificationCounts.unassigned > 0)
+    ) {
+      return classificationCounts;
+    }
+    let b = 0;
+    let s = 0;
+    let bs = 0;
+    let u = 0;
+    (leads || []).forEach((lead) => {
+      const role = lead.classification || lead.leadRole || 'Unassigned';
+      if (role === 'Buyer') b++;
+      else if (role === 'Seller') s++;
+      else if (role === 'Buyer & Seller') bs++;
+      else u++;
+    });
+    return {
+      all: total || (leads || []).length,
+      buyers: b,
+      sellers: s,
+      buyer_and_sellers: bs,
+      unassigned: u,
+      unclassified: u,
+    };
+  }, [classificationCounts, leads, total]);
+
   // Server clamped an out-of-range page (e.g. after deleting the last row of a page)
   useEffect(() => {
     if (pagination?.page && pagination.page !== page && pagination.pageReset) setPage(pagination.page);
@@ -807,11 +837,11 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
       {/* Classification & Campaigns Navigation Tabs */}
       <div className="flex items-center gap-1.5 border-b border-border pb-1 overflow-x-auto">
         {[
-          { id: 'ALL', label: 'All Leads', count: classificationCounts?.all ?? total },
-          { id: 'Buyer', label: 'Buyers', count: classificationCounts?.buyers ?? 0, color: 'text-blue-600 dark:text-blue-400' },
-          { id: 'Seller', label: 'Sellers', count: classificationCounts?.sellers ?? 0, color: 'text-purple-600 dark:text-purple-400' },
-          { id: 'Buyer & Seller', label: 'Buyer & Seller', count: classificationCounts?.buyer_and_sellers ?? 0, color: 'text-teal-600 dark:text-teal-400' },
-          { id: 'Unassigned', label: 'Unassigned', count: classificationCounts?.unassigned ?? 0, color: 'text-muted-foreground' },
+          { id: 'ALL', label: 'All Leads', count: displayClassificationCounts.all ?? total },
+          { id: 'Buyer', label: 'Buyers', count: displayClassificationCounts.buyers, color: 'text-blue-600 dark:text-blue-400' },
+          { id: 'Seller', label: 'Sellers', count: displayClassificationCounts.sellers, color: 'text-purple-600 dark:text-purple-400' },
+          { id: 'Buyer & Seller', label: 'Buyer & Seller', count: displayClassificationCounts.buyer_and_sellers, color: 'text-teal-600 dark:text-teal-400' },
+          { id: 'Unassigned', label: 'Unassigned', count: displayClassificationCounts.unassigned, color: 'text-muted-foreground' },
           { id: 'campaigns', label: 'Campaigns', isCampaignTab: true },
         ].map((tab) => {
           const isActive = tab.isCampaignTab

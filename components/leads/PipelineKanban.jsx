@@ -224,8 +224,16 @@ export default function PipelineKanban({ leads = [], onSelectLead, onUpdateStage
                         )}
                       </div>
 
-                      {/* Product & Application classification pills */}
+                      {/* Product, Role & Application classification pills */}
                       <div className="flex flex-wrap gap-1 items-center">
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${
+                          lead.classification === 'Buyer' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25' :
+                          lead.classification === 'Seller' ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25' :
+                          lead.classification === 'Buyer & Seller' ? 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/25' :
+                          'bg-muted text-muted-foreground border-border'
+                        }`}>
+                          {lead.classification || lead.leadRole || 'Unassigned'}
+                        </span>
                         <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20 text-[10px] font-semibold truncate max-w-[170px]">
                           {product}{grade ? ` — ${grade}` : ''}
                         </span>

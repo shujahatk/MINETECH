@@ -94,14 +94,14 @@ export default function SequenceManager() {
     setSteps(
       Array.isArray(seq.steps) && seq.steps.length > 0
         ? seq.steps.map((s, i) => ({
-            stepNumber: i + 1,
-            type: s.type || 'EMAIL',
-            templateId: s.templateId || '',
-            delayDays: Number(s.delayDays) || 0,
-            delayHours: Number(s.delayHours) || 0,
-            subject: s.subject || '',
-            body: s.body || '',
-          }))
+          stepNumber: i + 1,
+          type: s.type || 'EMAIL',
+          templateId: s.templateId || '',
+          delayDays: Number(s.delayDays) || 0,
+          delayHours: Number(s.delayHours) || 0,
+          subject: s.subject || '',
+          body: s.body || '',
+        }))
         : [{ stepNumber: 1, type: 'EMAIL', templateId: '', delayDays: 0, delayHours: 0, subject: '', body: '' }]
     );
     setIsCreating(true);
@@ -509,11 +509,10 @@ export default function SequenceManager() {
                         </span>
                         <Badge
                           variant="outline"
-                          className={`text-[10px] h-5 font-semibold ${
-                            isActive
-                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                              : 'bg-muted text-muted-foreground border-border'
-                          }`}
+                          className={`text-[10px] h-5 font-semibold ${isActive
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : 'bg-muted text-muted-foreground border-border'
+                            }`}
                         >
                           {isActive ? 'Active' : 'Paused'}
                         </Badge>
