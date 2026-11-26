@@ -43,7 +43,7 @@ function getMimeType(fileName = '', defaultType = 'application/pdf') {
 }
 
 /**
- * Retrieve local static document buffer if present
+ * Retrieve local static document buffer if explicitly requested by exact name
  */
 function getLocalCollateralBuffer(name = '') {
   try {
@@ -51,20 +51,20 @@ function getLocalCollateralBuffer(name = '') {
     if (!fs.existsSync(publicDocDir)) return null;
 
     const lower = (name || '').toLowerCase();
-    let targetFile = null;
+    // Do NOT match synthetic IDs or custom uploaded documents
+    if (lower.startsWith('custom-') || lower.startsWith('camp-att-')) {
+      return null;
+    }
 
-    if (lower.includes('bleaching') || (lower.includes('clay') && !lower.includes('bentonite'))) {
+    let targetFile = null;
+    if (lower === 'minetech_bleaching_clay.pdf' || lower === 'minetech_bleaching_clay') {
       targetFile = 'MineTech_Bleaching_Clay.pdf';
-    } else if (lower.includes('brochure') || lower.includes('corporate')) {
+    } else if (lower === 'minetech_corporate_brochure_2026.pdf' || lower === 'minetech_corporate_brochure_2026') {
       targetFile = 'MineTech_Corporate_Brochure_2026.pdf';
-    } else if (
-      lower.includes('bentonite') ||
-      lower.startsWith('custom-') ||
-      lower.startsWith('camp-att-') ||
-      lower.includes('minetech') ||
-      lower.endsWith('.pdf')
-    ) {
+    } else if (lower === 'minetech_bentonite.pdf' || lower === 'minetech_bentonite' || lower === 'minetech_bentonite_product_profiles.pdf') {
       targetFile = 'MineTech_Bentonite.pdf';
+    } else if (lower === 'minetech_activated_bleaching_earth_tds.pdf') {
+      targetFile = 'MineTech_Activated_Bleaching_Earth_TDS.pdf';
     }
 
     if (targetFile) {
@@ -74,9 +74,9 @@ function getLocalCollateralBuffer(name = '') {
       }
     }
 
-    // Direct filename check
+    // Direct filename match if it exists
     const directPath = path.join(publicDocDir, name);
-    if (fs.existsSync(directPath)) {
+    if (fs.existsSync(directPath) && fs.statSync(directPath).isFile()) {
       return fs.readFileSync(directPath);
     }
   } catch (e) {
@@ -104,149 +104,109 @@ export async function GET(request) {
     const cleanId = (id || queryFileName).toLowerCase();
     const cleanFileName = (queryFileName || id).toLowerCase();
     let buffer = null;
-    let resolvedFileName = queryFileName || id || 'MineTech_Bentonite.pdf';
+    let resolvedFileName = queryFileName || id || 'document.pdf';
     if (!resolvedFileName.includes('.')) resolvedFileName += '.pdf';
-
-    // 1. Instant check from local collateral files (0ms latency, 100% reliable)
-    buffer = getLocalCollateralBuffer(cleanFileName) || getLocalCollateralBuffer(cleanId);
 
     let doc = null;
 
-    // 2. Direct lookup in workspace_settings custom documents
-    if (!buffer) {
-      try {
-        const { data: sRows } = await supabaseAdmin
-          .from('email_campaigns')
-          .select('id, stats')
-          .order('created_at', { ascending: false })
-          .limit(10);
+    // 1. Direct lookup in workspace_settings custom documents (where uploaded docs live)
+    try {
+      const { data: sRows } = await supabaseAdmin
+        .from('email_campaigns')
+        .select('id, stats')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-        const settingsRow = (sRows || []).find(
-          (r) => r.stats?.is_workspace_settings === true || r.stats?.is_workspace_settings === 'true'
-        );
+      const settingsRow = (sRows || []).find(
+        (r) => r.stats?.is_workspace_settings === true || r.stats?.is_workspace_settings === 'true'
+      );
 
-        if (settingsRow && Array.isArray(settingsRow.stats?.custom_documents)) {
-          doc = settingsRow.stats.custom_documents.find((d) => {
-            if (!d) return false;
-            const dId = (d.id || '').toLowerCase();
-            const dFile = (d.fileName || '').toLowerCase();
-            const dName = (d.name || '').toLowerCase();
-            return (
-              dId === cleanId ||
-              dFile === cleanFileName ||
-              dName === cleanFileName ||
-              cleanId.includes(dId) ||
-              dId.includes(cleanId)
-            );
-          });
-        }
-      } catch (e) {
-        console.warn('[preview] workspace_settings lookup warning:', e.message);
+      if (settingsRow && Array.isArray(settingsRow.stats?.custom_documents)) {
+        doc = settingsRow.stats.custom_documents.find((d) => {
+          if (!d) return false;
+          const dId = (d.id || '').toLowerCase();
+          const dFile = (d.fileName || '').toLowerCase();
+          const dName = (d.name || '').toLowerCase();
+          return (
+            dId === cleanId ||
+            dFile === cleanFileName ||
+            dName === cleanFileName ||
+            (cleanId.length > 8 && dId.includes(cleanId)) ||
+            (dId.length > 8 && cleanId.includes(dId))
+          );
+        });
       }
-    }
 
-    // 3. Find document in library or active workspace batch
-    if (!buffer && !doc) {
-      doc = await getDocumentByIdAsync(id);
-    }
-    if (!buffer && !doc) {
-      const allDocs = await getAllDocumentsAsync();
-      doc = allDocs.find((d) => {
-        if (!d) return false;
-        const dId = (d.id || '').toLowerCase();
-        const dFile = (d.fileName || '').toLowerCase();
-        const dName = (d.name || '').toLowerCase();
-        return (
-          dId === cleanId ||
-          dFile === cleanFileName ||
-          dName === cleanFileName ||
-          cleanId.includes(dId) ||
-          dId.includes(cleanId)
-        );
-      });
-    }
-
-    if (!buffer && !doc) {
-      try {
-        const { data: batches } = await supabaseAdmin
-          .from('email_campaigns')
-          .select('stats')
-          .order('created_at', { ascending: false })
-          .limit(5);
-
-        for (const batch of batches || []) {
-          const campAtts = batch.stats?.campaign_attachments || [];
-          const foundCamp = campAtts.find((a) => {
+      // Also check campaign_attachments in recent campaigns
+      if (!doc) {
+        for (const row of sRows || []) {
+          const campAtts = row.stats?.campaign_attachments || [];
+          const found = campAtts.find((a) => {
             if (!a) return false;
             const aId = (a.id || '').toLowerCase();
             const aFile = (a.fileName || '').toLowerCase();
             const aName = (a.name || '').toLowerCase();
             return aId === cleanId || aFile === cleanFileName || aName === cleanFileName;
           });
-          if (foundCamp) {
-            doc = foundCamp;
+          if (found) {
+            doc = found;
             break;
           }
 
-          if (Array.isArray(batch.stats?.drafts)) {
-            for (const draft of batch.stats.drafts) {
-              const found = (draft.assigned_attachments || []).find((a) => {
+          if (Array.isArray(row.stats?.drafts)) {
+            for (const draft of row.stats.drafts) {
+              const matched = (draft.assigned_attachments || []).find((a) => {
                 if (!a) return false;
                 const aId = (a.id || '').toLowerCase();
                 const aFile = (a.fileName || '').toLowerCase();
                 const aName = (a.name || '').toLowerCase();
                 return aId === cleanId || aFile === cleanFileName || aName === cleanFileName;
               });
-              if (found) {
-                doc = found;
+              if (matched) {
+                doc = matched;
                 break;
               }
             }
+            if (doc) break;
           }
-          if (doc) break;
         }
-      } catch (batchErr) {
-        console.warn('[preview] Batch lookup warning:', batchErr.message);
       }
+    } catch (e) {
+      console.warn('[preview] workspace_settings lookup warning:', e.message);
     }
 
-    // 4. If doc resolved, use its attributes
+    // 2. Lookup in Document Library Service if still not found
+    if (!doc && id) {
+      try {
+        doc = await getDocumentByIdAsync(id);
+      } catch (_) {}
+    }
+    if (!doc) {
+      try {
+        const allDocs = await getAllDocumentsAsync();
+        doc = allDocs.find((d) => {
+          if (!d) return false;
+          const dId = (d.id || '').toLowerCase();
+          const dFile = (d.fileName || '').toLowerCase();
+          const dName = (d.name || '').toLowerCase();
+          return dId === cleanId || dFile === cleanFileName || dName === cleanFileName;
+        });
+      } catch (_) {}
+    }
+
+    // If doc resolved, use its official fileName
     if (doc) {
       resolvedFileName = doc.fileName || doc.name || resolvedFileName;
     }
 
-    // 5. Fetch via doc.url if it is an HTTP link
-    if (!buffer && doc?.url && doc.url.startsWith('http')) {
-      try {
-        const fetchRes = await fetch(doc.url);
-        if (fetchRes.ok) {
-          buffer = Buffer.from(await fetchRes.arrayBuffer());
-        }
-      } catch (fErr) {
-        console.warn('[preview] doc.url fetch warning:', fErr.message);
-      }
-    }
-
-    // 6. Resolve via storagePath
+    // 3. Priority: Retrieve actual file buffer from Supabase Storage or URL
     let storagePath = doc?.storagePath || '';
     if (!storagePath && doc?.url && doc.url.includes('/email-attachments/')) {
       storagePath = doc.url.split('/email-attachments/')[1];
     }
 
-    if (!buffer && storagePath) {
-      try {
-        const publicUrl = `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/${storagePath}`;
-        const fetchRes = await fetch(publicUrl);
-        if (fetchRes.ok) {
-          buffer = Buffer.from(await fetchRes.arrayBuffer());
-        }
-      } catch (pErr) {
-        console.warn('[preview] publicUrl fetch warning:', pErr.message);
-      }
-    }
-
-    // 7. Supabase Storage API download
-    if (!buffer && storagePath) {
+    // A. Direct Supabase Storage download by storagePath
+    if (storagePath) {
       try {
         const { data: blob, error: downloadErr } = await supabaseAdmin.storage
           .from('email-attachments')
@@ -258,38 +218,64 @@ export async function GET(request) {
       } catch (stErr) {
         console.warn('[preview] Supabase download error:', stErr.message);
       }
+
+      // If download failed, try fetching via public URL
+      if (!buffer) {
+        try {
+          const publicUrl = `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/${storagePath}`;
+          const fetchRes = await fetch(publicUrl);
+          if (fetchRes.ok) {
+            buffer = Buffer.from(await fetchRes.arrayBuffer());
+          }
+        } catch (_) {}
+      }
     }
 
-    // 8. Dynamic search in Supabase Storage uploads bucket
-    if (!buffer) {
+    // B. Direct fetch via doc.url if it is an HTTP link
+    if (!buffer && doc?.url && doc.url.startsWith('http')) {
       try {
-        const cleanTarget = (resolvedFileName || id).toLowerCase().replace(/[^a-z0-9]/g, '');
+        const fetchRes = await fetch(doc.url);
+        if (fetchRes.ok) {
+          buffer = Buffer.from(await fetchRes.arrayBuffer());
+        }
+      } catch (fErr) {
+        console.warn('[preview] doc.url fetch warning:', fErr.message);
+      }
+    }
+
+    // C. Decode base64 data if available on doc
+    if (!buffer && doc?.dataBase64) {
+      try {
+        buffer = Buffer.from(doc.dataBase64, 'base64');
+      } catch (_) {}
+    }
+
+    // D. Search uploads folder in Supabase Storage by ID timestamp or filename
+    if (!buffer && (cleanId.startsWith('custom-') || cleanId.startsWith('camp-att-') || cleanFileName)) {
+      try {
         const { data: files } = await supabaseAdmin.storage
           .from('email-attachments')
           .list('uploads', { limit: 100 });
 
         if (files && files.length > 0) {
-          const idDigits = (id.match(/\d{6,}/) || [''])[0];
-          const matches = files.filter((f) => {
+          // Extract timestamp digits if present in custom-1795...
+          const idDigits = (id.match(/\d{8,}/) || [''])[0];
+          const cleanTarget = (doc?.fileName || queryFileName || id).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+          const matchedFile = files.find((f) => {
+            if (idDigits && f.name.includes(idDigits)) return true;
             const cleanF = f.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            return (
-              cleanF.includes(cleanTarget) ||
-              cleanTarget.includes(cleanF.replace(/^\d+/, '')) ||
-              (cleanTarget.includes('bentonite') && cleanF.includes('bentonite')) ||
-              (cleanTarget.includes('company') && cleanF.includes('company')) ||
-              (cleanTarget.includes('bleaching') && cleanF.includes('bleaching')) ||
-              (idDigits && idDigits.length >= 6 && f.name.startsWith(idDigits.slice(0, 6)))
-            );
+            return cleanTarget && (cleanF.includes(cleanTarget) || cleanTarget.includes(cleanF.replace(/^\d+_/, '')));
           });
 
-          const candidateFiles = matches.length > 0 ? matches : (id.startsWith('custom-') ? files : []);
-          if (candidateFiles.length > 0) {
-            candidateFiles.sort((a, b) => b.name.localeCompare(a.name));
-            const bestFile = candidateFiles[0].name;
-            const publicUrl = `https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/uploads/${bestFile}`;
-            const fetchRes = await fetch(publicUrl);
-            if (fetchRes.ok) {
-              buffer = Buffer.from(await fetchRes.arrayBuffer());
+          if (matchedFile) {
+            const { data: blob } = await supabaseAdmin.storage
+              .from('email-attachments')
+              .download(`uploads/${matchedFile.name}`);
+
+            if (blob) {
+              buffer = Buffer.from(await blob.arrayBuffer());
+              resolvedFileName = matchedFile.name.replace(/^\d+_/, '');
             }
           }
         }
@@ -298,32 +284,24 @@ export async function GET(request) {
       }
     }
 
-    // 9. Direct Supabase Storage known uploads URL fallback
+    // 4. Exact Local Static Collateral check (for standard catalog PDFs)
     if (!buffer) {
-      const knownUrls = [
-        'https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/uploads/1795433878608_MineTech_Bentonite.pdf',
-        'https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/uploads/1795423057399_MineTech_Bleaching_Clay.pdf',
-        'https://oatkydlnhenemojbaxwx.supabase.co/storage/v1/object/public/email-attachments/campaigns/32533fb2-df20-4aae-a4e5-dfa563d19b4f/attachments/1795388863736_MineTech_Bentonite.pdf'
-      ];
+      buffer = getLocalCollateralBuffer(cleanFileName) || getLocalCollateralBuffer(cleanId);
+    }
 
-      for (const u of knownUrls) {
-        try {
-          const res = await fetch(u);
-          if (res.ok) {
-            buffer = Buffer.from(await res.arrayBuffer());
-            break;
-          }
-        } catch (_) {}
+    // 5. If still not found and id is an authentic MineTech brochure name, serve fallback collateral
+    if (!buffer) {
+      if (cleanFileName.includes('bentonite')) {
+        buffer = getLocalCollateralBuffer('MineTech_Bentonite.pdf');
+      } else if (cleanFileName.includes('clay') || cleanFileName.includes('bleaching')) {
+        buffer = getLocalCollateralBuffer('MineTech_Bleaching_Clay.pdf');
+      } else if (cleanFileName.includes('brochure') || cleanFileName.includes('corporate')) {
+        buffer = getLocalCollateralBuffer('MineTech_Corporate_Brochure_2026.pdf');
       }
     }
 
-    // 10. Ultimate fallback: Serve the authentic multi-page MineTech collateral PDF
     if (!buffer || buffer.length === 0) {
-      buffer = getLocalCollateralBuffer('MineTech_Bentonite.pdf');
-    }
-
-    if (!buffer || buffer.length === 0) {
-      return new Response('Unable to load document', { status: 404 });
+      return new Response('Unable to load document: File not found', { status: 404 });
     }
 
     const mimeType = getMimeType(resolvedFileName, doc?.fileType || 'application/pdf');
@@ -343,18 +321,6 @@ export async function GET(request) {
     });
   } catch (err) {
     console.error('[API /api/email/workspace/documents/preview Error]:', err);
-    const localBuf = getLocalCollateralBuffer('MineTech_Bentonite.pdf');
-    if (localBuf) {
-      return new Response(localBuf, {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Length': localBuf.length.toString(),
-          'Content-Disposition': 'inline; filename="MineTech_Bentonite.pdf"',
-          'Cache-Control': 'no-store, max-age=0',
-        },
-      });
-    }
-    return new Response('Error loading preview', { status: 500 });
+    return new Response('Error loading document preview: ' + err.message, { status: 500 });
   }
 }

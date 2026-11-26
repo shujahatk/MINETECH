@@ -5,6 +5,9 @@ import {
   getDefaultSignature,
   saveOrUpdateSignature,
   getConfiguredSignatureAsync,
+  deleteSignatureAsync,
+  duplicateSignatureAsync,
+  setDefaultSignatureAsync,
 } from '@/lib/services/signatureService';
 import {
   getActiveGmailSignature,
@@ -105,5 +108,58 @@ export async function POST(request) {
       { success: false, message: err.message || 'Failed to save signature' },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ success: false, message: 'Signature ID is required' }, { status: 400 });
+    }
+
+    await deleteSignatureAsync(id);
+    const signatures = await getAllSignaturesAsync();
+
+    return NextResponse.json({
+      success: true,
+      message: 'Signature permanently deleted.',
+      signatures,
+    });
+  } catch (err) {
+    console.error('[API /api/email/workspace/signatures DELETE Error]:', err);
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request) {
+  const auth = await requireAuth(request);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const body = await request.json();
+    const { action, id } = body;
+
+    if (action === 'set_default') {
+      await setDefaultSignatureAsync(id);
+    } else if (action === 'duplicate') {
+      await duplicateSignatureAsync(id);
+    } else {
+      await saveOrUpdateSignature(body);
+    }
+
+    const signatures = await getAllSignaturesAsync();
+    return NextResponse.json({
+      success: true,
+      signatures,
+      message: 'Signatures updated successfully.',
+    });
+  } catch (err) {
+    console.error('[API /api/email/workspace/signatures PATCH Error]:', err);
+    return NextResponse.json({ success: false, message: err.message }, { status: 500 });
   }
 }

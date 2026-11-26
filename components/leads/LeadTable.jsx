@@ -871,7 +871,7 @@ export default function LeadTable({ initialView = 'table', sectionTitle = null, 
               <PipelineKanban
                 leads={leads}
                 onSelectLead={openLeadById}
-                onUpdateStage={(id, newStage) => patchLead(id, { status: newStage })}
+                onUpdateStage={(id, newStage) => patchLead(id, { status: newStage, pipelineStage: newStage })}
               />
             </div>
           )}

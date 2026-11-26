@@ -25,6 +25,10 @@ export async function POST(request) {
       autoLaunch = false,
       scheduledAt = null,
       allowUnapproved = false,
+      sender,
+      senderName,
+      senderEmail,
+      replyTo,
     } = body;
 
     if (!Array.isArray(draftIds) || draftIds.length === 0) {
@@ -144,6 +148,12 @@ export async function POST(request) {
     // 3. Create the campaign strictly as DRAFT
     const campaignName = name?.trim() || `Personalized Outreach — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
     
+    const resolvedSender = sender || {
+      name: (senderName || 'Rauf').trim(),
+      email: (senderEmail || 'rauf@mine-tech.be').trim(),
+      replyTo: (replyTo || senderEmail || 'rauf@mine-tech.be').trim(),
+    };
+
     const campaignResult = await createCampaign({
       name: campaignName,
       subject: `Personalized Outreach (${personalizedRecipients.length} companies)`,
@@ -154,6 +164,7 @@ export async function POST(request) {
       scheduledAt,
       status: 'DRAFT',
       personalizedRecipients,
+      sender: resolvedSender,
     });
 
     if (!campaignResult || !campaignResult.id) {

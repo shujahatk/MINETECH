@@ -358,10 +358,27 @@ export default function SettingsView() {
     </div>
   );
 
-  const statusRow = (icon, label, ok, detail) => {
+  const statusRow = (icon, label, okOrStatus, detail, remediation = '') => {
     const Icon = icon;
+    let badgeType = 'not_configured';
+    let badgeLabel = 'Not configured';
+
+    if (okOrStatus === 'operational' || okOrStatus === true) {
+      badgeType = 'operational';
+      badgeLabel = 'Operational';
+    } else if (okOrStatus === 'standby') {
+      badgeType = 'standby';
+      badgeLabel = 'Optional / Standby';
+    } else if (okOrStatus === 'degraded') {
+      badgeType = 'degraded';
+      badgeLabel = 'Degraded';
+    } else {
+      badgeType = 'not_configured';
+      badgeLabel = 'Not configured';
+    }
+
     return (
-      <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/70 text-muted-foreground">
             <Icon className="h-4 w-4" />
@@ -369,12 +386,38 @@ export default function SettingsView() {
           <div className="min-w-0">
             <p className="text-[13px] font-medium text-foreground">{label}</p>
             {detail && <p className="truncate text-xs text-muted-foreground">{detail}</p>}
+            {remediation && badgeType === 'not_configured' && (
+              <p className="text-[11px] text-amber-500/90 dark:text-amber-400/90 mt-0.5">{remediation}</p>
+            )}
           </div>
         </div>
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${ok ? 'tone-success' : 'tone-warning'}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${ok ? 'bg-success' : 'bg-warning'}`} aria-hidden="true" />
-          {ok ? 'Connected' : 'Not configured'}
-        </span>
+        <div className="flex items-center gap-2 self-start sm:self-center">
+          <span
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${
+              badgeType === 'operational'
+                ? 'tone-success'
+                : badgeType === 'standby'
+                ? 'border-teal-500/30 bg-teal-500/10 text-teal-400'
+                : badgeType === 'degraded'
+                ? 'tone-warning'
+                : 'border-border/60 bg-muted/50 text-muted-foreground'
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                badgeType === 'operational'
+                  ? 'bg-success'
+                  : badgeType === 'standby'
+                  ? 'bg-teal-400'
+                  : badgeType === 'degraded'
+                  ? 'bg-warning'
+                  : 'bg-muted-foreground'
+              }`}
+              aria-hidden="true"
+            />
+            {badgeLabel}
+          </span>
+        </div>
       </div>
     );
   };
@@ -758,12 +801,36 @@ export default function SettingsView() {
 
           {/* SYSTEM */}
           {section === 'system' && (
-            <SectionCard title="System status" description="Services this workspace depends on. Status is read from the server configuration." icon={Database} flush>
+            <SectionCard title="System status" description="Services this workspace depends on. Status is read directly from live server connectivity." icon={Database} flush>
               <div className="divide-y divide-border/70">
-                {statusRow(Database, 'Supabase database', Boolean(integrations.supabaseConnected), 'Primary data store')}
-                {statusRow(Mail, 'Resend email relay', Boolean(integrations.resendConfigured), 'Outbound delivery')}
-                {statusRow(Cpu, 'AI provider', Boolean(integrations.aiConfigured), 'Drafting and lead intelligence')}
-                {statusRow(Layers, 'Listmonk', Boolean(integrations.listmonkConnected), integrations.listmonkUrl || integrations.listmonkStatus || 'Campaign delivery engine')}
+                {statusRow(
+                  Database,
+                  'Supabase PostgreSQL Database',
+                  integrations?.services?.supabase?.status || (integrations.supabaseConnected ? 'operational' : 'degraded'),
+                  integrations?.services?.supabase?.details || (integrations.supabaseConnected ? 'Connected (PostgreSQL with RLS)' : 'Cannot reach Supabase host'),
+                  'Verify NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local'
+                )}
+                {statusRow(
+                  Mail,
+                  'Resend Email Relay (mine-tech.be)',
+                  integrations?.services?.resend?.status || (integrations.resendConfigured ? 'operational' : 'not_configured'),
+                  integrations?.services?.resend?.details || (integrations.resendConfigured ? 'Verified sending domain: mine-tech.be' : 'Outbound email sending inactive'),
+                  'Add RESEND_API_KEY (starting with re_) to server environment to enable live email delivery'
+                )}
+                {statusRow(
+                  Cpu,
+                  'AI Intelligence Provider',
+                  integrations?.services?.ai?.status || (integrations.aiConfigured ? 'operational' : 'not_configured'),
+                  integrations?.services?.ai?.details || (integrations.aiConfigured ? 'Anthropic Claude (claude-sonnet-4-6)' : 'AI drafting engine offline'),
+                  'Add ANTHROPIC_API_KEY to server environment to enable AI drafting'
+                )}
+                {statusRow(
+                  Layers,
+                  'Listmonk Campaign Delivery Engine',
+                  integrations?.services?.listmonk?.status || (integrations.listmonkConnected ? 'operational' : 'standby'),
+                  integrations?.services?.listmonk?.details || (integrations.listmonkConnected ? `Active (${integrations.listmonkUrl})` : 'Optional local mass mailer (standby mode; primary delivery runs via Resend)'),
+                  'Optional: Start local Listmonk instance if using local SMTP bulk blasts'
+                )}
               </div>
             </SectionCard>
           )}

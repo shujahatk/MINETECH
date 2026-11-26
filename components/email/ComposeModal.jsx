@@ -99,6 +99,13 @@ export default function ComposeModal({
   const [toSearch, setToSearch] = useState('');
   const [showToSuggestions, setShowToSuggestions] = useState(false);
 
+  // Sender Identity & Campaign
+  const [senderDisplayName, setSenderDisplayName] = useState(initialDraft?.sender_name || 'Rauf');
+  const [senderEmail, setSenderEmail] = useState(initialDraft?.sender_email || 'rauf@mine-tech.be');
+  const [replyTo, setReplyTo] = useState(initialDraft?.reply_to || 'rauf@mine-tech.be');
+  const [campaignName, setCampaignName] = useState(initialDraft?.campaign_name || '');
+  const [showSenderConfig, setShowSenderConfig] = useState(false);
+
   // Subject and Body
   const [subject, setSubject] = useState(initialDraft?.subject || aiDraft?.subject || '');
   const [body, setBody] = useState(
@@ -121,6 +128,10 @@ export default function ComposeModal({
   // Attachments
   const [attachments, setAttachments] = useState(initialDraft?.attachments || []);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+
+  // Signatures
+  const [availableSignatures, setAvailableSignatures] = useState([]);
+  const [chosenSignatureId, setChosenSignatureId] = useState('sig-gmail-synced');
 
   // Scheduling
   const [isScheduling, setIsScheduling] = useState(Boolean(initialDraft?.scheduled_at));
@@ -148,6 +159,7 @@ export default function ComposeModal({
   const bodyTextareaRef = useRef(null);
   const toDropdownRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
+  const userEditedRecipientRef = useRef(false);
 
   // Fetch leads and templates
   useEffect(() => {
@@ -157,7 +169,9 @@ export default function ComposeModal({
     if (resolved) {
       setActiveLead(resolved);
       setSelectedLeadId(resolved._id || resolved.id || resolvedId || '');
-      setCustomTo(resolved.email || '');
+      if (!userEditedRecipientRef.current) {
+        setCustomTo(resolved.email || recipientEmail || initialTo || '');
+      }
     } else if (resolvedId) {
       setSelectedLeadId(resolvedId);
       fetch(`/api/leads/${resolvedId}`)
@@ -166,10 +180,16 @@ export default function ComposeModal({
           if (json?.data || json?.lead) {
             const leadData = json.data || json.lead;
             setActiveLead(leadData);
-            setCustomTo(leadData.email || '');
+            if (!userEditedRecipientRef.current) {
+              setCustomTo(leadData.email || recipientEmail || initialTo || '');
+            }
           }
         })
         .catch((e) => console.warn('Failed to load specific lead in ComposeModal:', e));
+    } else if (recipientEmail || initialTo) {
+      if (!userEditedRecipientRef.current) {
+        setCustomTo(recipientEmail || initialTo || '');
+      }
     }
 
     fetch('/api/leads?limit=150')
@@ -177,11 +197,7 @@ export default function ComposeModal({
       .then((j) => {
         const fetched = j.leads || [];
         setLeadsList(fetched);
-        if (!resolved && !resolvedId && !customTo && fetched.length > 0) {
-          setSelectedLeadId(fetched[0]._id || fetched[0].id);
-          setActiveLead(fetched[0]);
-          setCustomTo(fetched[0].email || '');
-        }
+        // Do NOT auto-select fetched[0] when no lead is provided!
       })
       .catch((e) => console.warn('Failed to fetch leads list:', e));
 
@@ -189,6 +205,17 @@ export default function ComposeModal({
       .then((r) => r.json())
       .then((j) => setTemplates(j.data || []))
       .catch((e) => console.warn('Failed to fetch email templates:', e));
+
+    fetch('/api/email/workspace/signatures')
+      .then((r) => r.json())
+      .then((j) => {
+        if (j.success && Array.isArray(j.signatures)) {
+          setAvailableSignatures(j.signatures);
+          const def = j.signatures.find((s) => s.isDefault) || j.signatures[0];
+          if (def) setChosenSignatureId(def.id);
+        }
+      })
+      .catch((e) => console.warn('Failed to fetch workspace signatures:', e));
   }, [lead, leadId, leadContext, initialLead, recipientEmail, initialTo]);
 
   // Click outside to close To suggestions
@@ -218,6 +245,12 @@ export default function ComposeModal({
 
   // Ensure brand signature
   const ensureCompanySignature = (text) => {
+    const selectedSig = availableSignatures.find((s) => s.id === chosenSignatureId);
+    if (selectedSig && selectedSig.bodyText !== undefined) {
+      if (!selectedSig.bodyText) return text; // No signature selected
+      const stripped = stripSignature(text);
+      return `${stripped}\n\n${selectedSig.bodyText}`;
+    }
     return ensureMineTechSignatureText(text);
   };
 
@@ -534,6 +567,11 @@ export default function ComposeModal({
         body: JSON.stringify({
           leadId: activeLead?._id || activeLead?.id || selectedLeadId || 'direct-lead',
           to: targetEmail,
+          senderDisplayName: senderDisplayName.trim() || 'Rauf',
+          senderName: senderDisplayName.trim() || 'Rauf',
+          senderEmail: senderEmail.trim() || 'rauf@mine-tech.be',
+          replyTo: replyTo.trim() || senderEmail.trim() || 'rauf@mine-tech.be',
+          campaignName: campaignName.trim() || undefined,
           subject,
           bodyHtml: `<p>${finalBody.replace(/\n/g, '<br/>')}</p>`,
           bodyText: finalBody,
@@ -664,6 +702,77 @@ export default function ComposeModal({
             </div>
           )}
 
+          {/* Sender Identity & From Header Preview */}
+          <div className="bg-muted/30 border border-border rounded-xl px-3.5 py-2.5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-semibold text-primary uppercase tracking-wider">From:</span>
+                <span className="text-xs font-semibold text-foreground">{senderDisplayName || 'Rauf'}</span>
+                <span className="text-xs text-muted-foreground font-mono">&lt;{senderEmail || 'rauf@mine-tech.be'}&gt;</span>
+                {campaignName && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 font-medium">
+                    Campaign: {campaignName}
+                  </span>
+                )}
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-medium">
+                  Verified mine-tech.be
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSenderConfig(!showSenderConfig)}
+                className="text-[11px] text-primary hover:underline font-medium"
+              >
+                {showSenderConfig ? 'Hide Sender Details' : 'Configure Sender & Campaign'}
+              </button>
+            </div>
+
+            {showSenderConfig && (
+              <div className="pt-2 border-t border-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 anim-fade-in">
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Sender Display Name</label>
+                  <Input
+                    type="text"
+                    value={senderDisplayName}
+                    onChange={(e) => setSenderDisplayName(e.target.value)}
+                    placeholder="Rauf"
+                    className="h-7 text-xs bg-background"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Sender Email</label>
+                  <Input
+                    type="email"
+                    value={senderEmail}
+                    onChange={(e) => setSenderEmail(e.target.value)}
+                    placeholder="rauf@mine-tech.be"
+                    className="h-7 text-xs bg-background font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Reply-To Address</label>
+                  <Input
+                    type="email"
+                    value={replyTo}
+                    onChange={(e) => setReplyTo(e.target.value)}
+                    placeholder="rauf@mine-tech.be"
+                    className="h-7 text-xs bg-background font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold text-muted-foreground uppercase block mb-1">Campaign Name</label>
+                  <Input
+                    type="text"
+                    value={campaignName}
+                    onChange={(e) => setCampaignName(e.target.value)}
+                    placeholder="e.g. Bentonite Suppliers"
+                    className="h-7 text-xs bg-background"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Recipient Section */}
           <div className="space-y-2">
             <div className="relative bg-muted/40 border border-border rounded-xl px-3.5 py-2" ref={toDropdownRef}>
@@ -688,9 +797,11 @@ export default function ComposeModal({
                       <button
                         type="button"
                         onClick={() => {
+                          const currentVal = customTo || activeLead?.email || '';
+                          userEditedRecipientRef.current = true;
                           setActiveLead(null);
-                          setCustomTo('');
-                          setToSearch('');
+                          setCustomTo(currentVal);
+                          setToSearch(currentVal);
                           setShowToSuggestions(true);
                         }}
                         className="text-[11px] text-muted-foreground hover:text-foreground underline"
@@ -710,8 +821,9 @@ export default function ComposeModal({
                   <div className="flex items-center justify-between flex-1 relative">
                     <input
                       type="text"
-                      value={toSearch || customTo}
+                      value={toSearch !== '' ? toSearch : customTo}
                       onChange={(e) => {
+                        userEditedRecipientRef.current = true;
                         setToSearch(e.target.value);
                         setCustomTo(e.target.value);
                         setShowToSuggestions(true);
@@ -738,9 +850,11 @@ export default function ComposeModal({
                     <div
                       key={l.id || l._id}
                       onClick={() => {
+                        userEditedRecipientRef.current = true;
                         setActiveLead(l);
                         setSelectedLeadId(l.id || l._id);
                         setCustomTo(l.email);
+                        setToSearch('');
                         setShowToSuggestions(false);
                       }}
                       className="px-3.5 py-2 hover:bg-muted/80 cursor-pointer flex items-center justify-between text-xs border-b border-border/50 last:border-0"
@@ -1109,6 +1223,24 @@ export default function ComposeModal({
                 <Clock className="h-3.5 w-3.5" />
                 <span>{isScheduling ? 'Scheduled' : 'Schedule'}</span>
               </button>
+
+              {availableSignatures.length > 0 && (
+                <div className="flex items-center gap-1.5 border border-border rounded-lg px-2 py-0.5 bg-muted/30">
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">Sig:</span>
+                  <select
+                    value={chosenSignatureId}
+                    onChange={(e) => setChosenSignatureId(e.target.value)}
+                    className="bg-transparent text-[11px] text-foreground focus:outline-none cursor-pointer max-w-[140px] truncate"
+                    title="Choose email signature"
+                  >
+                    {availableSignatures.map((sig) => (
+                      <option key={sig.id} value={sig.id} className="bg-card text-foreground">
+                        {sig.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

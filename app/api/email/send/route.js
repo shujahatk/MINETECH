@@ -22,6 +22,11 @@ export async function POST(request) {
       cc,
       bcc,
       replyTo,
+      senderName,
+      senderDisplayName,
+      senderEmail,
+      campaignId,
+      campaignName,
       attachments,
       inboxId,
       templateId,
@@ -33,6 +38,22 @@ export async function POST(request) {
 
     if (!leadId || !subject || (!bodyHtml && !bodyText)) {
       return NextResponse.json({ success: false, message: 'leadId, subject, and body are required' }, { status: 400 });
+    }
+
+    const resolvedSenderName = (senderDisplayName || senderName || 'Rauf').trim();
+    const resolvedSenderEmail = (senderEmail || 'rauf@mine-tech.be').trim();
+    const resolvedReplyTo = (replyTo || resolvedSenderEmail).trim();
+
+    // Prevent unverified domains from failing in Resend
+    if (resolvedSenderEmail.includes('@')) {
+      const domain = resolvedSenderEmail.split('@')[1].toLowerCase();
+      if (domain === 'minetech.be') {
+        return NextResponse.json({
+          success: false,
+          message: 'Configured sender domain "minetech.be" is invalid. The verified Resend sending domain is "mine-tech.be" (with a hyphen).',
+          code: 'UNAUTHORIZED_SENDER_DOMAIN',
+        }, { status: 400 });
+      }
     }
 
     const userId = auth.user.id || auth.user._id;
@@ -51,7 +72,10 @@ export async function POST(request) {
       bodyText,
       cc,
       bcc,
-      replyTo,
+      replyTo: resolvedReplyTo,
+      senderName: resolvedSenderName,
+      senderEmail: resolvedSenderEmail,
+      campaignId: campaignId || null,
       attachments,
       inboxId,
       templateId,

@@ -54,7 +54,7 @@ export default function PipelineKanban({ leads = [], onSelectLead, onUpdateStage
       await fetch(`/api/leads/${leadId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStage }),
+        body: JSON.stringify({ status: newStage, pipeline_stage: newStage }),
       });
       if (onUpdateStage) onUpdateStage(leadId, newStage);
     } catch (err) {
@@ -119,7 +119,15 @@ export default function PipelineKanban({ leads = [], onSelectLead, onUpdateStage
   return (
     <div className="flex gap-3 overflow-x-auto pb-3 pt-1">
       {MINE_TECH_STAGES.map((stage) => {
-        const stageLeads = leads.filter((l) => l.status === stage.id);
+        const stageLeads = leads.filter((l) => {
+          const raw = (l.status || l.pipelineStage || '').toUpperCase().trim();
+          const clean = raw.replace(/[\s-]+/g, '_');
+          if (clean === stage.id) return true;
+          if (stage.id === 'NEW' && (!clean || clean === 'NEW_LEAD')) return true;
+          if (stage.id === 'COMMERCIAL_DISCUSSION' && (clean === 'COMMERCIAL' || clean === 'DISCUSSION')) return true;
+          if (stage.id === 'TECHNICAL_EVALUATION' && (clean === 'TECHNICAL' || clean === 'EVALUATION')) return true;
+          return false;
+        });
         const isTargeted = dragOverStage === stage.id;
 
         return (
