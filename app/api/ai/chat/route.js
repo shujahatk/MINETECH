@@ -4,6 +4,8 @@ import {
   executeClaudeChat,
   saveChatMessage,
   createConversation,
+  getConversation,
+  updateConversation,
   DEFAULT_MODEL_ID,
 } from '@/lib/services/claudeChatService';
 
@@ -24,10 +26,9 @@ export async function POST(request) {
       systemPrompt = null,
     } = body;
 
-    let conversationId = incomingConvId;
+    let conversationId = incomingConvId || null;
     let messageList = Array.isArray(messages) ? [...messages] : [];
 
-    // If single prompt provided without messages array
     if (prompt && messageList.length === 0) {
       messageList.push({ role: 'user', content: prompt });
     }
@@ -40,23 +41,59 @@ export async function POST(request) {
     }
 
     const userId = auth.user?.id || auth.user?._id || null;
+    const lastUserMsg = [...messageList].reverse().find((m) => m.role === 'user');
+    if (!lastUserMsg || !String(lastUserMsg.content || '').trim()) {
+      return NextResponse.json(
+        { success: false, error: 'User message content cannot be empty.' },
+        { status: 400 }
+      );
+    }
 
-    // Create a new conversation if none exists
+    let generatedTitle = null;
+
+    // 1. Ensure a persistent conversation exists in Supabase
     if (!conversationId) {
-      const firstUserMessage = messageList.find((m) => m.role === 'user');
-      const initialTitle = firstUserMessage?.content
-        ? firstUserMessage.content.slice(0, 40) + '...'
-        : 'New Chat';
+      const cleanPreview = String(lastUserMsg.content).trim().replace(/\s+/g, ' ');
+      generatedTitle = cleanPreview.length > 48 ? `${cleanPreview.slice(0, 48)}…` : cleanPreview;
 
       const newConv = await createConversation({
-        title: initialTitle,
+        title: generatedTitle || 'New Conversation',
         model,
         userId,
       });
       conversationId = newConv.id;
+    } else {
+      // Auto-title if still default "New Conversation" or "New Chat"
+      const existingConv = await getConversation(conversationId, userId);
+      if (existingConv && ['New Conversation', 'New Chat'].includes(existingConv.title)) {
+        const cleanPreview = String(lastUserMsg.content).trim().replace(/\s+/g, ' ');
+        generatedTitle = cleanPreview.length > 48 ? `${cleanPreview.slice(0, 48)}…` : cleanPreview;
+        await updateConversation(conversationId, { title: generatedTitle }, userId);
+      }
+      // Reconstruct authoritative conversation context from Supabase + latest user prompt
+      if (existingConv && Array.isArray(existingConv.messages) && existingConv.messages.length > 0) {
+        const storedMsgs = existingConv.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+        const lastStored = storedMsgs[storedMsgs.length - 1];
+        if (!lastStored || lastStored.role !== 'user' || lastStored.content !== lastUserMsg.content) {
+          messageList = [...storedMsgs, { role: 'user', content: lastUserMsg.content }];
+        } else {
+          messageList = storedMsgs;
+        }
+      }
     }
 
-    // Call Claude
+    // 2. Persist the user message IMMEDIATELY so it is never lost even if AI call fails
+    const savedUserMsg = await saveChatMessage({
+      conversationId,
+      role: 'user',
+      content: lastUserMsg.content,
+      model,
+    });
+
+    // 3. Execute MineTech AI (Claude) with live CRM tools & controlled context
     const response = await executeClaudeChat({
       messages: messageList,
       model,
@@ -65,23 +102,14 @@ export async function POST(request) {
       conversationId,
     });
 
-    // Persist the latest user message
-    const lastUserMsg = [...messageList].reverse().find((m) => m.role === 'user');
-    if (lastUserMsg) {
-      await saveChatMessage({
-        conversationId,
-        role: 'user',
-        content: lastUserMsg.content,
-      });
-    }
-
-    // Persist the assistant response
-    await saveChatMessage({
+    // 4. Persist the assistant response in Supabase
+    const savedAssistantMsg = await saveChatMessage({
       conversationId,
       role: 'assistant',
       content: response.content,
       model: response.model,
       thinking: response.thinking || null,
+      toolCalls: response.toolsUsed || [],
       tokensUsed: response.usage,
     });
 
@@ -89,9 +117,13 @@ export async function POST(request) {
       success: true,
       data: {
         conversationId,
+        title: generatedTitle,
+        userMessageId: savedUserMsg?.id || null,
+        assistantMessageId: savedAssistantMsg?.id || null,
         content: response.content,
         model: response.model,
         thinking: response.thinking || null,
+        toolsUsed: response.toolsUsed || [],
         usage: response.usage,
       },
     });

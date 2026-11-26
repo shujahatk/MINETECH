@@ -184,6 +184,7 @@ export async function PATCH(request) {
     const { data: updated, error } = await supabaseAdmin
       .from('email_sequences')
       .update(updatePayload)
+      .eq('id', id)
       .select()
       .single();
 

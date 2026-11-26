@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
 import {
-  getConversationMessages,
+  getConversation,
   deleteConversation,
-  renameConversation,
+  updateConversation,
 } from '@/lib/services/claudeChatService';
 
 export const dynamic = 'force-dynamic';
@@ -14,8 +14,23 @@ export async function GET(request, { params }) {
 
   try {
     const { id } = await params;
-    const messages = await getConversationMessages(id);
-    return NextResponse.json({ success: true, data: { conversationId: id, messages } });
+    const userId = auth.user?.id || auth.user?._id || null;
+    const conv = await getConversation(id, userId);
+    if (!conv) {
+      return NextResponse.json({ success: false, error: 'Conversation not found' }, { status: 404 });
+    }
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: conv.id,
+        conversationId: conv.id,
+        title: conv.title,
+        model: conv.model,
+        created_at: conv.created_at,
+        updated_at: conv.updated_at,
+        messages: conv.messages || [],
+      },
+    });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
@@ -28,10 +43,16 @@ export async function PATCH(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    if (!body.title) {
-      return NextResponse.json({ success: false, error: 'Title is required' }, { status: 400 });
+    const userId = auth.user?.id || auth.user?._id || null;
+
+    if (body.title === undefined && body.model === undefined) {
+      return NextResponse.json({ success: false, error: 'Title or model is required' }, { status: 400 });
     }
-    const updated = await renameConversation(id, body.title);
+    const updated = await updateConversation(
+      id,
+      { title: body.title, model: body.model },
+      userId
+    );
     return NextResponse.json({ success: true, data: updated });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
@@ -44,8 +65,9 @@ export async function DELETE(request, { params }) {
 
   try {
     const { id } = await params;
-    await deleteConversation(id);
-    return NextResponse.json({ success: true, message: 'Conversation deleted' });
+    const userId = auth.user?.id || auth.user?._id || null;
+    await deleteConversation(id, userId);
+    return NextResponse.json({ success: true, message: 'Conversation deleted permanently' });
   } catch (err) {
     return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }

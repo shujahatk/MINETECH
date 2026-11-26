@@ -36,8 +36,8 @@ export async function POST(request) {
       draftId,
     } = await request.json();
 
-    if (!leadId || !subject || (!bodyHtml && !bodyText)) {
-      return NextResponse.json({ success: false, message: 'leadId, subject, and body are required' }, { status: 400 });
+    if ((!leadId && !to) || !subject || (!bodyHtml && !bodyText)) {
+      return NextResponse.json({ success: false, message: 'Recipient (to or leadId), subject, and body are required' }, { status: 400 });
     }
 
     const resolvedSenderName = (senderDisplayName || senderName || 'Rauf').trim();

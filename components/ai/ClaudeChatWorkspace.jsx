@@ -55,20 +55,20 @@ export const AVAILABLE_MODELS = [
 
 const STARTER_PROMPTS = [
   {
-    title: 'Business Analysis',
-    prompt: 'Analyse European supply chain risks for industrial minerals like Kaolin and Bentonite in 2026.',
+    title: 'Pipeline & Role Breakdown',
+    prompt: 'Give me a live summary of our CRM pipeline, including Buyers, Sellers, Buyer & Seller, Unassigned counts, and active campaigns.',
   },
   {
-    title: 'Code & Debugging',
-    prompt: 'Write a Python script that calculates factorials with memoization and input validation.',
+    title: 'Unreplied Buyers Follow-up',
+    prompt: 'Which buyers have we contacted who haven\'t replied yet, and what should we do next?',
   },
   {
-    title: 'General Explanation',
-    prompt: 'Explain cybersecurity and modern zero-trust architecture in detail.',
+    title: 'Company Interaction History',
+    prompt: 'Summarize our complete email, call, and campaign interaction history for Aceites del Sur.',
   },
   {
-    title: 'Email Drafting',
-    prompt: 'Write a professional email to a supplier requesting mineral sample specifications.',
+    title: 'Calls & Callbacks Check',
+    prompt: 'Review our recent call history and tell me which leads requested callbacks or need immediate follow-up.',
   },
 ];
 
@@ -267,6 +267,9 @@ export default function ClaudeChatWorkspace() {
   const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
   const [enableThinking, setEnableThinking] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingConv, setLoadingConv] = useState(false);
+  const [chatError, setChatError] = useState('');
+  const [lastFailedPrompt, setLastFailedPrompt] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(null);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [convSearch, setConvSearch] = useState('');
@@ -279,31 +282,53 @@ export default function ClaudeChatWorkspace() {
   const messagesEndRef = useRef(null);
   const abortControllerRef = useRef(null);
 
-  // Load conversations on mount
+  const syncUrlConversation = (convId) => {
+    try {
+      if (typeof window === 'undefined') return;
+      const url = new URL(window.location.href);
+      if (convId) url.searchParams.set('c', convId);
+      else url.searchParams.delete('c');
+      window.history.replaceState({}, '', url.toString());
+    } catch (_) {}
+  };
+
+  // Load conversations on mount and restore URL-selected or most recent conversation
   useEffect(() => {
-    fetchConversations();
+    fetchConversations(true);
   }, []);
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (autoSelect = false) => {
     try {
-      const res = await fetch('/api/ai/conversations');
+      const res = await fetch('/api/ai/conversations', { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         const list = json.data || [];
         setConversations(list);
-        if (list.length > 0 && !activeConvId) {
-          selectConversation(list[0].id);
+        if (autoSelect && list.length > 0) {
+          let targetId = list[0].id;
+          try {
+            const urlId = new URLSearchParams(window.location.search).get('c');
+            if (urlId && list.some((c) => c.id === urlId)) {
+              targetId = urlId;
+            }
+          } catch (_) {}
+          selectConversation(targetId);
         }
       }
     } catch (e) {
       console.warn('Failed to load conversations:', e);
+      setChatError('Could not load saved conversation history. Click retry or refresh.');
     }
   };
 
   const selectConversation = async (convId) => {
     setActiveConvId(convId);
+    setChatError('');
+    setLastFailedPrompt('');
+    setLoadingConv(true);
+    syncUrlConversation(convId);
     try {
-      const res = await fetch(`/api/ai/conversations/${convId}`);
+      const res = await fetch(`/api/ai/conversations/${convId}`, { cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         const conv = json.data;
@@ -311,13 +336,20 @@ export default function ClaudeChatWorkspace() {
           setMessages(conv.messages || []);
           if (conv.model) setSelectedModel(conv.model);
         }
+      } else {
+        setChatError('Could not load messages for this conversation.');
       }
     } catch (e) {
       console.warn('Failed to load conversation details:', e);
+      setChatError('Network error loading conversation history.');
+    } finally {
+      setLoadingConv(false);
     }
   };
 
   const handleNewConversation = async () => {
+    setChatError('');
+    setLastFailedPrompt('');
     try {
       const res = await fetch('/api/ai/conversations', {
         method: 'POST',
@@ -327,9 +359,13 @@ export default function ClaudeChatWorkspace() {
       if (res.ok) {
         const json = await res.json();
         const newConv = json.data;
-        setConversations([newConv, ...conversations]);
+        setConversations((prev) => [newConv, ...prev]);
         setActiveConvId(newConv.id);
         setMessages([]);
+        syncUrlConversation(newConv.id);
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        toast.error(errJson.error || 'Failed to create new conversation');
       }
     } catch (e) {
       toast.error('Failed to create new conversation');
@@ -411,6 +447,9 @@ export default function ClaudeChatWorkspace() {
     const textToSend = customPrompt || inputPrompt;
     if (!textToSend.trim() || isLoading) return;
 
+    setChatError('');
+    setLastFailedPrompt('');
+
     const userMessage = {
       id: 'temp_' + Date.now(),
       role: 'user',
@@ -441,10 +480,11 @@ export default function ClaudeChatWorkspace() {
       const json = await res.json();
       if (res.ok && json.success) {
         const assistantMsg = {
-          id: 'asst_' + Date.now(),
+          id: json.data.assistantMessageId || ('asst_' + Date.now()),
           role: 'assistant',
           content: json.data.content,
           thinking: json.data.thinking,
+          tool_calls: json.data.toolsUsed || [],
           model: json.data.model,
           usage: json.data.usage,
           created_at: new Date().toISOString(),
@@ -452,17 +492,26 @@ export default function ClaudeChatWorkspace() {
 
         setMessages((prev) => [...prev, assistantMsg]);
 
-        // If conversation ID was generated on backend
-        if (json.data.conversationId && json.data.conversationId !== activeConvId) {
-          setActiveConvId(json.data.conversationId);
-          fetchConversations();
+        // Update active conversation ID, URL, and sidebar list
+        if (json.data.conversationId) {
+          if (json.data.conversationId !== activeConvId) {
+            setActiveConvId(json.data.conversationId);
+            syncUrlConversation(json.data.conversationId);
+          }
+          fetchConversations(false);
         }
       } else {
-        toast.error(json.error || 'Failed to generate response');
+        const errMsg = json.error || 'Failed to generate response';
+        setChatError(errMsg);
+        setLastFailedPrompt(textToSend.trim());
+        toast.error(errMsg);
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        toast.error('Request failed: ' + err.message);
+        const errMsg = 'Request failed: ' + err.message;
+        setChatError(errMsg);
+        setLastFailedPrompt(textToSend.trim());
+        toast.error(errMsg);
       }
     } finally {
       setIsLoading(false);
@@ -624,13 +673,13 @@ export default function ClaudeChatWorkspace() {
             </div>
             <div>
               <h1 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                MineTech AI Drafting & Intelligence
+                MineTech AI
                 <Badge variant="outline" className="text-[10px] bg-primary/10 text-primary border-primary/20">
-                  Unrestricted
+                  Live CRM Intelligence
                 </Badge>
               </h1>
               <p className="text-[11px] text-muted-foreground">
-                General-purpose intelligence with optional email drafting
+                Connected to Leads, Pipeline, Inbox, Calls, Campaigns &amp; Follow-ups
               </p>
             </div>
           </div>
@@ -726,6 +775,21 @@ export default function ClaudeChatWorkspace() {
                           : 'bg-card border border-border text-foreground shadow-sm rounded-bl-sm'
                       }`}
                     >
+                      {/* Live CRM Tools Consulted */}
+                      {!isUser && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0 && (
+                        <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-medium text-muted-foreground">Live CRM data:</span>
+                          {Array.from(new Set(msg.tool_calls.map((t) => t.name || t))).map((toolName) => (
+                            <span
+                              key={toolName}
+                              className="inline-flex items-center gap-1 rounded-md border border-primary/20 bg-primary/5 px-1.5 py-0.5 text-[10px] font-mono text-primary"
+                            >
+                              {toolName.replace(/_/g, ' ')}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       {/* Collapsible Thinking Process if available */}
                       {!isUser && msg.thinking && (
                         <div className="mb-3 rounded-lg border border-border/80 bg-muted/30 overflow-hidden text-xs">
@@ -850,6 +914,43 @@ export default function ClaudeChatWorkspace() {
                   </div>
                 );
               })}
+
+              {/* Loading conversation history indicator */}
+              {loadingConv && (
+                <div className="flex items-center justify-center py-6 text-xs text-muted-foreground gap-2">
+                  <Sparkles className="h-3.5 w-3.5 animate-pulse text-primary" />
+                  <span>Loading conversation history from Supabase…</span>
+                </div>
+              )}
+
+              {/* Error & Retry banner (never silently lose messages) */}
+              {chatError && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-xs text-destructive flex items-center justify-between gap-3">
+                  <span>{chatError}</span>
+                  {lastFailedPrompt ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSendMessage(lastFailedPrompt)}
+                      className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/15 shrink-0"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Retry
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => fetchConversations(true)}
+                      className="h-7 text-xs border-destructive/40 text-destructive hover:bg-destructive/15 shrink-0"
+                    >
+                      Reload
+                    </Button>
+                  )}
+                </div>
+              )}
 
               {/* Streaming / Loading indicator */}
               {isLoading && (
