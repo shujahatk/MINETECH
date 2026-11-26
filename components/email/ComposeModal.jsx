@@ -35,7 +35,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import AiDraftBar from '@/components/ai/AiDraftBar';
-import { ensureMineTechSignatureText, SIGNATURE_TEXT } from '@/lib/utils/signature';
 
 const ALLOWED_EXTENSIONS = [
   'pdf', 'doc', 'docx', 'txt', 'rtf',
@@ -106,16 +105,10 @@ export default function ComposeModal({
   const [campaignName, setCampaignName] = useState(initialDraft?.campaign_name || '');
   const [showSenderConfig, setShowSenderConfig] = useState(false);
 
-  // Subject and Body
+  // Subject and Body (default signature is loaded dynamically from Supabase — never hardcoded)
   const [subject, setSubject] = useState(initialDraft?.subject || aiDraft?.subject || '');
   const [body, setBody] = useState(
-    initialDraft?.body_text
-      ? ensureMineTechSignatureText(initialDraft.body_text)
-      : initialDraft?.body
-      ? ensureMineTechSignatureText(initialDraft.body)
-      : aiDraft?.body
-      ? ensureMineTechSignatureText(aiDraft.body)
-      : `\n\n${SIGNATURE_TEXT}`
+    initialDraft?.body_text || initialDraft?.body || aiDraft?.body || ''
   );
 
   // CC and BCC as lists
@@ -129,9 +122,11 @@ export default function ComposeModal({
   const [attachments, setAttachments] = useState(initialDraft?.attachments || []);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
 
-  // Signatures
+  // Signatures (fetched from Supabase)
   const [availableSignatures, setAvailableSignatures] = useState([]);
-  const [chosenSignatureId, setChosenSignatureId] = useState('sig-gmail-synced');
+  const [chosenSignatureId, setChosenSignatureId] = useState('');
+  const appliedSignatureTextRef = useRef('');
+  const signatureInitializedRef = useRef(false);
 
   // Scheduling
   const [isScheduling, setIsScheduling] = useState(Boolean(initialDraft?.scheduled_at));
@@ -206,13 +201,24 @@ export default function ComposeModal({
       .then((j) => setTemplates(j.data || []))
       .catch((e) => console.warn('Failed to fetch email templates:', e));
 
-    fetch('/api/email/workspace/signatures')
+    fetch('/api/email/workspace/signatures', { cache: 'no-store' })
       .then((r) => r.json())
       .then((j) => {
         if (j.success && Array.isArray(j.signatures)) {
           setAvailableSignatures(j.signatures);
-          const def = j.signatures.find((s) => s.isDefault) || j.signatures[0];
-          if (def) setChosenSignatureId(def.id);
+          const def = j.defaultSignature || j.signatures.find((s) => s.isDefault) || j.signatures[0];
+          if (def) {
+            setChosenSignatureId(def.id);
+            if (!signatureInitializedRef.current && def.bodyText) {
+              signatureInitializedRef.current = true;
+              appliedSignatureTextRef.current = def.bodyText;
+              setBody((prev) => {
+                const trimmed = String(prev || '').trim();
+                if (trimmed && trimmed.includes(def.bodyText.trim())) return prev;
+                return trimmed ? `${trimmed}\n\n${def.bodyText}` : `\n\n${def.bodyText}`;
+              });
+            }
+          }
         }
       })
       .catch((e) => console.warn('Failed to fetch workspace signatures:', e));
@@ -243,22 +249,52 @@ export default function ComposeModal({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [subject, body, activeLead, customTo, attachments, scheduledAt, isScheduling]);
 
-  // Ensure brand signature
-  const ensureCompanySignature = (text) => {
-    const selectedSig = availableSignatures.find((s) => s.id === chosenSignatureId);
-    if (selectedSig && selectedSig.bodyText !== undefined) {
-      if (!selectedSig.bodyText) return text; // No signature selected
-      const stripped = stripSignature(text);
-      return `${stripped}\n\n${selectedSig.bodyText}`;
+  const stripSignature = (text) => {
+    let out = String(text || '');
+    if (appliedSignatureTextRef.current) {
+      const idx = out.lastIndexOf(appliedSignatureTextRef.current.trim());
+      if (idx !== -1) {
+        out = out.slice(0, idx);
+      }
     }
-    return ensureMineTechSignatureText(text);
-  };
-
-  const stripSignature = (text) =>
-    String(text || '')
+    return out
       .replace(/\n*Regards,\s*\nAbdullah Rauf[\s\S]*$/i, '')
       .replace(/\n*Regards,\s*\nMineTech Outbound\s*$/i, '')
       .trim();
+  };
+
+  // Switch signature cleanly while preserving user message text
+  const handleSignatureChange = (nextSigId) => {
+    setChosenSignatureId(nextSigId);
+    const nextSig = availableSignatures.find((s) => s.id === nextSigId);
+    setBody((prev) => {
+      const base = stripSignature(prev);
+      const nextText = nextSig?.bodyText || '';
+      appliedSignatureTextRef.current = nextText;
+      if (!nextText) return base;
+      return base ? `${base}\n\n${nextText}` : `\n\n${nextText}`;
+    });
+  };
+
+  // Ensure selected signature text & rich HTML (preserving line breaks & clickable links)
+  const ensureCompanySignature = (text) => {
+    const selectedSig = availableSignatures.find((s) => s.id === chosenSignatureId);
+    if (!selectedSig) return text;
+    if (!selectedSig.bodyText) return stripSignature(text);
+    const stripped = stripSignature(text);
+    return stripped ? `${stripped}\n\n${selectedSig.bodyText}` : selectedSig.bodyText;
+  };
+
+  const buildEmailHtmlWithSignature = (text) => {
+    const selectedSig = availableSignatures.find((s) => s.id === chosenSignatureId);
+    const stripped = stripSignature(text);
+    const bodyParagraph = stripped ? `<p>${stripped.replace(/\n/g, '<br/>')}</p>` : '';
+    if (selectedSig?.bodyHtml) {
+      return `${bodyParagraph}${selectedSig.bodyHtml}`;
+    }
+    const finalText = ensureCompanySignature(text);
+    return `<p>${finalText.replace(/\n/g, '<br/>')}</p>`;
+  };
 
   // Auto-Save Draft
   const saveCurrentDraft = useCallback(
@@ -573,7 +609,7 @@ export default function ComposeModal({
           replyTo: replyTo.trim() || senderEmail.trim() || 'rauf@mine-tech.be',
           campaignName: campaignName.trim() || undefined,
           subject,
-          bodyHtml: `<p>${finalBody.replace(/\n/g, '<br/>')}</p>`,
+          bodyHtml: buildEmailHtmlWithSignature(body),
           bodyText: finalBody,
           cc: ccList,
           bcc: bccList,
@@ -1118,11 +1154,9 @@ export default function ComposeModal({
                   </span>
                 </div>
                 <div
-                  className="whitespace-pre-wrap text-foreground leading-relaxed font-sans"
+                  className="text-foreground leading-relaxed font-sans"
                   dangerouslySetInnerHTML={{
-                    __html: renderedBody.includes('<img') || renderedBody.includes('<u>')
-                      ? renderedBody.replace(/\n/g, '<br/>')
-                      : renderedBody,
+                    __html: buildEmailHtmlWithSignature(renderedBody),
                   }}
                 />
               </div>
@@ -1229,13 +1263,13 @@ export default function ComposeModal({
                   <span className="text-[10px] text-muted-foreground uppercase font-semibold">Sig:</span>
                   <select
                     value={chosenSignatureId}
-                    onChange={(e) => setChosenSignatureId(e.target.value)}
-                    className="bg-transparent text-[11px] text-foreground focus:outline-none cursor-pointer max-w-[140px] truncate"
+                    onChange={(e) => handleSignatureChange(e.target.value)}
+                    className="bg-transparent text-[11px] text-foreground focus:outline-none cursor-pointer max-w-[160px] truncate"
                     title="Choose email signature"
                   >
                     {availableSignatures.map((sig) => (
                       <option key={sig.id} value={sig.id} className="bg-card text-foreground">
-                        {sig.name}
+                        {sig.name}{sig.isDefault ? ' (Default)' : ''}
                       </option>
                     ))}
                   </select>

@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/middleware/authGuard';
+import { requireAdmin } from '@/lib/auth/adminGuard';
 import {
   getAllSignaturesAsync,
-  getDefaultSignature,
+  getDefaultSignatureAsync,
   saveOrUpdateSignature,
   getConfiguredSignatureAsync,
   deleteSignatureAsync,
@@ -17,23 +18,32 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
+function isUserAdmin(user) {
+  const role = String(user?.role || '').toLowerCase().trim();
+  return role === 'admin' || role === 'superadmin' || role === 'owner';
+}
+
 export async function GET(request) {
   const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
+  if (!auth.authenticated) return auth.response || auth;
 
   try {
     const signatures = await getAllSignaturesAsync();
-    const defaultSig = getDefaultSignature();
+    const defaultSig = await getDefaultSignatureAsync();
     const activeGmail = getActiveGmailSignature();
     const configuredSignature = await getConfiguredSignatureAsync();
 
-    return NextResponse.json({
-      success: true,
-      signatures,
-      defaultSignature: defaultSig,
-      activeGmailSignature: activeGmail,
-      configuredSignature,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        signatures,
+        defaultSignature: defaultSig,
+        activeGmailSignature: activeGmail,
+        configuredSignature,
+        canManageSignatures: isUserAdmin(auth.user),
+      },
+      { headers: { 'Cache-Control': 'private, no-store' } }
+    );
   } catch (err) {
     console.error('[API /api/email/workspace/signatures GET Error]:', err);
     return NextResponse.json(
@@ -44,8 +54,8 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
+  const auth = await requireAdmin(request);
+  if (auth instanceof Response || !auth?.user) return auth;
 
   try {
     const body = await request.json();
@@ -53,18 +63,19 @@ export async function POST(request) {
     if (body.action === 'manual_html') {
       const updated = setManualSignatureHtml(body.signatureHtml, body.senderEmail);
       const signatures = await getAllSignaturesAsync();
+      const defaultSignature = await getDefaultSignatureAsync();
       return NextResponse.json({
         success: true,
         signature: updated,
         signatures,
-        message: 'Manual Gmail HTML signature updated and saved.',
+        defaultSignature,
+        message: 'Manual HTML signature updated and saved.',
       });
     }
 
-    // Save or update existing signature record in Supabase (preventing duplicates)
     const savedSignature = await saveOrUpdateSignature(body);
 
-    // If applyToAll is requested, also update all drafts in the active batch
+    // If applyToAll is requested, also update all drafts in the active batch (never mutates sent emails)
     if (body.applyToAll) {
       const nowIso = new Date().toISOString();
       const { data: batches } = await supabaseAdmin
@@ -94,13 +105,15 @@ export async function POST(request) {
     }
 
     const signatures = await getAllSignaturesAsync();
+    const defaultSignature = await getDefaultSignatureAsync();
 
     return NextResponse.json({
       success: true,
       signature: savedSignature,
       signatures,
+      defaultSignature,
       configuredSignature: savedSignature,
-      message: 'Signature configuration saved successfully.',
+      message: 'Signature configuration saved permanently.',
     });
   } catch (err) {
     console.error('[API /api/email/workspace/signatures POST Error]:', err);
@@ -112,8 +125,8 @@ export async function POST(request) {
 }
 
 export async function DELETE(request) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
+  const auth = await requireAdmin(request);
+  if (auth instanceof Response || !auth?.user) return auth;
 
   try {
     const { searchParams } = new URL(request.url);
@@ -124,11 +137,13 @@ export async function DELETE(request) {
 
     await deleteSignatureAsync(id);
     const signatures = await getAllSignaturesAsync();
+    const defaultSignature = await getDefaultSignatureAsync();
 
     return NextResponse.json({
       success: true,
       message: 'Signature permanently deleted.',
       signatures,
+      defaultSignature,
     });
   } catch (err) {
     console.error('[API /api/email/workspace/signatures DELETE Error]:', err);
@@ -137,8 +152,8 @@ export async function DELETE(request) {
 }
 
 export async function PATCH(request) {
-  const auth = await requireAuth(request);
-  if (auth instanceof Response) return auth;
+  const auth = await requireAdmin(request);
+  if (auth instanceof Response || !auth?.user) return auth;
 
   try {
     const body = await request.json();
@@ -153,9 +168,11 @@ export async function PATCH(request) {
     }
 
     const signatures = await getAllSignaturesAsync();
+    const defaultSignature = await getDefaultSignatureAsync();
     return NextResponse.json({
       success: true,
       signatures,
+      defaultSignature,
       message: 'Signatures updated successfully.',
     });
   } catch (err) {
